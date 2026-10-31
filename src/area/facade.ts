@@ -23,6 +23,17 @@ export function createFacadeMaterial() {
   const wy0 = select(isHouse, float(0.22), select(groundFloor, float(0.06), float(0.26)));
   const wy1 = select(isHouse, float(0.74), float(0.8));
   const win = band(f.x, wx0, float(1).sub(wx0), w.x).mul(band(f.y, wy0, wy1, w.y));
+  // window detail (frames, mullions, fake depth) in window-local coords wu, wv ∈ 0..1
+  const ww = float(1).sub(wx0.mul(2)), wh = wy1.sub(wy0);
+  const wu = f.x.sub(wx0).div(ww), wv = f.y.sub(wy0).div(wh);
+  const wwu = w.x.div(ww), wwv = w.y.div(wh);
+  const glassIn = band(wu, float(0.07), float(0.93), wwu).mul(band(wv, float(0.07), float(0.93), wwv));
+  const frame = win.mul(float(1).sub(glassIn)); // painted trim around the opening
+  const vBar = select(isHouse, band(wu, float(0.48), float(0.52), wwu), select(groundFloor, band(wu, float(0.325), float(0.345), wwu).add(band(wu, float(0.655), float(0.675), wwu)), band(wu, float(0.485), float(0.515), wwu)));
+  const hBar = select(isHouse, band(wv, float(0.48), float(0.52), wwv), band(wv, float(0.76), float(0.79), wwv));
+  const mull = clamp(vBar.add(hBar), 0, 1).mul(glassIn);
+  const reveal = clamp(smoothstep(0.93, 0.8, wv).oneMinus().add(smoothstep(0.07, 0.17, wu).oneMinus()), 0, 1).mul(glassIn); // shadow of the inset (top + left)
+  const sill = band(f.y, wy0.sub(0.05), wy0, w.y).mul(band(f.x, wx0.sub(0.03), float(1).sub(wx0).add(0.03), w.x));
   const shutter = select(isHouse, band(f.x, float(0.2), float(0.32), w.x).add(band(f.x, float(0.68), float(0.8), w.x)).mul(band(f.y, wy0, wy1, w.y)), float(0));
   // only on real walls, inside the wall's height range, and fade the grid out where it would shimmer (tiny on screen)
   const inWall = smoothstep(0.2, 0.3, up).mul(float(1).sub(smoothstep(top.sub(base).sub(0.5), top.sub(base).sub(0.3), up)))
@@ -42,11 +53,15 @@ export function createFacadeMaterial() {
   let col: any = wall.mul(frameDark);
   col = mix(col, shutterCol, shutter.mul(inWall).mul(crisp).mul(0.9));
   col = mix(col, glass, m.mul(mix(float(0.55), float(1), crisp)));
+  const trim = mix(wall, vec3(0.86, 0.85, 0.8), 0.7);
+  col = mix(col, trim, frame.add(mull.mul(float(1).sub(lit.mul(0.3)))).add(sill).mul(inWall).mul(crisp).clamp(0, 1));
+  col = col.mul(float(1).sub(reveal.mul(inWall).mul(crisp).mul(0.45)));
   mat.colorNode = col;
   // lit glass emits; far away the averaged grid becomes a soft per-building glow instead of sparkle
   const dist = distance(cameraPosition, positionWorld);
   const farAvg = litFrac.mul(0.35).mul(inWall).mul(float(1).sub(crisp));
   const brightness = mix(float(0.25), float(0.7), hash(id.x.add(id.y.mul(57)).add(seed.mul(1031)).add(9)));
-  mat.emissiveNode = tint.mul(m.mul(lit).mul(crisp).mul(brightness).add(farAvg.mul(0.8))).mul(min(float(1), float(2200).div(dist.add(1)).add(0.6)));
+  const glassOnly = m.mul(float(1).sub(mull.mul(crisp))).mul(float(1).sub(frame.mul(crisp))).mul(float(1).sub(reveal.mul(0.5)));
+  mat.emissiveNode = tint.mul(glassOnly.mul(lit).mul(crisp).mul(brightness).add(farAvg.mul(0.8))).mul(min(float(1), float(2200).div(dist.add(1)).add(0.6)));
   return { material: mat, uNight };
 }
