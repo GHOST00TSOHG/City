@@ -20,19 +20,19 @@ const GROWS: Record<number, number> = { 0: 0.75, 1: 1, 5: 0.6, 6: 1 };
 /** Dense grass near the camera: one draw call of instanced blades rebuilt around the camera as it moves.
  *  Wind bends blades (height²), rain wetness darkens and saturates them. Fades out with distance, so no edge. */
 export function buildGrass(terrain: Terrain, mask: GroundMask | null) {
-  const uWind = uniform(1), uWet = uniform(0);
+  const uWind = uniform(1), uWet = uniform(0), uSnow = uniform(0);
   // blade: 3 segments, 7 verts, unit size (x across, y up)
   const P = [-0.5, 0, 0, 0.5, 0, 0, -0.4, 0.35, 0, 0.4, 0.35, 0, -0.25, 0.7, 0, 0.25, 0.7, 0, 0, 1, 0];
   const g = new THREE.InstancedBufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(21).fill(0).map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(new Array(21).fill(0).map((_, i) => (i % 3 === 1 ? 0.55 : i % 3 === 2 ? 0.83 : 0)), 3));
   g.setIndex([0, 1, 3, 0, 3, 2, 2, 3, 5, 2, 5, 4, 4, 5, 6]);
   const buf = new THREE.InstancedBufferAttribute(new Float32Array(MAX * 4), 4); buf.setUsage(THREE.DynamicDrawUsage);
   g.setAttribute('blade', buf); g.instanceCount = 0;
   const b: any = instancedBufferAttribute(buf, "vec4"), seed = b.w, p = positionLocal;
   const ang = seed.mul(6.2831), hgt = mix(float(0.18), float(0.42), hash(seed.mul(911)));
   const fade = float(1).sub(smoothstep(R * 0.6, R * 0.97, distance(cameraPosition.xz, b.xz)));
-  const H = hgt.mul(fade), W = float(0.045);
+  const H = hgt.mul(fade).mul(float(1).sub(uSnow.mul(0.85))), W = float(0.045);
   const t = p.y, bend = t.mul(t).mul(H);
   const gust = sin(time.mul(1.7).add(b.x.mul(0.21)).add(b.z.mul(0.13))).mul(0.5).add(0.5);
   const lean = bend.mul(float(0.25).add(gust.mul(0.55).mul(uWind))).add(bend.mul(sin(time.mul(4.1).add(seed.mul(40))).mul(0.06)));
@@ -44,7 +44,7 @@ export function buildGrass(terrain: Terrain, mask: GroundMask | null) {
   const hue = hash(seed.mul(173));
   const base = mix(vec3(0.05, 0.09, 0.03), vec3(0.08, 0.11, 0.035), hue), tip = mix(vec3(0.2, 0.3, 0.09), vec3(0.27, 0.33, 0.11), hue);
   const col = mix(base, tip, t);
-  mat.colorNode = mix(col, col.mul(vec3(0.6, 0.72, 0.62)), uWet.mul(0.8));
+  mat.colorNode = mix(mix(col, col.mul(vec3(0.6, 0.72, 0.62)), uWet.mul(0.8)), vec3(0.78, 0.8, 0.84), uSnow.mul(t).mul(0.8));
   const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.name = 'grass';
   const last = new THREE.Vector3(1e9, 0, 0), arr = buf.array as Float32Array;
   const coverAt = (x: number, z: number) => { const ix = Math.round((x - terrain.x0) / terrain.cell), iz = Math.round((z - terrain.z0) / terrain.cell);
@@ -68,5 +68,5 @@ export function buildGrass(terrain: Terrain, mask: GroundMask | null) {
     }
     g.instanceCount = n; buf.needsUpdate = true; buf.clearUpdateRanges(); buf.addUpdateRange(0, n * 4);
   }
-  return { mesh, update, uWind, uWet, count: () => g.instanceCount, triangles: () => g.instanceCount * 5 };
+  return { mesh, update, uWind, uWet, uSnow, count: () => g.instanceCount, triangles: () => g.instanceCount * 5 };
 }

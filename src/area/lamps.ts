@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { attribute, vertexColor, vec3, uv, length, smoothstep, float, distance, cameraPosition, positionWorld, exp } from 'three/tsl';
+import { uniform, attribute, vertexColor, vec3, uv, length, smoothstep, float, distance, cameraPosition, positionWorld, exp } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Terrain } from './data';
 
@@ -32,7 +32,9 @@ export function buildLamps(lamps: number[][], terrain: Terrain) {
   const r = length(uv().sub(0.5)).mul(2);
   const fall = exp(r.mul(r).mul(-4.5)).mul(float(1).sub(smoothstep(0.75, 1, r)));
   const near = float(1).sub(smoothstep(90, 260, distance(cameraPosition, positionWorld)));
-  pmat.colorNode = vec3(1.0, 0.7, 0.4).mul(fall).mul(near).mul(0.3);
+  const uWet = uniform(0), uFog = uniform(0);
+  // wet ground reflects the lamp as a stronger, tighter glint; fog widens the glow
+  pmat.colorNode = vec3(1.0, 0.7, 0.4).mul(fall.add(exp(r.mul(r).mul(-14)).mul(uWet.mul(0.9)))).mul(near).mul(float(0.3).add(uFog.mul(0.12)));
   const pools = new THREE.InstancedMesh(pool, pmat, lamps.length); pools.name = 'lamp pools'; pools.renderOrder = 2;
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), s1 = new THREE.Vector3(1, 1, 1);
@@ -41,9 +43,9 @@ export function buildLamps(lamps: number[][], terrain: Terrain) {
     q.setFromAxisAngle(Y, -a);
     posts.setMatrixAt(i, m.compose(new THREE.Vector3(x, y, z), q, s1));
     const hx = x + Math.cos(a) * ARM, hz = z + Math.sin(a) * ARM;
-    pools.setMatrixAt(i, m.compose(new THREE.Vector3(hx, Math.max(terrain.heightAt(hx, hz), 0.1) + 0.3, hz), q, new THREE.Vector3(17, 1, 17)));
+    pools.setMatrixAt(i, m.compose(new THREE.Vector3(hx, Math.max(terrain.heightAt(hx, hz), 0.1) + 0.04, hz), q, new THREE.Vector3(17, 1, 17)));
   });
   posts.computeBoundingSphere(); pools.computeBoundingSphere();
   void positionWorld; void vertexColor;
-  return { posts, pools };
+  return { posts, pools, uWet, uFog };
 }
