@@ -8,3 +8,4 @@ tools/cache/
 config.private.json
 *.key
 .DS_Store
+__pycache__/
