@@ -1,11 +1,11 @@
 # City
 
-A night-time Three.js city built from free public data (terrain, OpenStreetMap) and hand-made Blender landmarks. Calm, cinematic, NYC-like wet-night mood.
+A Three.js zombie survival game in real places, built from free public data (OpenStreetMap, Overture, Mapterhorn terrain) and hand-made Blender models. Build order: world, then robot, then zombies, then multiplayer.
 
 - **Start here:** [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md) (every bot and person follows it)
 - **Current state / who's on what:** [HANDOFF.md](HANDOFF.md)
 - Rules: [knowledge/BUILD-RULES.md](knowledge/BUILD-RULES.md) · Tests: [knowledge/TESTING.md](knowledge/TESTING.md) · Plan: [knowledge/CITY-PLAN.md](knowledge/CITY-PLAN.md)
-- **Landmarks (Jonn + Jonn's bot, Blender):** [knowledge/JONN-LANDMARKS.md](knowledge/JONN-LANDMARKS.md)
+- **Jonn + Jonn's bots (Blender models):** [knowledge/JONN-DIRECTIONS.md](knowledge/JONN-DIRECTIONS.md) (landmark list: [JONN-LANDMARKS.md](knowledge/JONN-LANDMARKS.md))
 
 ## Run
 ```bash

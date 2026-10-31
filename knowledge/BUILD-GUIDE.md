@@ -1,5 +1,7 @@
 # City BUILD-GUIDE
 
+**Build order (Luis, Oct 31, 2026):** world first (all towns/cities, water, sky, weather, environment), then the robot, then zombies, then multiplayer last. City is a zombie survival game.
+
 Any bot (Websmith, Jonn's bot) or person can follow this cold. If a rule here conflicts with a request, the rule wins; ask Luis.
 
 ---
@@ -28,11 +30,7 @@ Tag format: `city-vNN-<section>` (two digits).
 ## 2. Data rules (Luis)
 - **Free public data only:** NJ elevation (USGS 3DEP 1 m / NJ LiDAR DEMs), NJ tree canopy / land cover (NJDEP, USGS NLCD), OpenStreetMap (**ODbL: show "© OpenStreetMap contributors"** in the app credits and README).
 - **No personal photos** in the repo or as references.
-- **Google Photorealistic 3D Tiles = TEMPORARY backdrop only.**
-  - Never copy, cache (beyond normal HTTP cache headers), export, bake, trace, or derive anything from it. No service-worker tile cache, no tiles in the repo, no offline mode, never a modeling reference.
-  - While shown: Google Maps logo (unmodified, 16-19 px tall, aria-label "Google Maps") + the combined tile copyright line, never covered.
-  - Not on the same screen/scene as non-Google maps (no OSM/Mapbox/Cesium basemap with it). Our own 3D objects on top are allowed; label them "custom model, not Google Maps data."
-  - Dropped for an area once our buildings cover it.
+- **No Google data at all** (tiles removed Oct 31, 2026). The world is baked from OSM, OpenFreeMap, Overture and Mapterhorn: see `BAKE-PIPELINE.md`.
 - **Record every source** in `knowledge/DATA-SOURCES.md` before merging data:
 
 | Source | What | URL | License | Attribution text | Used in | Added |
@@ -42,7 +40,7 @@ Tag format: `city-vNN-<section>` (two digits).
 ---
 ## 3. Terrain + OSM buildings in Three.js
 **Stack:** Vite + `three` from npm, bundled. **No CDNs.** Assets in `public/`.
-Suggested libs: `3d-tiles-renderer` (temporary Google backdrop only), `osmtogeojson`, `earcut` (or three's ShapeUtils), `geotiff` (read DEMs), `proj4` (if reprojecting), `meshoptimizer`/`gltf-transform` (assets).
+Suggested libs: `osmtogeojson`, `earcut` (or three's ShapeUtils), `geotiff` (read DEMs), `proj4` (if reprojecting), `meshoptimizer`/`gltf-transform` (assets).
 ```bash
 npm create vite@latest . -- --template vanilla-ts
 npm i three
@@ -68,23 +66,10 @@ Pipeline per area (script per step in `tools/`, outputs committed only if small;
 9. **Budget (laptop, integrated GPU):** ≤ 150 draw calls, ≤ 1.5 M triangles visible, ≥ 50 fps at 1080p, ≤ 300 MB GPU memory. Check `renderer.info.render.calls` in a dev overlay.
 
 ---
-## 4. Blender landmark workflow (landmarks only)
-**Split:** Jonn and Jonn's bot build all landmarks; Websmith does all Three.js work. Landmark list, folder layout and handoff: [JONN-LANDMARKS.md](JONN-LANDMARKS.md).
-- **References:** public-domain images, public plans, OSM footprints, or your own drawings. **Never Google tiles.** No personal photos. Strip EXIF/GPS from anything added.
-- **Scale:** real-world meters (1 unit = 1 m). **+Y up on export.** Origin at footprint center, at ground level.
-- **Export:** glTF 2.0 `.glb`, Draco or meshopt, KTX2 textures:
-```bash
-npx gltf-transform optimize in.glb landmarks/<area>/<slug>/<slug>.glb --compress meshopt --texture-compress ktx2
-```
-- **Night materials:** emissive windows/lights as a separate material (`emissive-windows`).
-- **Budget per landmark:** ≤ 50k triangles (hero ≤ 100k with Luis's OK), ≤ 2 textures at 2048², ≤ 3 MB .glb.
-- **Naming:** `landmarks/<area>/<slug>/<slug>.glb` + README with sources/licenses; objects/materials in English kebab-case; no usernames or local paths in the file (File → External Data → Make Paths Relative; check before export).
-- **Placement:** `landmarks.json`:
-```json
-[{ "id": "example-lighthouse", "file": "landmarks/example/example-lighthouse/example-lighthouse.glb",
-   "lat": 0.0, "lon": 0.0, "headingDeg": 0, "elevationM": 0, "area": "example" }]
-```
-  **Private places never go here**; they go in gitignored `config.private.json` (local dev only, never in the production bundle).
+## 4. Blender work (Jonn)
+**[JONN-DIRECTIONS.md](JONN-DIRECTIONS.md) is the source of truth** for Jonn's Blender tasks: order, specs, export formats, file paths and handoff. If anything here or in [JONN-LANDMARKS.md](JONN-LANDMARKS.md) differs, follow JONN-DIRECTIONS.md. Websmith does all Three.js work.
+- **References:** public-domain images, public plans, OSM footprints, or your own drawings. **Never Google tiles.** No personal photos. Strip EXIF/GPS.
+- **Private places** never go in the repo; they go in gitignored `config.private.json` (local dev only).
 
 ---
 ## 5. The look
@@ -104,7 +89,7 @@ npx gltf-transform optimize in.glb landmarks/<area>/<slug>/<slug>.glb --compress
 ---
 ## 7. Secrets
 - **No keys in the repo, ever.** Commit `.env.example` with placeholders only.
-- Map keys come from env at build/deploy (e.g. `VITE_GOOGLE_TILES_KEY`, set as a CI/host secret). Restrict: HTTP referrer = prod domain (separate dev key for `localhost`), API = Map Tiles only, daily quota cap, billing alerts.
+- Map keys come from env at build/deploy (set as a CI/host secret; none needed today). Restrict: HTTP referrer = prod domain (separate dev key for `localhost`), API = Map Tiles only, daily quota cap, billing alerts.
 - gitleaks in pre-commit and CI (blocks merge). GitHub secret scanning + push protection on.
 ```bash
 # pre-commit (e.g. via husky or .git/hooks/pre-commit)
