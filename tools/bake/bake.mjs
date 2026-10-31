@@ -19,6 +19,10 @@ const id = process.argv[2];
 if (!id) { console.error('usage: bake.mjs <area>'); process.exit(1); }
 const A = loadArea(id), C = cacheDir(id), O = outDir(id), P = projector(A.origin);
 const masks = loadMasks(id).map((m) => { const [x, z] = P.fwd(m.lon, m.lat); return { x, z, r: m.radiusM }; });
+// Areas flagged requiresMask (the home area's general region) never bake private homes without a mask:
+// with no config.private.json mask they fall back to public-only (no houses, sheds or pools anywhere).
+const publicOnly = !!A.requiresMask && masks.length === 0;
+if (publicOnly) console.warn(`${id}: requiresMask but no private mask found -> public-only bake (houses, sheds and pools dropped)`);
 const masked = (x, z) => masks.some((m) => (x - m.x) ** 2 + (z - m.z) ** 2 < m.r * m.r);
 const osm = JSON.parse(fs.readFileSync(path.join(C, 'osm.json'), 'utf8'));
 const palette = A.palette ?? id;
@@ -182,6 +186,7 @@ for (const b of all) {
   const box = obb(outer); if (!box) continue;
   const inf = inferBuilding(b.tags, area, box, b.id, b.est ?? ovrEst.get(b.id), palette);
   // Pitched roofs need a near-rectangular footprint; otherwise fall back to a clean flat roof with a low parapet.
+  if (publicOnly && (inf.kind === 'house' || inf.kind === 'shed' || inf.kind === 'garage' || inf.kind === 'garages')) { stats.masked++; continue; }
   const fill = area / box.area;
   let roof = inf.roof;
   if (roof !== 'flat' && roof !== 'dome' && (fill < 0.8 || holes.length)) { roof = 'flat'; inf.notes.push('roof:flat-fallback'); }
@@ -212,7 +217,7 @@ for (const e of osm.elements) {
 const pools = [], piers = [], trees = [], lamps = [];
 for (const e of osm.elements) {
   const t = e.tags; if (!t) continue;
-  if (t.leisure === 'swimming_pool' && e.type === 'way') for (const p of polygonsOf(e)) { const [cx, cz] = centroid(p.outer); if (!masked(cx, cz) && Math.abs(ringArea(p.outer)) > 3) pools.push(cw(p.outer).map(q)); }
+  if (!publicOnly && t.leisure === 'swimming_pool' && e.type === 'way') for (const p of polygonsOf(e)) { const [cx, cz] = centroid(p.outer); if (!masked(cx, cz) && Math.abs(ringArea(p.outer)) > 3) pools.push(cw(p.outer).map(q)); }
   if (['pier', 'breakwater', 'groyne'].includes(t.man_made) && e.type === 'way' && e.geometry) {
     const line = projLine(e.geometry), closed = e.geometry.length > 3 && e.geometry[0].lat === e.geometry.at(-1).lat && e.geometry[0].lon === e.geometry.at(-1).lon;
     if (closed && t.area !== 'no') piers.push({ poly: cw(closeOpen(line)).map(q) }); else piers.push({ line: line.map(q), w: parseFloat(t.width) > 0 ? parseFloat(t.width) : 3 });
@@ -296,7 +301,7 @@ for (const r of roads) {
       const off = r.w / 2 + 1.7 + rnd() * 0.8, x = p[i] + ux * s - uz * off * sd, z = p[i + 1] + uz * s + ux * off * sd;
       const j = oi(x, z); if (j < 0 || occ[j] === 1 || occ[j] === 2 || masked(x, z) || wet(x, z) || nearLamp(x, z, 25)) continue;
       if (onRoadCore(x, z)) continue;
-      mkTree(x, z, rnd() < 0.65); streetTrees++;
+      mkTree(x, z, rnd() < (A.streetPalmShare ?? 0.65)); streetTrees++;
     }
   }
 }
@@ -306,11 +311,32 @@ let scattered = 0;
 for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) {
   const i = iz * NX + ix; if (water[i]) continue;
   const d = density[cover[i]]; if (!d) continue;
-  let n = d * G * G; while (n > 0) { if (rnd() < Math.min(n, 1)) { const x = gx0 + (ix + rnd() - 0.5) * G, z = gz0 + (iz + rnd() - 0.5) * G; if (!masked(x, z) && !wet(x, z) && free(x, z, 0) && !onRoadCore(x, z)) { mkTree(x, z, rnd() < (cover[i] === 4 || cover[i] === 5 ? 0.25 : palmShare)); scattered++; } } n -= 1; }
+  let n = d * (A.treeDensity ?? 1) * G * G; while (n > 0) { if (rnd() < Math.min(n, 1)) { const x = gx0 + (ix + rnd() - 0.5) * G, z = gz0 + (iz + rnd() - 0.5) * G; if (!masked(x, z) && !wet(x, z) && free(x, z, 0) && !onRoadCore(x, z)) { mkTree(x, z, rnd() < (cover[i] === 4 || cover[i] === 5 ? 0.25 : palmShare)); scattered++; } } n -= 1; }
+}
+
+// ---------- fictional ferry dock (areas.json ferryDock): nearest shore point to the origin with >= 70 m of open water ahead
+let dock = null;
+if (A.ferryDock) {
+  const inGrid = (x, z) => x > gx0 && z > gz0 && x < gx0 + (NX - 1) * G && z < gz0 + (NZ - 1) * G;
+  let best = Infinity;
+  for (let iz = 0; iz < NZ; iz += 1) for (let ix = 0; ix < NX; ix += 1) {
+    const x = gx0 + ix * G, z = gz0 + iz * G, d = Math.hypot(x, z);
+    if (d > 1500 || d >= best || wet(x, z)) continue;
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2, c = Math.cos(a), sn = Math.sin(a); let ok = true;
+      for (let r = 6; r <= 70 && ok; r += 4) { const px = x + c * r, pz = z + sn * r; ok = inGrid(px, pz) && wet(px, pz); }
+      for (const dl of [-14, 14]) for (let r = 10; r <= 50 && ok; r += 8) { const px = x + c * r - sn * dl, pz = z + sn * r + c * dl; ok = wet(px, pz); }
+      if (ok) { best = d; dock = { x: q(x), z: q(z), a: Math.round(a * 1000), name: A.ferryDock.name, fiction: 1 }; break; }
+    }
+  }
+  if (dock) { const dx = dock.x / 10, dz = dock.z / 10, keep = []; // clear trees off the pier and its forecourt
+    for (let i = 0; i < treeOut.length; i += 5) if (Math.hypot(treeOut[i] / 10 - dx, treeOut[i + 1] / 10 - dz) > 30) keep.push(...treeOut.slice(i, i + 5));
+    treeOut.length = 0; treeOut.push(...keep); }
+  console.log('ferry dock:', dock ? `placed ${Math.round(best)} m from origin` : 'no shore found');
 }
 
 // ---------- write
-const area = { v: 1, id, name: A.name, origin: A.origin.name, units: 'dm (x east, z south, local ENU around origin)', buildings, roads, pools, piers, trees: treeOut, lamps };
+const area = { v: 1, id, name: A.name, origin: A.origin.name, units: 'dm (x east, z south, local ENU around origin)', buildings, roads, pools, piers, trees: treeOut, lamps, ...(dock ? { dock } : {}), ...(A.inland ? { inland: 1 } : {}) };
 fs.writeFileSync(path.join(O, 'area.json'), JSON.stringify(area));
 // ground mask for grass (2 m, 1 bit per cell; set = building, pool or road core, no grass): header OCC1 nx nz cell_cm x0_cm z0_cm
 { const bits = new Uint8Array(Math.ceil(ONX * ONZ / 8)); for (let j = 0; j < ONX * ONZ; j++) if (occ[j] === 1 || occ[j] === 2 || roadCore[j]) bits[j >> 3] |= 1 << (j & 7);
@@ -332,6 +358,6 @@ const attribution = {
 };
 fs.writeFileSync(path.join(O, 'attribution.json'), JSON.stringify(attribution, null, 2) + '\n');
 const sizes = Object.fromEntries(['area.json', 'terrain.bin'].map((f) => { const b = fs.readFileSync(path.join(O, f)); return [f, { bytes: b.length, gzip: zlib.gzipSync(b, { level: 9 }).length }]; }));
-const manifest = { area: id, grid: { nx: NX, nz: NZ, m: G }, waterPolys, counts: { buildings: buildings.length, roads: roads.length, pools: pools.length, piers: piers.length, trees: treeOut.length / 5, treesMapped: trees.length, treesStreet: streetTrees, treesScattered: scattered, lamps: lamps.length, lampsInferred: inferredLamps }, buildingSources: { osm: stats.osm, overture: stats.overture, parts: stats.parts, outlinesReplacedByParts: stats.skippedOutlineWithParts }, masks: masks.length ? `${masks.length} private mask(s) applied, ${stats.masked} buildings removed` : 'none', heightSource: stats.notes, roofs: stats.roofs, sizes };
+const manifest = { area: id, grid: { nx: NX, nz: NZ, m: G }, waterPolys, counts: { buildings: buildings.length, roads: roads.length, pools: pools.length, piers: piers.length, trees: treeOut.length / 5, treesMapped: trees.length, treesStreet: streetTrees, treesScattered: scattered, lamps: lamps.length, lampsInferred: inferredLamps }, buildingSources: { osm: stats.osm, overture: stats.overture, parts: stats.parts, outlinesReplacedByParts: stats.skippedOutlineWithParts }, masks: publicOnly ? `public-only fallback (no private mask): ${stats.masked} residential buildings dropped` : masks.length ? `${masks.length} private mask(s) applied, ${stats.masked} buildings removed` : 'none', heightSource: stats.notes, roofs: stats.roofs, sizes };
 fs.writeFileSync(path.join(O, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(JSON.stringify(manifest, null, 1));

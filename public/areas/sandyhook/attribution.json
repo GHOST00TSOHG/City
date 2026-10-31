@@ -1,0 +1,33 @@
+{
+  "area": "Sandy Hook, NJ",
+  "credits": [
+    {
+      "text": "© OpenStreetMap contributors",
+      "licence": "ODbL 1.0",
+      "url": "https://www.openstreetmap.org/copyright",
+      "used": "buildings, building parts, roads, landcover, pools, piers, trees, lamps"
+    },
+    {
+      "text": "OpenFreeMap © OpenMapTiles Data from OpenStreetMap",
+      "licence": "OpenMapTiles schema; data ODbL",
+      "url": "https://openfreemap.org",
+      "used": "water + ocean polygons",
+      "tiles": "https://tiles.openfreemap.org/planet/20261025_080012_pt/{z}/{x}/{y}.pbf"
+    },
+    {
+      "text": "© Overture Maps Foundation",
+      "licence": "ODbL 1.0 (buildings theme)",
+      "url": "https://docs.overturemaps.org/attribution/",
+      "used": "gap-fill footprints (Microsoft ML Buildings) and height estimates",
+      "release": "2026-10-21.0"
+    },
+    {
+      "text": "© Mapterhorn",
+      "licence": "open data, see attribution list (USGS 3DEP for the USA)",
+      "url": "https://mapterhorn.com/attribution",
+      "used": "terrain, zoom 13"
+    }
+  ],
+  "osmTimestamp": "2026-06-01T08:52:28Z",
+  "note": "This baked data is a Derived Database of OpenStreetMap and is available under the ODbL 1.0."
+}

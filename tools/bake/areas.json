@@ -2,11 +2,116 @@
   "_note": "Public areas only. Origins are public landmarks. Private masks (home area) live in config.private.json (gitignored), never here.",
   "keywest": {
     "name": "Key West, FL (Old Town)",
-    "origin": { "name": "Southernmost Point Buoy", "lat": 24.54655, "lon": -81.79751 },
-    "bbox": { "west": -81.8120, "south": 24.5400, "east": -81.7700, "north": 24.5660 },
+    "origin": {
+      "name": "Southernmost Point Buoy",
+      "lat": 24.54655,
+      "lon": -81.79751
+    },
+    "bbox": {
+      "west": -81.812,
+      "south": 24.54,
+      "east": -81.77,
+      "north": 24.566
+    },
     "gridM": 8,
     "terrainZoom": 13,
     "overtureRelease": "2026-10-21.0",
     "openfreemapZoom": 14
+  },
+  "bayshore": {
+    "name": "Highlands, NJ (Bayshore)",
+    "origin": {
+      "name": "Twin Lights",
+      "lat": 40.39666,
+      "lon": -73.98594
+    },
+    "bbox": {
+      "west": -74.008,
+      "south": 40.392,
+      "east": -73.977,
+      "north": 40.415
+    },
+    "gridM": 8,
+    "requiresMask": true,
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14,
+    "palette": "nj",
+    "palmShare": 0,
+    "streetPalmShare": 0,
+    "treeDensity": 0.5
+  },
+  "sandyhook": {
+    "name": "Sandy Hook, NJ",
+    "origin": {
+      "name": "Sandy Hook Lighthouse",
+      "lat": 40.46172,
+      "lon": -74.00202
+    },
+    "bbox": {
+      "west": -74.02,
+      "south": 40.417,
+      "east": -73.965,
+      "north": 40.48
+    },
+    "gridM": 10,
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14,
+    "palette": "nj",
+    "palmShare": 0,
+    "streetPalmShare": 0,
+    "treeDensity": 0.3,
+    "requiresMask": true
+  },
+  "newark": {
+    "name": "Newark, NJ (Schools Stadium)",
+    "origin": {
+      "name": "Newark Schools Stadium",
+      "lat": 40.76979,
+      "lon": -74.18462
+    },
+    "bbox": {
+      "west": -74.198,
+      "south": 40.761,
+      "east": -74.172,
+      "north": 40.779
+    },
+    "gridM": 8,
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14,
+    "palette": "nj",
+    "palmShare": 0,
+    "streetPalmShare": 0,
+    "treeDensity": 0.5,
+    "inland": true
+  },
+  "passaic": {
+    "name": "Newark, NJ (Passaic waterfront)",
+    "origin": {
+      "name": "Riverfront Park",
+      "lat": 40.7336,
+      "lon": -74.1618
+    },
+    "bbox": {
+      "west": -74.176,
+      "south": 40.724,
+      "east": -74.148,
+      "north": 40.744
+    },
+    "gridM": 8,
+    "ferryDock": {
+      "name": "City Ferry (fictional)",
+      "fiction": true
+    },
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14,
+    "palette": "nj",
+    "palmShare": 0,
+    "streetPalmShare": 0,
+    "treeDensity": 0.5,
+    "inland": true
   }
 }

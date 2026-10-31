@@ -1,0 +1,46 @@
+{
+  "area": "bayshore",
+  "grid": {
+    "nx": 329,
+    "nz": 321,
+    "m": 8
+  },
+  "waterPolys": 16,
+  "counts": {
+    "buildings": 120,
+    "roads": 707,
+    "pools": 0,
+    "piers": 81,
+    "trees": 28833,
+    "treesMapped": 60,
+    "treesStreet": 1320,
+    "treesScattered": 27453,
+    "lamps": 919,
+    "lampsInferred": 919
+  },
+  "buildingSources": {
+    "osm": 109,
+    "overture": 11,
+    "parts": 0,
+    "outlinesReplacedByParts": 0
+  },
+  "masks": "public-only fallback (no private mask): 2134 residential buildings dropped",
+  "heightSource": {
+    "overture": 110,
+    "default": 9,
+    "height:tag": 1
+  },
+  "roofs": {
+    "flat": 120
+  },
+  "sizes": {
+    "area.json": {
+      "bytes": 757369,
+      "gzip": 280991
+    },
+    "terrain.bin": {
+      "bytes": 316851,
+      "gzip": 79256
+    }
+  }
+}

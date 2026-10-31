@@ -1,0 +1,49 @@
+{
+  "area": "sandyhook",
+  "grid": {
+    "nx": 466,
+    "nz": 702,
+    "m": 10
+  },
+  "waterPolys": 44,
+  "counts": {
+    "buildings": 241,
+    "roads": 1489,
+    "pools": 0,
+    "piers": 95,
+    "trees": 33893,
+    "treesMapped": 137,
+    "treesStreet": 774,
+    "treesScattered": 32982,
+    "lamps": 553,
+    "lampsInferred": 553
+  },
+  "buildingSources": {
+    "osm": 206,
+    "overture": 35,
+    "parts": 0,
+    "outlinesReplacedByParts": 0
+  },
+  "masks": "public-only fallback (no private mask): 2975 residential buildings dropped",
+  "heightSource": {
+    "overture": 211,
+    "default": 28,
+    "height:tag": 1,
+    "levels:tag": 1
+  },
+  "roofs": {
+    "flat": 236,
+    "gabled": 3,
+    "skillion": 2
+  },
+  "sizes": {
+    "area.json": {
+      "bytes": 971545,
+      "gzip": 368299
+    },
+    "terrain.bin": {
+      "bytes": 981420,
+      "gzip": 63585
+    }
+  }
+}
