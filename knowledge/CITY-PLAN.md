@@ -10,3 +10,5 @@ Full detail: [BUILD-GUIDE.md](BUILD-GUIDE.md).
   - v04 trees + water
   - v05 shadow people
   - v06+ landmarks, one per version
+
+**Rebuild order (Luis, Oct 31, 2026; replaces the versions above):** zombie survival game. Phases: 0 bake pipeline, 1 Key West, 2 facades/night/lamps, 3 vegetation, 4 water/sky/weather, 5 all other areas + ferry, 6 interiors, 7 robot (customization, drop-in), 8 zombies (unique zombies, gadgets, dismemberment, headshot-only kills), 9 multiplayer last.

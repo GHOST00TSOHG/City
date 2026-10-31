@@ -1,6 +1,6 @@
 # JONN-LANDMARKS: Blender landmarks guide for Jonn's bot
 
-Read this cold, then [BUILD-GUIDE.md](BUILD-GUIDE.md) §4 (Blender), §2 (data rules) and §6 (privacy). If anything conflicts, BUILD-GUIDE wins; ask Luis.
+**Start with [JONN-DIRECTIONS.md](JONN-DIRECTIONS.md)**: it sets your task order and wins over this file. Then read [BUILD-GUIDE.md](BUILD-GUIDE.md) §4 (Blender), §2 (data rules) and §6 (privacy). If anything conflicts, BUILD-GUIDE wins; ask Luis.
 
 ## 1. Your role
 - **Jonn + Jonn's bot build ALL Blender landmarks.** Websmith does all the Three.js work.
