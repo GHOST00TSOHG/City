@@ -102,7 +102,7 @@ npx gltf-transform optimize in.glb landmarks/<area>/<slug>/<slug>.glb --compress
 ---
 ## 7. Secrets
 - **No keys in the repo, ever.** Commit `.env.example` with placeholders only.
-- Map keys come from env at build/deploy (e.g. `VITE_GOOGLE_TILES_KEY`, set as a CI/host secret). Restrict: HTTP referrer = prod domain (separate dev key for `localhost`), API = Map Tiles only, daily quota cap, billing alerts.
+- Map keys come from env at build/deploy (set as a CI/host secret; none needed today). Restrict: HTTP referrer = prod domain (separate dev key for `localhost`), API = Map Tiles only, daily quota cap, billing alerts.
 - gitleaks in pre-commit and CI (blocks merge). GitHub secret scanning + push protection on.
 ```bash
 # pre-commit (e.g. via husky or .git/hooks/pre-commit)

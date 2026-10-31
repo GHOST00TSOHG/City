@@ -9,7 +9,7 @@ Follow [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md). Update this file in
 - Vite + TypeScript + `three` from npm, bundled; no CDNs (Inter font from `@fontsource/inter`).
 - Night mood: ACES tone mapping, exp fog, cool moon key light, hemisphere fill, warm sodium city glow, wet reflective fallback ground, gradient sky with horizon glow.
 - Camera: start over Twin Lights, Highlands NJ (public landmark), looking over the Bayshore. Slow auto-drift that stops on touch, damped OrbitControls, clamped zoom and tilt. Works on laptop and phone (lower pixel ratio and coarser tiles on touch devices).
-- TEMPORARY Google Photorealistic 3D Tiles backdrop (`3d-tiles-renderer`), key from `VITE_GOOGLE_TILES_KEY`. Textures darkened for night. "Google Maps" logo text plus the live tile copyright line are always shown while tiles are on.
+- (v01 only, since removed) a temporary Google 3D Tiles backdrop. Gone in the rebuild.
 - No key: fallback ground and sky, plus one `console.info` notice.
 - `.env.example`, `.gitignore` (`.env*`), `.gitleaks.toml`, CI (gitleaks + build on PRs), CODEOWNERS, CLAUDE.md.
 - Playwright smoke (`tests/smoke.spec.ts`): canvas visible, zero console errors, ≤ 150 draw calls, screenshots at laptop and phone sizes.
