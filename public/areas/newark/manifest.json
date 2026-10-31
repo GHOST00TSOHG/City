@@ -1,0 +1,50 @@
+{
+  "area": "newark",
+  "grid": {
+    "nx": 275,
+    "nz": 251,
+    "m": 8
+  },
+  "waterPolys": 9,
+  "counts": {
+    "buildings": 6848,
+    "roads": 1211,
+    "pools": 0,
+    "piers": 0,
+    "trees": 10983,
+    "treesMapped": 63,
+    "treesStreet": 2049,
+    "treesScattered": 8871,
+    "lamps": 1602,
+    "lampsInferred": 1600
+  },
+  "buildingSources": {
+    "osm": 4657,
+    "overture": 2191,
+    "parts": 0,
+    "outlinesReplacedByParts": 0
+  },
+  "masks": "none",
+  "heightSource": {
+    "overture": 4997,
+    "default": 1408,
+    "roof:flat-fallback": 217,
+    "levels:tag": 443
+  },
+  "roofs": {
+    "gabled": 4562,
+    "hipped": 1667,
+    "flat": 548,
+    "skillion": 71
+  },
+  "sizes": {
+    "area.json": {
+      "bytes": 1505382,
+      "gzip": 439230
+    },
+    "terrain.bin": {
+      "bytes": 207099,
+      "gzip": 54734
+    }
+  }
+}

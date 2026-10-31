@@ -1,0 +1,52 @@
+{
+  "area": "passaic",
+  "grid": {
+    "nx": 296,
+    "nz": 279,
+    "m": 8
+  },
+  "waterPolys": 6,
+  "counts": {
+    "buildings": 5051,
+    "roads": 2356,
+    "pools": 5,
+    "piers": 6,
+    "trees": 7588,
+    "treesMapped": 132,
+    "treesStreet": 1861,
+    "treesScattered": 5595,
+    "lamps": 1827,
+    "lampsInferred": 1815
+  },
+  "buildingSources": {
+    "osm": 4967,
+    "overture": 84,
+    "parts": 19,
+    "outlinesReplacedByParts": 10
+  },
+  "masks": "none",
+  "heightSource": {
+    "overture": 2375,
+    "default": 2601,
+    "roof:flat-fallback": 297,
+    "levels:tag": 71,
+    "height:tag": 3,
+    "overture:floors": 1
+  },
+  "roofs": {
+    "gabled": 3561,
+    "flat": 955,
+    "hipped": 431,
+    "skillion": 104
+  },
+  "sizes": {
+    "area.json": {
+      "bytes": 1264075,
+      "gzip": 382283
+    },
+    "terrain.bin": {
+      "bytes": 247776,
+      "gzip": 52410
+    }
+  }
+}
