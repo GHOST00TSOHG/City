@@ -1,0 +1,13 @@
+title = "City gitleaks config"
+[extend]
+useDefault = true
+
+[[rules]]
+id = "google-api-key"
+description = "Google API key"
+regex = '''AIza[0-9A-Za-z\-_]{35}'''
+keywords = ["aiza"]
+
+[allowlist]
+description = "Lockfiles and placeholders"
+paths = ['''package-lock\.json''', '''\.env\.example''']
