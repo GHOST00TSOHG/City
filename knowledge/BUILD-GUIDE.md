@@ -66,23 +66,10 @@ Pipeline per area (script per step in `tools/`, outputs committed only if small;
 9. **Budget (laptop, integrated GPU):** ≤ 150 draw calls, ≤ 1.5 M triangles visible, ≥ 50 fps at 1080p, ≤ 300 MB GPU memory. Check `renderer.info.render.calls` in a dev overlay.
 
 ---
-## 4. Blender landmark workflow (landmarks only)
-**Split:** Jonn and Jonn's bots build all Blender models (landmarks, robot, zombies); Websmith does all Three.js work. **Jonn's tasks, order and specs: [JONN-DIRECTIONS.md](JONN-DIRECTIONS.md).** Landmark list: [JONN-LANDMARKS.md](JONN-LANDMARKS.md).
-- **References:** public-domain images, public plans, OSM footprints, or your own drawings. **Never Google tiles.** No personal photos. Strip EXIF/GPS from anything added.
-- **Scale:** real-world meters (1 unit = 1 m). **+Y up on export.** Origin at footprint center, at ground level.
-- **Export:** glTF 2.0 `.glb`, Draco or meshopt, KTX2 textures:
-```bash
-npx gltf-transform optimize in.glb landmarks/<area>/<slug>/<slug>.glb --compress meshopt --texture-compress ktx2
-```
-- **Night materials:** emissive windows/lights as a separate material (`emissive-windows`).
-- **Budget per landmark:** ≤ 50k triangles (hero ≤ 100k with Luis's OK), ≤ 2 textures at 2048², ≤ 3 MB .glb.
-- **Naming:** `landmarks/<area>/<slug>/<slug>.glb` + README with sources/licenses; objects/materials in English kebab-case; no usernames or local paths in the file (File → External Data → Make Paths Relative; check before export).
-- **Placement:** `landmarks.json`:
-```json
-[{ "id": "example-lighthouse", "file": "landmarks/example/example-lighthouse/example-lighthouse.glb",
-   "lat": 0.0, "lon": 0.0, "headingDeg": 0, "elevationM": 0, "area": "example" }]
-```
-  **Private places never go here**; they go in gitignored `config.private.json` (local dev only, never in the production bundle).
+## 4. Blender work (Jonn)
+**[JONN-DIRECTIONS.md](JONN-DIRECTIONS.md) is the source of truth** for Jonn's Blender tasks: order, specs, export formats, file paths and handoff. If anything here or in [JONN-LANDMARKS.md](JONN-LANDMARKS.md) differs, follow JONN-DIRECTIONS.md. Websmith does all Three.js work.
+- **References:** public-domain images, public plans, OSM footprints, or your own drawings. **Never Google tiles.** No personal photos. Strip EXIF/GPS.
+- **Private places** never go in the repo; they go in gitignored `config.private.json` (local dev only).
 
 ---
 ## 5. The look
