@@ -11,7 +11,10 @@ export function createThrust(scene: THREE.Scene, count: number) {
   { const v = uv().y; // 1 at nozzle, 0 at tip
     const core = mix(vec3(1.0, 0.45, 0.08), vec3(1.0, 0.92, 0.6), smoothstep(0.55, 1.0, v));
     const flick = sin(time.mul(53)).mul(0.08).add(0.92);
-    flameMat.colorNode = mix(core, vec3(1, 0.3, 0.05), uBurst.mul(0.4)).mul(flick).mul(2.2);
+    // BURST: white-hot core with blue edge and standing shock diamonds (bright bands along the jet)
+    const hot = mix(vec3(0.75, 0.88, 1.0), vec3(1, 1, 1), smoothstep(0.4, 1.0, v));
+    const diamonds = smoothstep(0.55, 0.95, sin(v.mul(46).sub(time.mul(4))).mul(0.5).add(0.5)).mul(smoothstep(0.1, 0.6, v)).mul(1.4);
+    flameMat.colorNode = mix(core, hot.mul(diamonds.add(0.75)), uBurst).mul(flick).mul(2.2);
     flameMat.opacityNode = smoothstep(0.0, 0.5, v).mul(float(0.9)); }
   const geo = new THREE.ConeGeometry(0.06, 1, 10, 1, true).translate(0, -0.5, 0);
   const inner = new THREE.ConeGeometry(0.03, 0.6, 8, 1, true).translate(0, -0.3, 0);
@@ -20,7 +23,7 @@ export function createThrust(scene: THREE.Scene, count: number) {
     for (const g of a) { const o = pos.length / 3; pos.push(...(g.attributes.position.array as Float32Array)); u.push(...(g.attributes.uv.array as Float32Array)); for (const i of g.index!.array) idx.push(i + o); g.dispose(); }
     merged.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); merged.setAttribute('uv', new THREE.Float32BufferAttribute(u, 2)); merged.setIndex(idx); }
   const flames = Array.from({ length: count }, () => { const m = new THREE.Mesh(merged, flameMat); m.frustumCulled = false; m.renderOrder = 5; scene.add(m); return m; });
-  const light = new THREE.PointLight(0xff8a30, 0, 14, 2); scene.add(light);
+  const light = new THREE.PointLight(0xff8a30, 0, 14, 2); const lc0 = new THREE.Color(0xff8a30), lc1 = new THREE.Color(0xbfe4ff); scene.add(light);
 
   const N = 220, puffGeo = new THREE.IcosahedronGeometry(0.5, 1);
   const puffMat = new THREE.MeshBasicNodeMaterial({ transparent: true, opacity: 0.38, depthWrite: false });
@@ -46,14 +49,14 @@ export function createThrust(scene: THREE.Scene, count: number) {
         f.scale.set(1 + burst * 0.6, len, 1 + burst * 0.6); lx += f.position.x; ly += f.position.y; lz += f.position.z;
       });
       if (flames.length) light.position.set(lx / flames.length, ly / flames.length - 0.3, lz / flames.length);
-      light.intensity = power > 0.02 ? (6 + burst * 10) * power * (0.8 + Math.random() * 0.4) : 0;
+      light.color.copy(lc0).lerp(lc1, burst); light.intensity = power > 0.02 ? (6 + burst * 10) * power * (0.8 + Math.random() * 0.4) : 0;
       // emit
       acc += dt * (power > 0.02 ? 70 + burst * 90 : 0);
       while (acc >= 1) { acc -= 1;
         for (const f of flames) { if (!f.visible) continue;
           dir.set(0, -1, 0).applyQuaternion(f.quaternion); tmp.copy(f.position).addScaledVector(dir, f.scale.y * 0.9);
           rv.copy(vel).multiplyScalar(0.15).addScaledVector(dir, 2.5).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.4, (Math.random() - 0.5) * 0.6));
-          if (burst > 0.2 && Math.random() < 0.5) emit(tmp, rv, 0.35, 0.18, 1.5, 0xff7a20); // fire trail
+          if (burst > 0.2 && Math.random() < 0.5) emit(tmp, rv, 0.35, 0.18, 1.5, 0xdff1ff); // white-hot trail
           else emit(tmp, rv, 0.7 + Math.random() * 0.4, 0.12, 2.2, 0x1c1c1e);
           if (ground !== null && f.position.y - ground < 6 && Math.random() < 0.6) { // dust / spray where the jet hits
             const a = Math.random() * Math.PI * 2, s = 3 + Math.random() * 3;

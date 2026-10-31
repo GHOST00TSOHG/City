@@ -7,7 +7,7 @@ export function createRobotHud() {
 <div class="row small"><span>ALT <b class="alt">0</b> ft</span><span>V/S <b class="vs">0</b> ft/s</span></div>
 <div class="burst"><span>BURST</span><i><u></u></i></div></div>
 <div id="reticle"><span></span><em class="ralt"></em></div>
-<div id="legend">WASD move/fly · Space jump / rockets up · C down · Shift run / BURST · F rockets on/off · A/D bank · drag look · V free cam</div>`;
+<div id="legend">WASD move/fly · Space jump / rockets · C down · Shift run / BURST · hold X power up · F rockets · B garage · V free cam</div>`;
   document.body.appendChild(el);
   const q = (s: string) => el.querySelector(s) as HTMLElement;
   const mode = q('.mode'), mph = q('.mph'), alt = q('.alt'), vs = q('.vs'), bar = q('.burst u'), ralt = q('.ralt');
