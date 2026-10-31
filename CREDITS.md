@@ -24,3 +24,7 @@ No Google data, keys, tiles or models are used. No personal photos.
 | sharp, pbf, @mapbox/vector-tile (bake tools only) | Apache-2.0 / BSD-3 |
 | overturemaps CLI (bake tools only, `pip install overturemaps`) | MIT |
 | City code | MIT, © 2026 Luis Bryant-Petrillo |
+
+## Vegetation (phase 3)
+- **ez-tree** by Daniel Greenheck — https://github.com/dgreenheck/ez-tree — MIT licence. npm `@dgreenheck/ez-tree@1.1.0`, bundled locally (no CDN). Procedural oak/ash geometry plus the package's bundled bark/leaf textures (MIT, shipped inside the package). Its materials and wind are replaced with our own TSL shaders.
+- Grass, palms and card impostors are procedural (our code). No third-party licensed (non-open) assets are committed; SpeedTree models, if bought, are loaded at runtime from `public/trees/` and must not be committed.

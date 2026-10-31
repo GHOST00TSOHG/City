@@ -3,6 +3,8 @@ import * as THREE from 'three/webgpu';
 /** Growable non-indexed triangle soup with flat normals and vertex colours (linear). */
 export class Soup {
   p: number[] = []; n: number[] = []; c: number[] = [];
+  /** Optional per-vertex facade data [baseY, wallTopY, kind, seed]; kind 0 = no windows. */
+  f: number[] | null = null; cur: [number, number, number, number] = [0, 0, 0, 0];
   private static e1 = new THREE.Vector3(); private static e2 = new THREE.Vector3(); private static nn = new THREE.Vector3();
   /** Adds triangle; flips winding so the face normal points along `hint` (or computed normal if no hint). */
   tri(a: number[], b: number[], c: number[], col: THREE.Color, hint?: [number, number, number], shade: [number, number, number] = [1, 1, 1]) {
@@ -14,6 +16,7 @@ export class Soup {
     if (hint && n.x * hint[0] + n.y * hint[1] + n.z * hint[2] < 0) { const t = b; b = c; c = t; n.negate(); s = [shade[0], shade[2], shade[1]]; }
     for (const [v, k] of [[a, s[0]], [b, s[1]], [c, s[2]]] as [number[], number][]) {
       this.p.push(v[0], v[1], v[2]); this.n.push(n.x, n.y, n.z); this.c.push(col.r * k, col.g * k, col.b * k);
+      if (this.f) this.f.push(...this.cur);
     }
   }
   quad(a: number[], b: number[], c: number[], d: number[], col: THREE.Color, hint?: [number, number, number], shade?: [number, number, number, number]) {
@@ -26,6 +29,7 @@ export class Soup {
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.p, 3));
     g.setAttribute('normal', new THREE.Float32BufferAttribute(this.n, 3));
     g.setAttribute('color', new THREE.Float32BufferAttribute(this.c, 3));
+    if (this.f) g.setAttribute('facade', new THREE.Float32BufferAttribute(this.f, 4));
     g.computeBoundingSphere(); g.computeBoundingBox();
     return g;
   }

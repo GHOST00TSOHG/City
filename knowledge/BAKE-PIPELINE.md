@@ -32,3 +32,20 @@ Defaults: `building=yes` is classed by footprint (<22 m² shed, <320 m² house, 
 
 ## Privacy
 Masks (the home area) live only in `config.private.json` (gitignored): `{"masks":[{"area":"<id>","lat":..,"lon":..,"radiusM":..}]}`. The bake drops buildings, pools and trees inside a mask and writes only a count to the manifest. Use a generous radius. Never commit coordinates.
+
+## Phase 2: lamps, trees, facades (heuristics)
+- **Lamps:** OSM `highway=street_lamp` nodes (masked like everything else) plus inferred lamps. Inferred: major roads every 32 m on alternating sides, minor streets every 42 m on one side. Each lamp is kept at least 14 m from other lamps and is skipped on water, in masked areas and on buildings. Record `[x dm, z dm, inferred 0/1, arm heading mrad]`, with the arm pointing at the nearest road.
+- **Trees:** OSM `natural=tree` nodes plus `tree_row` ways (one tree every 8 m), plus a seeded scatter by land cover (per m²: wood 1/45, wetland 1/120, land 1/260, grass 1/320). A tree needs 2 m of clearance from buildings, pools and roads. 55% are palms (25% in wood/wetland). Palms are 7–15 m tall, broadleaf trees 5–12 m. Stored as a flat array `[x, z, kind, height dm, seed] …`.
+- **Facades (client):** inferred type. Houses (pitched or under 7.5 m, under 400 m²) get small windows with shutters. Other buildings get a regular grid with a storefront on the ground floor. About 22–30% of windows are lit warm and a few cool. The shader uses no textures.
+
+## Phase 3 — vegetation
+- **Street trees:** along minor/major roads every 11–19 m, 50% per side, set back road w/2 + 1.7–2.5 m; skipped on buildings, pools, masked areas, water, road core (2 m grid, w/2 + 0.3 m) or within 5 m of a lamp. 65% palms.
+- **Yard trees (relaxed clearance):** only the trunk cell must be free and off road core. Densities per m²: wood 1/45, grass 1/260, land 1/140, wetland 1/120. Key West bake: 25,500 trees (207 mapped, 2,847 street, 22,446 scattered).
+- **ground-mask.bin:** Int32 header [0x4f434331 'OCC1', nx, nz, cell_cm=200, x0_cm, z0_cm], then a bit-packed mask (row-major, LSB first), bit = building/pool/road core. Used by the runtime grass to avoid paved/built ground.
+
+## Phase 5
+- `requiresMask` with no private mask gives a public-only bake that drops residential buildings and pools. This is recorded in `manifest.masks`.
+- `treeDensity` scales scattered trees. `streetPalmShare` and `palmShare` are 0 for NJ. The `nj` palette uses siding, brick and shingle.
+- `ferryDock`: the dock goes at the nearest land point within 1.5 km of the origin that has at least 70 m of open water ahead and ±14 m clear. Trees within 30 m are removed. The result is written as `dock {x,z,a,name,fiction}`.
+- `inland`: passed through to area.json. The client clips the water plane and adds a land skirt.
+- Overpass: overpass-api.de was unreliable, so the area OSM was fetched from overpass.kumi.systems (OSM base 2026-07-15) into `tools/cache/<area>/osm.json`.

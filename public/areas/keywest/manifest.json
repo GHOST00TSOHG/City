@@ -11,8 +11,12 @@
     "roads": 2870,
     "pools": 1103,
     "piers": 213,
-    "trees": 133,
-    "lamps": 29
+    "trees": 25500,
+    "treesMapped": 207,
+    "treesStreet": 2847,
+    "treesScattered": 22446,
+    "lamps": 2369,
+    "lampsInferred": 2340
   },
   "buildingSources": {
     "osm": 7557,
@@ -38,8 +42,8 @@
   },
   "sizes": {
     "area.json": {
-      "bytes": 1732971,
-      "gzip": 497680
+      "bytes": 2320304,
+      "gzip": 722673
     },
     "terrain.bin": {
       "bytes": 579372,

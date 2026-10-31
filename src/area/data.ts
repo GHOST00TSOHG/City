@@ -2,16 +2,24 @@
 export interface Building { r: number[][]; h: number; m: number; s: string; rh: number; o: [number, number, number, number, number]; wc: number; rc: number; src?: string }
 export interface Road { c: number; w: number; p: number[] }
 export interface Pier { poly?: number[]; line?: number[]; w?: number }
-export interface AreaData { id: string; name: string; buildings: Building[]; roads: Road[]; pools: number[][]; piers: Pier[]; trees: number[][]; lamps: number[][] }
+export interface AreaData { id: string; name: string; buildings: Building[]; roads: Road[]; pools: number[][]; piers: Pier[]; /** flat [x dm, z dm, kind 0 palm|1 broadleaf, height dm, seed]… */ trees: number[]; /** [x dm, z dm, inferred, arm heading mrad] */ lamps: number[][]; /** fictional ferry dock: dm, heading mrad */ dock?: { x: number; z: number; a: number; name: string } }
 export interface Terrain { nx: number; nz: number; cell: number; x0: number; z0: number; h: Float32Array; cover: Uint8Array; heightAt(x: number, z: number): number }
 
-export async function loadArea(id: string): Promise<{ area: AreaData; terrain: Terrain }> {
-  const base = `${import.meta.env.BASE_URL}areas/${id}/`;
-  const [area, bin] = await Promise.all([
-    fetch(base + 'area.json').then((r) => { if (!r.ok) throw new Error(`area ${id}: ${r.status}`); return r.json(); }),
-    fetch(base + 'terrain.bin').then((r) => { if (!r.ok) throw new Error(`terrain ${id}: ${r.status}`); return r.arrayBuffer(); }),
-  ]);
-  return { area, terrain: parseTerrain(bin) };
+const cache = new Map<string, Promise<{ area: AreaData; terrain: Terrain; mask: ArrayBuffer | null }>>();
+/** Fetches (once) and parses an area. Repeated calls share one promise, so preloading makes a later switch instant. */
+export function loadArea(id: string) {
+  let p = cache.get(id);
+  if (!p) {
+    const base = `${import.meta.env.BASE_URL}areas/${id}/`;
+    p = Promise.all([
+      fetch(base + 'area.json').then((r) => { if (!r.ok) throw new Error(`area ${id}: ${r.status}`); return r.json(); }),
+      fetch(base + 'terrain.bin').then((r) => { if (!r.ok) throw new Error(`terrain ${id}: ${r.status}`); return r.arrayBuffer(); }),
+      fetch(base + 'ground-mask.bin').then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null),
+    ]).then(([area, bin, mask]) => ({ area, terrain: parseTerrain(bin), mask }));
+    p.catch(() => cache.delete(id));
+    cache.set(id, p);
+  }
+  return p;
 }
 
 export function parseTerrain(buf: ArrayBuffer): Terrain {
@@ -21,8 +29,8 @@ export function parseTerrain(buf: ArrayBuffer): Terrain {
   const n = nx * nz, hi = new Int16Array(buf, 24, n), cover = new Uint8Array(buf, 24 + n * 2, n);
   const h = new Float32Array(n);
   for (let i = 0; i < n; i++) h[i] = hi[i] / 10;
-  // Two box-blur passes soften the 8 m grid so the coastline (0 m contour) reads as a smooth curve, not stairs.
-  for (let pass = 0; pass < 2; pass++) {
+  // Four box-blur passes soften the 8 m grid so the coastline (0 m contour) reads as a smooth curve, not stairs.
+  for (let pass = 0; pass < 4; pass++) {
     const src = h.slice();
     for (let iz = 1; iz < nz - 1; iz++) for (let ix = 1; ix < nx - 1; ix++) {
       const i = iz * nx + ix;
