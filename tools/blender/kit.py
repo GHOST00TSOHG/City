@@ -283,7 +283,7 @@ class Kit:
         bpy.ops.object.mode_set(mode='EDIT')
         for o in objs:
             bm = bmesh.from_edit_mesh(o.data); dec = [i for i, m in enumerate(o.data.materials) if m.name == 'decal']
-            for f in bm.faces: f.select = f.material_index not in dec
+            for f in bm.faces: f.select = True  # decals get atlas UVs too, so AO / grime / edge wear paint over them
             bmesh.update_edit_mesh(o.data)
         bpy.ops.uv.smart_project(angle_limit=math.radians(55), island_margin=0.004, area_weight=0.0, scale_to_bounds=False)
         bpy.ops.uv.pack_islands(margin=0.004, rotate=True, shape_method='CONCAVE')
@@ -410,9 +410,20 @@ class Kit:
             nm = N.new('ShaderNodeNormalMap'); L.new(ni.outputs[0], nm.inputs['Color']); L.new(nm.outputs[0], b.inputs['Normal'])
             if name == 'decal':
                 du = N.new('ShaderNodeUVMap'); du.uv_map = 'decal'; di = N.new('ShaderNodeTexImage'); di.image = bpy.data.images.load(os.path.join(ROOT, 'public', 'robot', 'decals.png'))
-                L.new(du.outputs[0], di.inputs[0]); L.new(di.outputs['Alpha'], b.inputs['Alpha']); b.inputs['Emission Strength'].default_value = 0
-                b.inputs['Base Color'].default_value = (*paint.get('decalColor', PREVIEW['decalColor']), 1); b.inputs['Roughness'].default_value = 0.6
-            if name in ('visor', 'decalColor', 'screen'): b.inputs['Emission Strength'].default_value = 8
+                L.new(du.outputs[0], di.inputs[0]); b.inputs['Emission Strength'].default_value = 0
+                # painted-in: same AO / grime as the paint under it, chipped away where the edge-wear mask shows bare metal
+                sp = N.new('ShaderNodeSeparateColor'); L.new(mi.outputs[0], sp.inputs[0])
+                inv = N.new('ShaderNodeMapRange'); inv.inputs['From Min'].default_value = 0.35; inv.inputs['From Max'].default_value = 0.7; inv.inputs['To Min'].default_value = 1; inv.inputs['To Max'].default_value = 0
+                L.new(sp.outputs['Green'], inv.inputs['Value']); al = N.new('ShaderNodeMath'); al.operation = 'MULTIPLY'; L.new(di.outputs['Alpha'], al.inputs[0]); L.new(inv.outputs[0], al.inputs[1])
+                L.new(al.outputs[0], b.inputs['Alpha'])
+                dc = N.new('ShaderNodeRGB'); dc.outputs[0].default_value = (*paint.get('decalColor', PREVIEW['decalColor']), 1)
+                gm = N.new('ShaderNodeMix'); gm.data_type = 'RGBA'; gm.blend_type = 'MULTIPLY'; L.new(sp.outputs['Blue'], gm.inputs['Factor']); L.new(dc.outputs[0], gm.inputs[6]); gm.inputs[7].default_value = (0.25, 0.2, 0.15, 1)
+                am = N.new('ShaderNodeMix'); am.data_type = 'RGBA'; am.blend_type = 'MULTIPLY'; am.inputs['Factor'].default_value = 1.0; L.new(gm.outputs[2], am.inputs[6]); L.new(sp.outputs['Red'], am.inputs[7])
+                L.new(am.outputs[2], b.inputs['Base Color']); b.inputs['Roughness'].default_value = 0.55; b.inputs['Metallic'].default_value = 0.1
+                continue
+            if name in ('visor', 'decalColor', 'screen'):
+                c_ = paint.get(name, PREVIEW[name]); b.inputs['Emission Color'].default_value = (*c_, 1); b.inputs['Base Color'].default_value = (*c_, 1)
+                b.inputs['Emission Strength'].default_value = 2.2 if name == 'screen' else 6
             if name in ('visor', 'decalColor', 'screen', 'decal'): continue
             sp = N.new('ShaderNodeSeparateColor'); L.new(mi.outputs[0], sp.inputs[0])
             col = paint.get(name, PREVIEW[name])
