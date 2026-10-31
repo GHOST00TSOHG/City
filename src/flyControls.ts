@@ -17,13 +17,14 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
   const euler = new THREE.Euler(0, 0, 0, 'YXZ');
   const pivotOrbit = { dYaw: 0, dPitch: 0 };
   let wheelMove = 0;
+  let enabled = true;
 
   const syncAngles = () => { euler.setFromQuaternion(camera.quaternion, 'YXZ'); yaw = euler.y; pitch = euler.x; };
   syncAngles();
 
   const isTyping = (e: KeyboardEvent) => (e.target as HTMLElement)?.tagName === 'INPUT';
   addEventListener('keydown', (e) => {
-    if (isTyping(e)) return;
+    if (isTyping(e) || !enabled) return;
     keys.add(e.code);
     if (e.code === 'KeyG') walk = !walk;
     if (e.code === 'KeyL') dom.requestPointerLock?.();
@@ -33,6 +34,7 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
   addEventListener('blur', () => keys.clear());
 
   const look = (dx: number, dy: number) => {
+    if (!enabled) return;
     yaw -= dx * 0.0025; pitch -= dy * 0.0025;
     pitch = Math.max(-1.45, Math.min(1.45, pitch));
   };
@@ -45,6 +47,7 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
   });
   dom.addEventListener('wheel', (e) => {
     e.preventDefault();
+    if (!enabled) return;
     const mouseWheel = e.deltaMode === 1 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 50 && Number.isInteger(e.deltaY));
     if (e.ctrlKey || mouseWheel) wheelMove += -e.deltaY * (e.ctrlKey ? 4 : 1); // pinch / wheel = dolly
     else { pivotOrbit.dYaw += e.deltaX * 0.003; pivotOrbit.dPitch += e.deltaY * 0.002; } // two-finger drag = orbit
@@ -57,6 +60,9 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
 
   return {
     get walk() { return walk; },
+    get enabled() { return enabled; },
+    /** Off while the robot drives the camera; on re-enable, angles resync from wherever the camera is. */
+    setEnabled(v: boolean) { enabled = v; keys.clear(); vel.set(0, 0, 0); wheelMove = 0; pivotOrbit.dYaw = pivotOrbit.dPitch = 0; if (v) syncAngles(); },
     setWalk(v: boolean) { walk = v; },
     update(dt: number) {
       dt = Math.min(dt, 0.1);
