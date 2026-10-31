@@ -26,6 +26,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 6: procedural interiors | bot/websmith-rebuild-p6-interiors | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Landmark #1 Newark Schools Stadium (pending Luis) | bot/jonn-newark-schools-stadium | (unclaimed, Jonn) | open | |
 
@@ -119,3 +120,38 @@ Built on Grok Bot (no Claude). Estimate for v01 streets: medium.
 - Seam pattern is in part-local space, so seam spacing differs slightly per part.
 - Slow-mo and FX timing were tuned in stepped headless runs; check feel and cost at 60 fps on the Air M4.
 - Damage only comes from `K` for now.
+
+## A6 — smoothness pass
+Goal: no frame over 33 ms and a steady 60 fps while flying on the MacBook Air M4. `?a6=0` turns all of it off (legacy path) for A/B runs.
+- **Perf overlay (src/perf/overlay.ts):** `P` or `` ` `` toggles, `?perf=1` opens it at load. 240-frame graph with 16.7/33 ms lines and a CPU trace; fps, avg, p99, worst, frames over 33 / 20 ms, CPU ms, GPU upload kB (now/max), shader compiles, queued jobs. Reset button.
+- **Flight benchmark (src/perf/bench.ts):** `?bench=flight` (add `&area=keywest` etc.). Skips the garage, drops the robot in, warms up 3.5 s, then flies 5 scripted phases (low-fast burst, climb-cruise, sharp turns, dive + zoom, long straight; ~52 s). Panel shows per-phase and overall fps, p50/p99/worst, long-frame counts, CPU, max upload, compiles; PASS = no frame >33 ms and p99 ≤ 20 ms. Copy JSON button; also `console.log('[City bench]', …)` and `window.__bench`. Run again with `__benchRun()`.
+- **Frame budget (src/perf/frame.ts):** per-frame job queue (~3 ms, `?budget=`) and a 4 MB upload cap; tree refreshes and interior builds wait for room.
+- **GPU work hooks (src/perf/gpuHooks.ts):** count upload bytes/calls and pipeline compiles per frame on WebGPU and WebGL2.
+- **Workers:** area JSON fetch/parse + terrain decode (src/area/area.worker.ts); grass scatter (src/area/grass.worker.ts, ping-pong buffers, patch centred ~6 frames ahead).
+- **Trees:** far LOD bucket per species holds every tree, uploaded once; near LOD buckets refilled from a 64 m grid every 20 m with a velocity lead (~0.5 s prefetch), only the used range uploaded. A GPU distance band per LOD (instanced `tpos`) does the exact LOD cut, so nothing is re-sorted per frame. All instance buffers are StaticDraw: DynamicDraw made the WebGPU renderer re-upload every whole matrix buffer every frame (the main stutter source).
+- **Shader prewarm (src/perf/prewarm.ts):** `compileAsync` over everything (hidden objects and empty instance sets included) before the first frame and after area switches.
+- **Interiors:** LRU of 4 built interiors; no new builds above 25 m/s; deferred when the frame budget is low.
+- **Allocations:** removed per-frame vectors in scene, controller and thrust.
+- **Crater fix:** decal raised to +0.22 m with polygon offset and renderOrder so it shows on roads.
+- Headless work counter: `node tools/perf/frame-work.mjs <dist> <area> <label>` (150 frames × 3 m, WebGL2/SwiftShader; counts uploads, compiles, JS time, heap growth, long tasks; headless fps is meaningless).
+
+### Before / after (headless, 150 frames over 450 m)
+| Metric | Key West before | Key West after | Sandy Hook before | Sandy Hook after |
+|---|---|---|---|---|
+| GPU upload / frame | 2044 KB | 150 KB | 3125 KB | 494 KB |
+| Max upload in a frame | 8185 KB | 550 KB | 13946 KB | 2508 KB |
+| Frames uploading >256 KB | 65 | 40 | 62 | 49 |
+| Program links in flight | 2 | 0 | 2 | 0 |
+| JS ms p99 / max | 19.9 / 3288 | 12.6 / 14.1 | 46.5 / 5708 | 16.1 / 18.7 |
+| Frames JS >8 ms | 32 | 9 | 43 | 11 |
+| Heap growth / frame | 307 KB | 123 KB | 335 KB | 120 KB |
+| Long tasks (longest) | 1 (3293 ms) | 0 | 1 (5710 ms) | 0 |
+| Console errors | 2× 404 (pre-existing) | same | same | same |
+
+### Known issues (A6)
+- Real fps not measured here; run `?bench=flight` on the M4 (and `&a6=0` for the before run).
+- Far building LOD unchanged; the world is still built at load, not tile-streamed.
+- Far tree bucket draws every tree (GPU band cull discards out-of-band ones), so vertex work is higher than strictly needed.
+- Grass refresh uploads up to ~0.5 MB per refresh.
+- Prewarm temporarily shows hidden objects; a toggle during the async compile could be restored wrong.
+- Two 404s on load existed before A6 (optional files).

@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { instancedBufferAttribute, positionLocal, vec3, vec2, sin, cos, float, time, uniform, mix, hash, smoothstep, cameraPosition, distance } from 'three/tsl';
 import type { Terrain } from './data';
+import { R, MAX, scatterGrass } from './grassScatter';
+import { A6, budget } from '../perf/frame';
 
 /** Ground mask (bake: ground-mask.bin): 2 m cells, bit set = building, pool or road, no grass. */
 export interface GroundMask { nx: number; nz: number; cell: number; x0: number; z0: number; bits: Uint8Array; blocked(x: number, z: number): boolean }
@@ -13,9 +15,6 @@ export function parseGroundMask(buf: ArrayBuffer): GroundMask {
   } };
 }
 
-const R = 40, DENS = 22, MAX = 140000; // radius m, blades per m², cap
-// cover classes that grow grass: land (yards) 0, grass 1, wetland 5, pitch 6
-const GROWS: Record<number, number> = { 0: 0.75, 1: 1, 5: 0.6, 6: 1 };
 
 /** Dense grass near the camera: one draw call of instanced blades rebuilt around the camera as it moves.
  *  Wind bends blades (height²), rain wetness darkens and saturates them. Fades out with distance, so no edge. */
@@ -46,27 +45,39 @@ export function buildGrass(terrain: Terrain, mask: GroundMask | null) {
   const col = mix(base, tip, t);
   mat.colorNode = mix(mix(col, col.mul(vec3(0.6, 0.72, 0.62)), uWet.mul(0.8)), vec3(0.78, 0.8, 0.84), uSnow.mul(t).mul(0.8));
   const mesh = new THREE.Mesh(g, mat); mesh.frustumCulled = false; mesh.name = 'grass';
-  const last = new THREE.Vector3(1e9, 0, 0), arr = buf.array as Float32Array;
-  const coverAt = (x: number, z: number) => { const ix = Math.round((x - terrain.x0) / terrain.cell), iz = Math.round((z - terrain.z0) / terrain.cell);
-    return ix < 0 || iz < 0 || ix >= terrain.nx || iz >= terrain.nz ? 255 : terrain.cover[iz * terrain.nx + ix]; };
-  const h2 = (a: number, b: number, c: number) => { let h = (Math.imul(a, 374761393) + Math.imul(b, 668265263) + Math.imul(c, 1442695041)) | 0; h = Math.imul(h ^ (h >>> 15), 2246822519); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
+  const last = new THREE.Vector3(1e9, 0, 0);
+  const plain = mask ? { nx: mask.nx, nz: mask.nz, cell: mask.cell, x0: mask.x0, z0: mask.z0, bits: mask.bits } : null;
+  // A6: scatter on a worker. Two buffers ping-pong: the attribute shows one while the worker fills the other.
+  let worker: Worker | null = null, spare: Float32Array | null = null, inFlight = false;
+  const prev = new THREE.Vector3(1e9, 0, 0), vel = new THREE.Vector3();
+  if (A6 && typeof Worker !== 'undefined') {
+    worker = new Worker(new URL('./grass.worker.ts', import.meta.url), { type: 'module' });
+    const grid = { nx: terrain.nx, nz: terrain.nz, cell: terrain.cell, x0: terrain.x0, z0: terrain.z0, h: terrain.h, cover: terrain.cover };
+    worker.postMessage({ init: true, terrain: grid, mask: plain }); spare = new Float32Array(MAX * 4);
+    worker.onmessage = (e) => {
+      inFlight = false; const { arr, n } = e.data as { arr: Float32Array; n: number };
+      if (!visible) { spare = arr; return; } // climbed above grass height while it was in flight
+      // copy into the live array (swapping arrays makes the backend reallocate + re-upload the whole buffer)
+      (buf.array as Float32Array).set(arr.subarray(0, n * 4)); spare = arr; g.instanceCount = n;
+      buf.clearUpdateRanges(); buf.addUpdateRange(0, n * 4); buf.needsUpdate = true; budget.upload(n * 16);
+    };
+  }
+  let visible = false;
   function update(cam: THREE.Vector3) {
     const gy = terrain.heightAt(cam.x, cam.z);
-    if (cam.y - gy > 60) { if (g.instanceCount) g.instanceCount = 0; last.set(1e9, 0, 0); return; }
-    if (cam.distanceTo(last) < 5) return; last.copy(cam);
-    let n = 0; const cx = Math.floor(cam.x), cz = Math.floor(cam.z);
-    for (let gz = cz - R; gz <= cz + R && n < MAX; gz++) for (let gx = cx - R; gx <= cx + R && n < MAX; gx++) {
-      const dx = gx + 0.5 - cam.x, dz = gz + 0.5 - cam.z; if (dx * dx + dz * dz > R * R) continue;
-      const grow = GROWS[coverAt(gx + 0.5, gz + 0.5)]; if (!grow) continue;
-      if (mask && mask.blocked(gx + 0.5, gz + 0.5)) continue;
-      const y0 = terrain.heightAt(gx + 0.5, gz + 0.5); if (y0 < 0.25) continue;
-      const k = Math.floor(DENS * grow * (0.6 + h2(gx, gz, 7) * 0.8));
-      for (let i = 0; i < k && n < MAX; i++) {
-        const x = gx + h2(gx, gz, i * 3 + 1), z = gz + h2(gx, gz, i * 3 + 2);
-        arr[n * 4] = x; arr[n * 4 + 1] = terrain.heightAt(x, z) - 0.02; arr[n * 4 + 2] = z; arr[n * 4 + 3] = h2(gx, gz, i * 3 + 3); n++;
-      }
+    if (prev.x < 1e8) vel.lerp(prev.sub(cam).negate(), 0.2); prev.copy(cam);
+    if (cam.y - gy > 60) { visible = false; if (g.instanceCount) g.instanceCount = 0; last.set(1e9, 0, 0); return; }
+    visible = true;
+    if (cam.distanceTo(last) < 5) return;
+    if (worker) { // prefetch: centre the next patch ~6 frames ahead to cover the worker round trip
+      if (inFlight || !spare) return; inFlight = true; last.copy(cam);
+      const x = cam.x + vel.x * 6, z = cam.z + vel.z * 6, arr = spare; spare = null;
+      worker.postMessage({ x, z, arr }, [arr.buffer]); return;
     }
+    last.copy(cam);
+    const arr = buf.array as Float32Array, n = scatterGrass(terrain, plain, cam.x, cam.z, arr);
     g.instanceCount = n; buf.needsUpdate = true; buf.clearUpdateRanges(); buf.addUpdateRange(0, n * 4);
   }
-  return { mesh, update, uWind, uWet, uSnow, count: () => g.instanceCount, triangles: () => g.instanceCount * 5 };
+  const dispose = () => worker?.terminate();
+  return { mesh, update, dispose, uWind, uWet, uSnow, count: () => g.instanceCount, triangles: () => g.instanceCount * 5 };
 }

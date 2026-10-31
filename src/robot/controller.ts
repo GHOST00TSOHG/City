@@ -45,7 +45,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
 
   const fwd = new THREE.Vector3(), right = new THREE.Vector3(), want = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const qYaw = new THREE.Quaternion(), qLean = new THREE.Quaternion(), qBank = new THREE.Quaternion(), qRoll = new THREE.Quaternion();
-  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
+  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1), camF = new THREE.Vector3();
   const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
   function touchDown() {
@@ -74,7 +74,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     update(dt0: number) {
       const dt = Math.min(dt0, 1 / 20); t += dt;
       // camera-relative input basis (ground) / heading basis (air)
-      const camF = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+      camF.set(Math.sin(camYaw), 0, Math.cos(camYaw)); // reused: no per-frame allocation (A6)
       right.crossVectors(camF, up).normalize();
       const iF = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0), iR = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
       const iUp = k('Space') || k('KeyE') ? 1 : 0, iDown = k('KeyC') || k('KeyQ') || k('ControlLeft') ? 1 : 0, iBurst = k('ShiftLeft') || k('ShiftRight');

@@ -11,6 +11,11 @@ import { loadSave, writeSave } from './save';
 import { createRobotController } from './robot/controller';
 import { createThrust } from './robot/thrust';
 import { createRobotHud } from './robot/hud';
+import { A6, budget } from './perf/frame';
+import { gpu, installGpuHooks, resetGpuFrame } from './perf/gpuHooks';
+import { createPerfOverlay } from './perf/overlay';
+import { createFlightBench } from './perf/bench';
+import { prewarm } from './perf/prewarm';
 import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
@@ -28,6 +33,7 @@ setTitle(areaId);
 
 createScene(canvas, areaId).then(async (app) => {
   loading?.remove();
+  installGpuHooks((app.renderer as any).backend); // per-frame upload bytes + pipeline compiles for the perf overlay / bench
   const rain = createRain(), snow = createSnow(); app.scene.add(rain.mesh, snow.mesh);
   const setWeather = (kind: WeatherKind, intensity = 0.6) => {
     rain.mesh.visible = kind === 'rain'; rain.setIntensity(intensity);
@@ -103,7 +109,8 @@ createScene(canvas, areaId).then(async (app) => {
     if (cam.fov !== 40) { cam.fov = 40; cam.updateProjectionMatrix(); }
     cam.lookAt(hangar.x - fz * 0.55, hangar.y + 0.62, hangar.z + fx * 0.55);
   };
-  const joinScreen = robotMode && qs.get('join') !== '0';
+  const benchMode = qs.get('bench') === 'flight';
+  const joinScreen = robotMode && qs.get('join') !== '0' && !benchMode;
   setRobotMode(robotMode);
   if (joinScreen) setHangar(true); else if (robotMode) dropIn();
   addEventListener('keydown', (e) => {
@@ -140,9 +147,20 @@ createScene(canvas, areaId).then(async (app) => {
   w.__robot = { ctl, model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
-  let frames = 0, last = performance.now(), t = 0;
+  // A6: compile every pipeline the flight can need (hidden rockets, crater, weather, empty LOD buckets) while the
+  // garage is up, so nothing compiles on first sight mid-flight.
+  if (A6) { const ms = await prewarm(app.renderer, app.scene, app.camera); console.info(`[City] prewarm ${ms.toFixed(0)} ms, ${gpu.totalCompiles} pipelines`); }
+  const overlay = createPerfOverlay(() => `${app.backend} ${(app.renderer.info.render as any).drawCalls ?? app.renderer.info.render.calls} calls`);
+  if (showStats) overlay.setVisible(true);
+  const bench = benchMode ? createFlightBench({ ctl, canvas, start: () => { if (cust.open) setHangar(false); if (!robotMode) setRobotMode(true); dropIn(40); },
+    info: () => ({ backend: app.backend, area: app.areaId, budgetMs: budget.ms }) }) : null;
+  if (bench) { overlay.setVisible(true); w.__benchRun = bench; }
+
+  let frames = 0, last = performance.now(), t = 0, lastRaf = 0, cpuMs = 0;
   const timer = new THREE.Timer();
-  app.renderer.setAnimationLoop(() => {
+  app.renderer.setAnimationLoop((now0: number) => {
+    const t0 = performance.now(), frameMs = lastRaf ? now0 - lastRaf : 16.7; lastRaf = now0;
+    overlay.frame(frameMs, cpuMs); bench?.frame(frameMs, cpuMs); resetGpuFrame(); budget.begin();
     timer.update(); const rdt = timer.getDelta(); t += rdt;
     const dt = rdt * (slowT > 0 ? 0.3 + 0.7 * (1 - Math.sin((slowT / 0.55) * Math.PI)) : 1);
     if (cust.open) {
@@ -156,7 +174,9 @@ createScene(canvas, areaId).then(async (app) => {
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     if (parts) parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     app.update(dt, t); rain.update(t, app.camera.position); snow.update(t, app.camera.position);
+    budget.run();
     app.renderer.render(app.scene, app.camera);
+    cpuMs = performance.now() - t0;
     frames++;
     const now = performance.now();
     if (now - last > 1000) {
@@ -164,6 +184,7 @@ createScene(canvas, areaId).then(async (app) => {
       const r = app.renderer.info.render;
       if (showStats) statsEl.textContent = `${fps.toFixed(0)} fps · ${r.drawCalls ?? r.calls} calls · ${(r.triangles / 1e3).toFixed(0)}k tris · ${app.backend}`;
       w.__city = { fps, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, hangar: cust.open, damage: +damage.toFixed(2), slowmo: slowT > 0, robot: robotMode && !cust.open ? { mode: ctl.mode, anim: ctl.anim, pos: ctl.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(ctl.vel.length() * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2), charge: +fx.charge.toFixed(2) } : null, ready: true };
+      w.__scene = app.scene;
     }
   });
 }).catch((e) => {
