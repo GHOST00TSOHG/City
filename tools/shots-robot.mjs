@@ -7,7 +7,7 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
 page.on('console', (m) => { if (m.type() === 'error') errors.push(`${m.type()}: ${m.text()}`); });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
-await page.goto(`http://localhost:5173/?perf=1&area=${area}`, { waitUntil: 'load' });
+await page.goto(`http://localhost:5173/?perf=1&join=0&area=${area}`, { waitUntil: 'load' });
 await page.waitForFunction(() => window.__city?.ready, null, { timeout: 180000 });
 const sim = (secs, hold = []) => page.evaluate(({ secs, hold }) => {
   const r = window.__robot; hold.forEach((k) => r.ctl.press(k, true));

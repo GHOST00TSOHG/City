@@ -15,7 +15,8 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   const keys = new Set<string>();
   const pos = new THREE.Vector3(), vel = new THREE.Vector3();
   let heading = 0, mode: RobotMode = 'SKYDIVING', burst = 1, rollT = 0, landT = 0, airT = 0, phase = 0, t = 0;
-  let lean = 0, bank = 0, yawRate = 0, power = 0, burstOn = 0, enabled = true;
+  let lean = 0, bank = 0, yawRate = 0, power = 0, burstOn = 0, enabled = true, charging = false, hero = false;
+  let onImpact: ((p: THREE.Vector3, strength: number) => void) | null = null;
   let camYaw = 0, camPitch = 0.22, camDist = 5, fov = 55, dragging = false, lx = 0, ly = 0, lastDrag = -10;
   const camPos = new THREE.Vector3(), camWant = new THREE.Vector3(), camOff = new THREE.Vector3(0, 3, -8), look = new THREE.Vector3();
   let anim: RobotAnim = 'fall', floor = { y: 0, water: false, roof: false };
@@ -48,6 +49,8 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
   function touchDown() {
+    if (hero) { hero = false; mode = 'LAND'; landT = -0.45; anim = 'land'; const s = Math.min(1.4, 0.6 + -vel.y / 60); vel.set(0, 0, 0); pos.y = floor.y; onImpact?.(pos, s); return; } // superhero landing
+    if (-vel.y > 18) onImpact?.(pos, Math.min(0.8, -vel.y / 60));
     const vh = Math.hypot(vel.x, vel.z), impact = -vel.y;
     if (vh > 16 || impact > 24) { mode = 'ROLL'; rollT = 0; anim = 'roll'; } // tumbling forward roll at speed (reference 0:32)
     else { mode = 'LAND'; landT = 0; anim = 'land'; vel.x *= 0.3; vel.z *= 0.3; } // knee bend (0:42)
@@ -60,7 +63,12 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     get enabled() { return enabled; },
     setEnabled(v: boolean) { enabled = v; keys.clear(); model.root.visible = v; },
     /** Drop-in spawn: start high above (x, z) facing `h`, skydiving into the superman pose. */
-    spawn(x: number, y: number, z: number, h = 0) { pos.set(x, y, z); vel.set(Math.sin(h) * 6, 0, Math.cos(h) * 6); heading = h; camYaw = h; mode = 'SKYDIVING'; airT = 1; anim = 'fall'; camOff.set(-Math.sin(h) * 8, 3, -Math.cos(h) * 8); },
+    /** Hero drop: straight down fast, ends in a crouched superhero landing with an impact callback. */
+    heroDrop(x: number, y: number, z: number, h = 0) { this.spawn(x, y, z, h); vel.set(0, -45, 0); hero = true; airT = 1; },
+    set onImpact(f: ((p: THREE.Vector3, s: number) => void) | null) { onImpact = f; },
+    /** Power-up stance: hold to charge (ground: crouch in place; air: hover). Refills BURST faster. */
+    set charging(v: boolean) { charging = v; }, get charging() { return charging && enabled; },
+    spawn(x: number, y: number, z: number, h = 0) { hero = false; pos.set(x, y, z); vel.set(Math.sin(h) * 6, 0, Math.cos(h) * 6); heading = h; camYaw = h; mode = 'SKYDIVING'; airT = 1; anim = 'fall'; camOff.set(-Math.sin(h) * 8, 3, -Math.cos(h) * 8); },
     /** Test hook: set the held keys directly. */
     press(code: string, down: boolean) { if (down) { keys.add(code); dispatchEvent(new KeyboardEvent('keydown', { code })); } else keys.delete(code); },
     update(dt0: number) {
@@ -72,10 +80,10 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       const iUp = k('Space') || k('KeyE') ? 1 : 0, iDown = k('KeyC') || k('KeyQ') || k('ControlLeft') ? 1 : 0, iBurst = k('ShiftLeft') || k('ShiftRight');
       power += ((mode === 'ROCKETS' ? 0.35 + 0.65 * Math.max(iUp, Math.abs(iF) * 0.8, Math.hypot(vel.x, vel.z) / CRUISE) : 0) - power) * (1 - Math.exp(-dt * 10));
       burstOn += ((mode === 'ROCKETS' && iBurst && burst > 0.02 ? 1 : 0) - burstOn) * (1 - Math.exp(-dt * 8));
-      burst = Math.max(0, Math.min(1, burst + dt * (burstOn > 0.5 ? -0.22 : 0.1)));
+      burst = Math.max(0, Math.min(1, burst + dt * (burstOn > 0.5 ? -0.22 : charging ? 0.55 : 0.1)));
 
       if (mode === 'GROUND' || mode === 'LAND') {
-        want.set(0, 0, 0).addScaledVector(camF, iF).addScaledVector(right, iR);
+        want.set(0, 0, 0).addScaledVector(camF, iF).addScaledVector(right, iR); if (charging) want.set(0, 0, 0);
         const moving = want.lengthSq() > 0 && mode === 'GROUND';
         const sp = iBurst ? RUN : WALK;
         if (moving) { want.normalize(); heading += angDiff(Math.atan2(want.x, want.z), heading) * (1 - Math.exp(-dt * 12)); want.multiplyScalar(sp); } else want.set(0, 0, 0);
@@ -83,6 +91,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         const vh = Math.hypot(vel.x, vel.z); phase += dt * vh * (vh > 5 ? 1.5 : 2.6);
         anim = mode === 'LAND' ? 'land' : vh > 5 ? 'run' : vh > 0.4 ? 'walk' : 'idle';
         if (mode === 'LAND') { landT += dt; if (landT > 0.38) mode = 'GROUND'; }
+        if (charging && mode === 'GROUND') anim = 'land';
         lean += (0 - lean) * (1 - Math.exp(-dt * 10)); bank += (0 - bank) * (1 - Math.exp(-dt * 10));
       } else if (mode === 'ROLL') {
         rollT += dt; vel.multiplyScalar(Math.exp(-dt * 2.6)); vel.y = 0; anim = 'roll';
@@ -144,7 +153,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       }
       // lean pivots around the hips so the flying body stays centred
       if (lean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(lean) * 0.55;
-      const crouch = mode === 'LAND' ? Math.sin(Math.min(1, landT / 0.38) * Math.PI) : 0;
+      const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
       model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t }, dt);
 
       // chase camera: behind and above; pulls back with a wider FOV at speed, closer and narrower on foot
