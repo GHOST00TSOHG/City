@@ -7,6 +7,8 @@ import { buildBuildings } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
 import { buildLamps } from './area/lamps';
 import { buildTrees } from './area/trees';
+import { buildGrass, parseGroundMask } from './area/grass';
+import { vertexColor, uniform as tslUniform } from 'three/tsl';
 import { positionWorld, sin, cos, vec3, time, normalize, transformNormalToView } from 'three/tsl';
 
 export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
@@ -24,7 +26,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: qs.get('gl') === '1', powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight, false);
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.NeutralToneMapping; // keeps hues true at low light (ACES shifted night colours toward grey-orange)
   renderer.toneMappingExposure = 1.0;
   await renderer.init();
   const backend = (renderer.backend as any).isWebGPUBackend ? 'webgpu' : 'webgl2';
@@ -45,6 +47,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const facade = createFacadeMaterial(); const lambert = facade.material;
   const groundMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   const roadMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const uWet = tslUniform(0);
+  groundMat.colorNode = vertexColor().mul(uWet.mul(-0.32).add(1));
+  roadMat.colorNode = vertexColor().mul(uWet.mul(-0.38).add(1));
   const tMesh = buildTerrain(terrain, groundMat);
   const roads = buildRoads(area, terrain, roadMat);
   const pools = buildPoolsPiers(area, terrain, roadMat);
@@ -59,9 +64,11 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     void sin;
   }
   const lamps = buildLamps(area.lamps, terrain);
-  const trees = buildTrees(area.trees as number[], terrain);
+  const trees = await buildTrees(area.trees as number[], terrain);
+  const mask = await fetch(`${import.meta.env.BASE_URL}areas/${areaId}/ground-mask.bin`).then(r => (r.ok ? r.arrayBuffer() : null)).then(b => (b ? parseGroundMask(b) : null)).catch(() => null);
+  const grass = buildGrass(terrain, mask);
   sea.name = 'sea'; sea.position.y = 0; sea.renderOrder = 1;
-  scene.add(tMesh, roads, pools, blds.group, sea, lamps.posts, lamps.pools, trees.group);
+  scene.add(tMesh, roads, pools, blds.group, sea, lamps.posts, lamps.pools, trees.group, grass.mesh);
 
   const ground = (x: number, z: number) => Math.max(terrain.heightAt(x, z), 0);
   const controls = createFlyControls(camera, canvas, ground);
@@ -99,7 +106,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   return {
     renderer, scene, camera, controls, sky, backend, area, views, setView,
     stats: { buildings: blds.count, trees: area.trees.length / 5, lamps: area.lamps.length, chunks: blds.group.children.length, roads: area.roads.length },
-    update(dt: number) { controls.update(dt); sky.follow(camera); trees.update(camera.position); },
-    setRainLook(k: number) { sky.setOvercast(k); (scene.fog as THREE.FogExp2).density = 0.00016 + k * 0.0012; trees.uWind.value = 1 + k * 1.8; },
+    update(dt: number) { controls.update(dt); sky.follow(camera); trees.update(camera.position); grass.update(camera.position); },
+    setRainLook(k: number) { sky.setOvercast(k); (scene.fog as THREE.FogExp2).density = 0.00016 + k * 0.0012; trees.uWind.value = 1 + k * 1.8; grass.uWind.value = 1 + k * 1.5; grass.uWet.value = k; uWet.value = k; },
   };
 }

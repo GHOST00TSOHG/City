@@ -11,9 +11,10 @@
     "roads": 2870,
     "pools": 1103,
     "piers": 213,
-    "trees": 9594,
+    "trees": 25500,
     "treesMapped": 207,
-    "treesScattered": 9387,
+    "treesStreet": 2847,
+    "treesScattered": 22446,
     "lamps": 2369,
     "lampsInferred": 2340
   },
@@ -41,8 +42,8 @@
   },
   "sizes": {
     "area.json": {
-      "bytes": 1984027,
-      "gzip": 593939
+      "bytes": 2320304,
+      "gzip": 722673
     },
     "terrain.bin": {
       "bytes": 579372,

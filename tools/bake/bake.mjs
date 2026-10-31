@@ -238,6 +238,9 @@ const dm = (r) => r.map((v) => v / 10);
 for (const b of buildings) occFill([dm(b.r[0])], 1);
 for (const p of pools) occFill([dm(p)], 2);
 for (const r of roads) { const p = dm(r.p), hw = r.w / 2 + 0.6; for (let i = 0; i + 3 < p.length; i += 2) { const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]); for (let s = 0; s <= L; s += 1) { const k = s / (L || 1), x = p[i] + (p[i + 2] - p[i]) * k, z = p[i + 1] + (p[i + 3] - p[i + 1]) * k; for (let a = -hw; a <= hw; a += 1.5) { const nx = -(p[i + 3] - p[i + 1]) / (L || 1), nz = (p[i + 2] - p[i]) / (L || 1), j = oi(x + nx * a, z + nz * a); if (j >= 0) occ[j] = occ[j] || 3; } } } }
+const roadCore = new Uint8Array(ONX * ONZ);
+for (const r of roads) { const p = dm(r.p), hw = r.w / 2 + 0.3; for (let i = 0; i + 3 < p.length; i += 2) { const L = Math.hypot(p[i + 2] - p[i], p[i + 3] - p[i + 1]); for (let s = 0; s <= L; s += 1) { const k = s / (L || 1), x = p[i] + (p[i + 2] - p[i]) * k, z = p[i + 1] + (p[i + 3] - p[i + 1]) * k; for (let a = -hw; a <= hw; a += 1) { const nx = -(p[i + 3] - p[i + 1]) / (L || 1), nz = (p[i + 2] - p[i]) / (L || 1), j = oi(x + nx * a, z + nz * a); if (j >= 0) roadCore[j] = 1; } } } }
+const onRoadCore = (x, z) => { const j = oi(x, z); return j >= 0 && roadCore[j] === 1; };
 const free = (x, z, r) => { for (let dz = -r; dz <= r; dz += OG) for (let dx = -r; dx <= r; dx += OG) { const j = oi(x + dx, z + dz); if (j < 0 || occ[j]) return false; } return true; };
 const wet = (x, z) => { const ix = Math.round((x - gx0) / G), iz = Math.round((z - gz0) / G); return ix < 0 || iz < 0 || ix >= NX || iz >= NZ || water[iz * NX + ix] === 1; };
 let rng = 0x9e3779b9; const rnd = () => { rng ^= rng << 13; rng >>>= 0; rng ^= rng >>> 17; rng ^= rng << 5; rng >>>= 0; return rng / 4294967296; };
@@ -245,7 +248,7 @@ let rng = 0x9e3779b9; const rnd = () => { rng ^= rng << 13; rng >>>= 0; rng ^= r
 // ---------- inferred street lamps: spacing rule along streets (OSM maps only a handful)
 // majors every 32 m alternating sides, minor streets every 42 m on one side, kept 14 m away from mapped lamps.
 const lampKey = new Map(); const lk = (x, z) => `${Math.floor(x / 14)},${Math.floor(z / 14)}`;
-const nearLamp = (x, z) => { const cx = Math.floor(x / 14), cz = Math.floor(z / 14); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (lampKey.has(`${cx + a},${cz + b}`)) for (const [lx, lz] of lampKey.get(`${cx + a},${cz + b}`)) if ((lx - x) ** 2 + (lz - z) ** 2 < 196) return true; return false; };
+const nearLamp = (x, z, r2 = 196) => { const cx = Math.floor(x / 14), cz = Math.floor(z / 14); for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (lampKey.has(`${cx + a},${cz + b}`)) for (const [lx, lz] of lampKey.get(`${cx + a},${cz + b}`)) if ((lx - x) ** 2 + (lz - z) ** 2 < r2) return true; return false; };
 const addLampKey = (x, z) => { const k = lk(x, z); if (!lampKey.has(k)) lampKey.set(k, []); lampKey.get(k).push([x, z]); };
 for (const l of lamps) addLampKey(l[0] / 10, l[1] / 10);
 let inferredLamps = 0;
@@ -280,17 +283,39 @@ function treeRow(line) { for (let i = 0; i + 3 < line.length; i += 2) { const L 
 const treeOut = [];
 const mkTree = (x, z, palm) => { const kind = palm ? 0 : 1, h = palm ? 7 + rnd() * 8 : 5 + rnd() * 7; treeOut.push(q(x), q(z), kind, Math.round(h * 10), Math.floor(rnd() * 256)); };
 for (const t of trees) mkTree(t[0] / 10, t[1] / 10, rnd() < palmShare);
-const density = { 4: 1 / 45, 1: 1 / 320, 0: 1 / 260, 5: 1 / 120 }; // trees per m² by cover class (land0 = yards)
+// street trees: sidewalk verges of minor/major streets every ~14 m both sides (Old Town streets are lined with palms/poincianas)
+let streetTrees = 0;
+for (const r of roads) {
+  if (r.c > 1 || r.b) continue;
+  const p = dm(r.p);
+  for (let i = 0; i + 3 < p.length; i += 2) {
+    const dx = p[i + 2] - p[i], dz = p[i + 3] - p[i + 1], L = Math.hypot(dx, dz); if (L < 6) continue;
+    const ux = dx / L, uz = dz / L;
+    for (let s = 5 + rnd() * 6; s < L - 4; s += 11 + rnd() * 8) for (const sd of [-1, 1]) {
+      if (rnd() > 0.5) continue;
+      const off = r.w / 2 + 1.7 + rnd() * 0.8, x = p[i] + ux * s - uz * off * sd, z = p[i + 1] + uz * s + ux * off * sd;
+      const j = oi(x, z); if (j < 0 || occ[j] === 1 || occ[j] === 2 || masked(x, z) || wet(x, z) || nearLamp(x, z, 25)) continue;
+      if (onRoadCore(x, z)) continue;
+      mkTree(x, z, rnd() < 0.65); streetTrees++;
+    }
+  }
+}
+// yard trees: only the trunk cell has to be free; canopies may overhang roofs (as they do in Old Town)
+const density = { 4: 1 / 45, 1: 1 / 260, 0: 1 / 140, 5: 1 / 120 }; // trees per m² by cover class (land0 = yards)
 let scattered = 0;
 for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) {
   const i = iz * NX + ix; if (water[i]) continue;
   const d = density[cover[i]]; if (!d) continue;
-  let n = d * G * G; while (n > 0) { if (rnd() < Math.min(n, 1)) { const x = gx0 + (ix + rnd() - 0.5) * G, z = gz0 + (iz + rnd() - 0.5) * G; if (!masked(x, z) && !wet(x, z) && free(x, z, 2)) { mkTree(x, z, rnd() < (cover[i] === 4 || cover[i] === 5 ? 0.25 : palmShare)); scattered++; } } n -= 1; }
+  let n = d * G * G; while (n > 0) { if (rnd() < Math.min(n, 1)) { const x = gx0 + (ix + rnd() - 0.5) * G, z = gz0 + (iz + rnd() - 0.5) * G; if (!masked(x, z) && !wet(x, z) && free(x, z, 0) && !onRoadCore(x, z)) { mkTree(x, z, rnd() < (cover[i] === 4 || cover[i] === 5 ? 0.25 : palmShare)); scattered++; } } n -= 1; }
 }
 
 // ---------- write
 const area = { v: 1, id, name: A.name, origin: A.origin.name, units: 'dm (x east, z south, local ENU around origin)', buildings, roads, pools, piers, trees: treeOut, lamps };
 fs.writeFileSync(path.join(O, 'area.json'), JSON.stringify(area));
+// ground mask for grass (2 m, 1 bit per cell; set = building, pool or road core, no grass): header OCC1 nx nz cell_cm x0_cm z0_cm
+{ const bits = new Uint8Array(Math.ceil(ONX * ONZ / 8)); for (let j = 0; j < ONX * ONZ; j++) if (occ[j] === 1 || occ[j] === 2 || roadCore[j]) bits[j >> 3] |= 1 << (j & 7);
+  const h = new Int32Array([0x4f434331, ONX, ONZ, OG * 100, Math.round(gx0 * 100), Math.round(gz0 * 100)]);
+  fs.writeFileSync(path.join(O, 'ground-mask.bin'), Buffer.concat([Buffer.from(h.buffer), Buffer.from(bits.buffer)])); }
 const head = new Int32Array([0x43545231 /* CTR1 */, NX, NZ, G * 100, gx0 * 100, gz0 * 100]);
 fs.writeFileSync(path.join(O, 'terrain.bin'), Buffer.concat([Buffer.from(head.buffer), Buffer.from(hgt.buffer), Buffer.from(cover.buffer)]));
 const ofm = JSON.parse(fs.readFileSync(path.join(C, 'openfreemap-tilejson.json'), 'utf8'));
@@ -307,6 +332,6 @@ const attribution = {
 };
 fs.writeFileSync(path.join(O, 'attribution.json'), JSON.stringify(attribution, null, 2) + '\n');
 const sizes = Object.fromEntries(['area.json', 'terrain.bin'].map((f) => { const b = fs.readFileSync(path.join(O, f)); return [f, { bytes: b.length, gzip: zlib.gzipSync(b, { level: 9 }).length }]; }));
-const manifest = { area: id, grid: { nx: NX, nz: NZ, m: G }, waterPolys, counts: { buildings: buildings.length, roads: roads.length, pools: pools.length, piers: piers.length, trees: treeOut.length / 5, treesMapped: trees.length, treesScattered: scattered, lamps: lamps.length, lampsInferred: inferredLamps }, buildingSources: { osm: stats.osm, overture: stats.overture, parts: stats.parts, outlinesReplacedByParts: stats.skippedOutlineWithParts }, masks: masks.length ? `${masks.length} private mask(s) applied, ${stats.masked} buildings removed` : 'none', heightSource: stats.notes, roofs: stats.roofs, sizes };
+const manifest = { area: id, grid: { nx: NX, nz: NZ, m: G }, waterPolys, counts: { buildings: buildings.length, roads: roads.length, pools: pools.length, piers: piers.length, trees: treeOut.length / 5, treesMapped: trees.length, treesStreet: streetTrees, treesScattered: scattered, lamps: lamps.length, lampsInferred: inferredLamps }, buildingSources: { osm: stats.osm, overture: stats.overture, parts: stats.parts, outlinesReplacedByParts: stats.skippedOutlineWithParts }, masks: masks.length ? `${masks.length} private mask(s) applied, ${stats.masked} buildings removed` : 'none', heightSource: stats.notes, roofs: stats.roofs, sizes };
 fs.writeFileSync(path.join(O, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(JSON.stringify(manifest, null, 1));
