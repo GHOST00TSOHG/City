@@ -1,69 +1,92 @@
-import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import * as THREE from 'three/webgpu';
+import { createSky } from './sky';
+import { createFlyControls } from './flyControls';
+import { loadArea } from './area/data';
+import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
+import { buildBuildings } from './area/buildings';
 
-/** Public start spot: Twin Lights Historic Site, Highlands NJ (a public landmark, never a home). */
-export const START = { name: 'twin-lights', lat: 40.3966, lon: -73.9861 };
+export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
+/** Start views per area (public places only). Key West origin = Southernmost Point Buoy. */
+export const VIEWS: Record<string, View[]> = {
+  keywest: [
+    { name: 'aerial', pos: [650, 420, 700], look: [-900, 0, -1300] },
+    { name: 'oldtown', pos: [-520, 140, -760], look: [-1050, 0, -1350] },
+    { name: 'duval', pos: [-905, 1.7, -1180], look: [-1060, 3, -1520], snap: true },
+  ],
+};
 
-export function createScene(canvas: HTMLCanvasElement) {
-  const mobile = matchMedia('(pointer: coarse)').matches;
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: !mobile, powerPreference: 'high-performance', logarithmicDepthBuffer: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
-  renderer.setSize(innerWidth, innerHeight);
+export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
+  const qs = new URLSearchParams(location.search);
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: qs.get('gl') === '1', powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight, false);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMappingExposure = 1.0;
+  await renderer.init();
+  const backend = (renderer.backend as any).isWebGPUBackend ? 'webgpu' : 'webgl2';
 
   const scene = new THREE.Scene();
-  const nightSky = new THREE.Color(0x070a14);
-  scene.background = nightSky;
-  scene.fog = new THREE.FogExp2(0x0b1020, 0.0011); // light distance fog
+  scene.background = new THREE.Color(0x070c1a);
+  scene.fog = new THREE.FogExp2(0x0d1426, 0.00016);
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 40000);
 
-  // ENU local frame: x east, -z north, y up (meters). Camera looks NW over the bay toward NYC.
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1, 40000);
-  camera.position.set(420, 260, 520);
-  const controls = new OrbitControls(camera, canvas);
-  controls.target.set(0, 20, 0);
-  controls.enableDamping = true; controls.dampingFactor = 0.06;
-  controls.rotateSpeed = 0.4; controls.zoomSpeed = 0.6; controls.panSpeed = 0.5;
-  controls.minDistance = 40; controls.maxDistance = 6000;
-  controls.maxPolarAngle = Math.PI * 0.48;
-  controls.autoRotate = true; controls.autoRotateSpeed = 0.15; // slow, calm drift
-  controls.addEventListener('start', () => (controls.autoRotate = false));
-  controls.update();
+  // Night lighting that keeps material colours honest: neutral moonlight key + soft sky/ground fill.
+  const moonDir = new THREE.Vector3(0.45, 0.62, 0.35).normalize();
+  const moon = new THREE.DirectionalLight(0xe4e9f5, 1.25); moon.position.copy(moonDir).multiplyScalar(1000);
+  scene.add(moon, moon.target);
+  scene.add(new THREE.HemisphereLight(0xb2b8c6, 0x50483c, 1.15));
+  const sky = createSky(moonDir); scene.add(sky.group);
 
-  // Lighting: cool moon key, faint sky/ground fill, warm sodium city glow.
-  const moon = new THREE.DirectionalLight(0x9fb4ff, 0.9);
-  moon.position.set(-2000, 3000, -1500);
-  scene.add(moon);
-  scene.add(new THREE.HemisphereLight(0x23304f, 0x0a0806, 0.5));
-  const glow = new THREE.PointLight(0xffa04a, 2.5, 2500, 1.2); // sodium glow from town
-  glow.position.set(0, 120, 0);
-  scene.add(glow);
+  const { area, terrain } = await loadArea(areaId);
+  const lambert = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
+  const groundMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
+  const roadMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const tMesh = buildTerrain(terrain, groundMat);
+  const roads = buildRoads(area, terrain, roadMat);
+  const pools = buildPoolsPiers(area, terrain, roadMat);
+  const blds = buildBuildings(area.buildings, terrain, lambert);
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(60000, 60000).rotateX(-Math.PI / 2),
+    new THREE.MeshStandardNodeMaterial({ color: 0x16404a, roughness: 0.22, metalness: 0, transparent: true, opacity: 0.82, depthWrite: false }));
+  sea.name = 'sea'; sea.position.y = 0; sea.renderOrder = 1;
+  scene.add(tMesh, roads, pools, blds.group, sea);
 
-  // Fallback (no key): wet dark ground + sky dome with horizon city glow. 3 draw calls.
-  const fallback = new THREE.Group();
-  const ground = new THREE.Mesh(
-    new THREE.CircleGeometry(20000, 64).rotateX(-Math.PI / 2),
-    new THREE.MeshStandardMaterial({ color: 0x0a0d14, roughness: 0.25, metalness: 0.6 }),
-  );
-  fallback.add(ground);
-  const skyMat = new THREE.ShaderMaterial({
-    side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { top: { value: new THREE.Color(0x0a1226) }, horizon: { value: new THREE.Color(0x6a4330) } },
-    vertexShader: 'varying vec3 vp; void main(){ vp = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: 'uniform vec3 top; uniform vec3 horizon; varying vec3 vp; void main(){ float h = clamp(normalize(vp).y, 0.0, 1.0); gl_FragColor = vec4(mix(horizon, top, pow(h, 0.35)), 1.0); }',
-  });
-  fallback.add(new THREE.Mesh(new THREE.SphereGeometry(30000, 32, 16), skyMat));
-  const moonDisc = new THREE.Mesh(new THREE.CircleGeometry(260, 32), new THREE.MeshBasicMaterial({ color: 0xdfe6ff, fog: false }));
-  moonDisc.position.copy(moon.position).normalize().multiplyScalar(25000);
-  moonDisc.lookAt(0, 0, 0);
-  fallback.add(moonDisc);
-  scene.add(fallback);
+  const ground = (x: number, z: number) => Math.max(terrain.heightAt(x, z), 0);
+  const controls = createFlyControls(camera, canvas, ground);
+  const setView = (v0: View) => {
+    const v = v0.snap ? snapToStreet(v0) : v0;
+    camera.position.set(...v.pos); camera.lookAt(...v.look); controls.syncAngles();
+    if (v0.snap || v.pos[1] < 3) controls.setWalk(true); else controls.setWalk(false);
+  };
+  // Street views snap to the nearest major/minor road so the camera stands on the street, looking along it.
+  function snapToStreet(v: View): View {
+    let best = Infinity, out = v;
+    for (const r of area.roads) {
+      if (r.c > 1) continue;
+      for (let i = 0; i + 3 < r.p.length; i += 2) {
+        const ax = r.p[i] / 10, az = r.p[i + 1] / 10, bx = r.p[i + 2] / 10, bz = r.p[i + 3] / 10;
+        const dx = bx - ax, dz = bz - az, L2 = dx * dx + dz * dz || 1;
+        const t = Math.max(0, Math.min(1, ((v.pos[0] - ax) * dx + (v.pos[2] - az) * dz) / L2));
+        const px = ax + dx * t, pz = az + dz * t, d = Math.hypot(px - v.pos[0], pz - v.pos[2]);
+        if (d < best) {
+          best = d; const L = Math.sqrt(L2), ux = dx / L, uz = dz / L;
+          const s = Math.sign((v.look[0] - px) * ux + (v.look[2] - pz) * uz) || 1, off = r.w / 2 - 1.2;
+          const x = px - uz * off, z = pz + ux * off;
+          out = { ...v, pos: [x, ground(x, z) + 1.7, z], look: [x + ux * s * 150, ground(x, z) + 4, z + uz * s * 150] };
+        }
+      }
+    }
+    return out;
+  }
+  const views = VIEWS[areaId] ?? [{ name: 'aerial', pos: [0, 400, 600], look: [0, 0, 0] }];
+  setView(views.find((v) => v.name === qs.get('view')) ?? views[0]);
 
-  addEventListener('resize', () => {
-    camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
+  addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); });
+  addEventListener('keydown', (e) => { if (e.code === 'KeyG') controls.setWalk(!controls.walk); });
 
-  return { renderer, scene, camera, controls, fallback, update: (_dt: number) => controls.update() };
+  return {
+    renderer, scene, camera, controls, sky, backend, area, views, setView,
+    stats: { buildings: blds.count, chunks: blds.group.children.length, roads: area.roads.length },
+    update(dt: number) { controls.update(dt); sky.follow(camera); },
+    setRainLook(k: number) { sky.setOvercast(k); (scene.fog as THREE.FogExp2).density = 0.00016 + k * 0.0012; },
+  };
 }
