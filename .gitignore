@@ -1,0 +1,35 @@
+# Secrets and env
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+secrets/
+credentials*.json
+
+# Private config and notes (never commit)
+config.private.json
+*.private.json
+notes/
+*.notes.md
+NOTES*.md
+
+# Data caches (raw downloads stay local; never Google tiles)
+tools/cache/
+data/raw/
+
+# Build and deps
+node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.blend1
