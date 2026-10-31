@@ -1,0 +1,12 @@
+{
+  "_note": "Public areas only. Origins are public landmarks. Private masks (home area) live in config.private.json (gitignored), never here.",
+  "keywest": {
+    "name": "Key West, FL (Old Town)",
+    "origin": { "name": "Southernmost Point Buoy", "lat": 24.54655, "lon": -81.79751 },
+    "bbox": { "west": -81.8120, "south": 24.5400, "east": -81.7700, "north": 24.5660 },
+    "gridM": 8,
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14
+  }
+}

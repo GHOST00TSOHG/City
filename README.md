@@ -10,18 +10,17 @@ A night-time Three.js city built from free public data (terrain, OpenStreetMap) 
 ## Run
 ```bash
 npm ci
-cp .env.example .env.local   # optional: add VITE_GOOGLE_TILES_KEY (never commit it)
+npm run bake:fetch keywest && npm run bake keywest   # optional: rebuild area data (needs pip install overturemaps)
 npm run dev                  # http://localhost:5173 (stats overlay on)
 npm run build                # typecheck + production bundle in dist/
 npm run preview              # serve dist/ on http://localhost:4173
 npx playwright install chromium && npm run test:smoke
 gitleaks detect --redact --config .gitleaks.toml
 ```
-Without a key the app runs with a dark night fallback ground and logs one console notice. Add `?stats` to the URL for fps and draw calls.
+Add `?perf=1` to the URL for fps and draw calls.
 
 ## Data and attribution
-Map data © OpenStreetMap contributors, ODbL. Elevation and land cover: USGS 3DEP / NJ public data. Full list: `knowledge/DATA-SOURCES.md`.
-Google Photorealistic 3D Tiles may appear as a temporary backdrop, with Google's logo and attribution shown on screen.
+Map data © OpenStreetMap contributors (ODbL) · OpenFreeMap © OpenMapTiles · © Overture Maps Foundation · terrain © Mapterhorn (USGS 3DEP). Full list: [CREDITS.md](CREDITS.md). No Google data.
 
 ## License
 MIT, © 2026 Luis Bryant-Petrillo. Data keeps its own licenses (see DATA-SOURCES).
