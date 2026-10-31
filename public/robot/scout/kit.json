@@ -1,0 +1,86 @@
+{
+ "addons_used": {
+  "HOps bool_difference": 76,
+  "HOps add_mod_bevel": 51,
+  "HOps mod_weighted_normal": 51,
+  "MESHmachine fuse": 23
+ },
+ "type": "scout",
+ "pistons": [],
+ "tris": {
+  "body:base": 8275,
+  "helmet:crt": 4636,
+  "helmet:visor": 3253,
+  "helmet:twin": 2148,
+  "arms:long": 2190,
+  "arms:blade": 2744,
+  "arms:grapple": 3481,
+  "legs:digi": 3332,
+  "legs:straight": 4750,
+  "legs:sprint": 2631,
+  "thrusters:twin": 1420,
+  "thrusters:ducted": 6368,
+  "thrusters:fins": 3296,
+  "bionics:scope": 1148,
+  "bionics:antenna": 1164,
+  "bionics:drone": 1292,
+  "boots:blade": 1356,
+  "boots:pads": 1504,
+  "boots:skids": 1856
+ },
+ "slots": {
+  "helmet": [
+   "crt",
+   "visor",
+   "twin"
+  ],
+  "arms": [
+   "long",
+   "blade",
+   "grapple"
+  ],
+  "bionics": [
+   "scope",
+   "antenna",
+   "drone"
+  ],
+  "legs": [
+   "digi",
+   "straight",
+   "sprint"
+  ],
+  "thrusters": [
+   "twin",
+   "ducted",
+   "fins"
+  ],
+  "boots": [
+   "blade",
+   "pads",
+   "skids"
+  ]
+ },
+ "screens": {
+  "crt": [
+   0,
+   0.13,
+   0.133,
+   0.3,
+   0.17
+  ],
+  "visor": [
+   0,
+   0.135,
+   0.145,
+   0.25,
+   0.06
+  ],
+  "twin": [
+   0,
+   0.06,
+   0.128,
+   0.14,
+   0.04
+  ]
+ }
+}

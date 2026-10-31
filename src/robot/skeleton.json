@@ -1,0 +1,7 @@
+{
+  "_doc": "Per-type skeleton shared by the game (src/robot/types.ts) and Blender (tools/blender/kit.py). Game frame: +Y up, +Z forward, metres. Each bone offset is relative to its parent; Right* bones mirror Left* in x. sole = foot-bone y of the sole, hand = forearm-bone y of the wrist.",
+  "scout":  { "height": 2.1, "sole": -0.12, "hand": -0.42, "bones": { "Hips": [0, 1.16, 0], "Spine": [0, 0.08, 0], "Head": [0, 0.62, 0], "LeftArm": [0.26, 0.45, 0], "LeftForeArm": [0, -0.36, 0], "LeftUpLeg": [0.11, -0.06, 0], "LeftLeg": [0, -0.48, 0], "LeftFoot": [0, -0.5, 0] } },
+  "heavy":  { "height": 2.6, "sole": -0.16, "hand": -0.45, "bones": { "Hips": [0, 1.31, 0], "Spine": [0, 0.1, 0], "Head": [0, 0.7, 0.04], "LeftArm": [0.5, 0.6, 0], "LeftForeArm": [0, -0.42, 0], "LeftUpLeg": [0.2, -0.1, 0], "LeftLeg": [0, -0.5, 0], "LeftFoot": [0, -0.55, 0] } },
+  "worker": { "height": 2.4, "sole": -0.14, "hand": -0.46, "bones": { "Hips": [0, 1.35, 0], "Spine": [0, 0.08, 0], "Head": [0, 0.72, 0.04], "LeftArm": [0.34, 0.55, 0], "LeftForeArm": [0, -0.42, 0], "LeftUpLeg": [0.13, -0.07, 0], "LeftLeg": [0, -0.52, 0], "LeftFoot": [0, -0.62, 0] } },
+  "glitch": { "height": 2.0, "sole": -0.09, "hand": -0.28, "bones": { "Hips": [0, 1.05, 0], "Spine": [0, 0.08, 0], "Head": [0, 0.55, 0], "LeftArm": [0.21, 0.42, 0], "LeftForeArm": [0, -0.3, 0], "LeftUpLeg": [0.1, -0.06, 0], "LeftLeg": [0, -0.45, 0], "LeftFoot": [0, -0.45, 0] } }
+}
