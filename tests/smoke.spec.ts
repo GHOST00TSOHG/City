@@ -10,7 +10,7 @@ for (const vp of [{ name: 'laptop', width: 1280, height: 800 }, { name: 'phone',
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(e.message));
     await page.setViewportSize(vp);
-    await page.goto('/?stats');
+    await page.goto('/?perf=1');
     await expect(page.locator('#city')).toBeVisible();
     await page.waitForFunction(() => (window as any).__city, null, { timeout: 30_000 });
     await page.waitForTimeout(Number(process.env.SETTLE_MS ?? 4000));

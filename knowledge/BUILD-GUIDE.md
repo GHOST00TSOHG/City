@@ -65,7 +65,8 @@ Pipeline per area (script per step in `tools/`, outputs committed only if small;
 6. **Water:** polygons at water level, reflective dark material.
 7. **Trees:** sample canopy/land-cover raster → points → one `InstancedMesh` per tree type per chunk.
 8. **Chunking + LOD:** 1 km chunks; load near ones, unload far ones; 2-3 LODs (full / boxes / skipped). Frustum culling on.
-9. **Budget (laptop, integrated GPU):** ≤ 150 draw calls, ≤ 1.5 M triangles visible, ≥ 50 fps at 1080p, ≤ 300 MB GPU memory. Check `renderer.info.render.calls` in a dev overlay.
+9. **Budget (laptop, integrated GPU):** ≤ 150 draw calls, ≤ 1.5 M triangles visible, ≥ 50 fps at 1080p, ≤ 300 MB GPU memory. Check `renderer.info.render.calls` in a dev overlay (`?perf=1`).
+   **Target device: MacBook Air M4 (Apple GPU, Safari or Chrome).** pixelRatio capped at 1.5, bloom at half resolution, post-processing calls count toward the 150.
 
 ---
 ## 4. Blender landmark workflow (landmarks only)
