@@ -1,0 +1,11 @@
+html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; font-family: 'Inter', system-ui, sans-serif; color: #cfd8e6; }
+#city { display: block; width: 100vw; height: 100vh; touch-action: none; }
+#hud { position: fixed; top: 12px; left: 14px; pointer-events: none; }
+#hud .title { font-weight: 600; font-size: 16px; letter-spacing: .04em; text-shadow: 0 1px 4px #000; }
+#hud .title span { font-weight: 400; opacity: .7; font-size: 13px; }
+#credits { position: fixed; left: 0; right: 0; bottom: 0; padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; font-size: 11px; background: linear-gradient(transparent, rgba(0,0,0,.65)); z-index: 10; }
+#google { display: flex; align-items: center; gap: 8px; }
+#google[hidden] { display: none; }
+.glogo { font-family: 'Inter', Arial, sans-serif; font-weight: 500; font-size: 15px; line-height: 18px; height: 18px; color: #fff; }
+#gcopy { opacity: .9; }
+#stats { position: fixed; top: 12px; right: 14px; font: 11px ui-monospace, monospace; background: rgba(0,0,0,.5); padding: 4px 6px; border-radius: 4px; }
