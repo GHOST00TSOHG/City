@@ -3,7 +3,7 @@ import '@fontsource/inter/600.css';
 import './style.css';
 import * as THREE from 'three/webgpu';
 import { createScene } from './scene';
-import { createRain, createWeatherUI, type WeatherKind } from './weather';
+import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
 const canvas = document.getElementById('city') as HTMLCanvasElement;
@@ -12,9 +12,11 @@ const areaId = qs.get('area') ?? 'keywest';
 
 createScene(canvas, areaId).then((app) => {
   loading?.remove();
-  const rain = createRain(); app.scene.add(rain.mesh);
+  const rain = createRain(), snow = createSnow(); app.scene.add(rain.mesh, snow.mesh);
   const setWeather = (kind: WeatherKind, intensity = 0.6) => {
-    rain.mesh.visible = kind === 'rain'; rain.setIntensity(intensity); app.setRainLook(kind === 'rain' ? intensity : 0);
+    rain.mesh.visible = kind === 'rain'; rain.setIntensity(intensity);
+    snow.mesh.visible = kind === 'snow'; snow.setIntensity(intensity);
+    app.setWeather(kind, intensity);
   };
   const weatherUI = createWeatherUI(setWeather);
   const hint = document.createElement('div'); hint.id = 'hint';
@@ -25,7 +27,7 @@ createScene(canvas, areaId).then((app) => {
   const showStats = qs.get('perf') === '1';
   statsEl.hidden = !showStats;
   const w = window as any;
-  w.__setWeather = (k: WeatherKind, i?: number) => { if (k === 'clear' || k === 'rain') weatherUI.set(k); setWeather(k, i); };
+  w.__setWeather = (k: WeatherKind, i = 0.6) => weatherUI.set(k, i);
   w.__cityCam = app.camera; w.__cityControls = app.controls;
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
@@ -33,7 +35,7 @@ createScene(canvas, areaId).then((app) => {
   const timer = new THREE.Timer();
   app.renderer.setAnimationLoop(() => {
     timer.update(); const dt = timer.getDelta(); t += dt;
-    app.update(dt); rain.update(t, app.camera.position);
+    app.update(dt); rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     app.renderer.render(app.scene, app.camera);
     frames++;
     const now = performance.now();
