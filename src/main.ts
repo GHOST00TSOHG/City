@@ -3,6 +3,10 @@ import '@fontsource/inter/600.css';
 import './style.css';
 import * as THREE from 'three/webgpu';
 import { createScene } from './scene';
+import { loadRobot, DEFAULT_LOOK, type RobotLook } from './robot/model';
+import { createRobotController } from './robot/controller';
+import { createThrust } from './robot/thrust';
+import { createRobotHud } from './robot/hud';
 import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
@@ -18,7 +22,7 @@ const titleEl = document.querySelector('#hud .title span');
 const setTitle = (id: string) => { if (titleEl) titleEl.textContent = AREAS.find((a) => a[0] === id)?.[2] ?? id; };
 setTitle(areaId);
 
-createScene(canvas, areaId).then((app) => {
+createScene(canvas, areaId).then(async (app) => {
   loading?.remove();
   const rain = createRain(), snow = createSnow(); app.scene.add(rain.mesh, snow.mesh);
   const setWeather = (kind: WeatherKind, intensity = 0.6) => {
@@ -37,7 +41,7 @@ createScene(canvas, areaId).then((app) => {
     if (busy || id === app.areaId) return; busy = true;
     bar.querySelectorAll('button').forEach((b) => { b.disabled = true; b.setAttribute('aria-pressed', String(b.dataset.a === id)); });
     fade.classList.add('on'); await new Promise((r) => setTimeout(r, 380));
-    try { await app.switchArea(id, view); setTitle(id); const u = new URL(location.href); u.searchParams.set('area', id); u.searchParams.delete('view'); history.replaceState(null, '', u); }
+    try { await app.switchArea(id, view); setTitle(id); if (robotMode) dropIn(); const u = new URL(location.href); u.searchParams.set('area', id); u.searchParams.delete('view'); history.replaceState(null, '', u); }
     catch (e) { console.warn('[City] area switch failed', e); bar.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.a === app.areaId))); }
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     fade.classList.remove('on'); bar.querySelectorAll('button').forEach((b) => (b.disabled = false)); busy = false;
@@ -47,8 +51,29 @@ createScene(canvas, areaId).then((app) => {
   const idle = (window as any).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
   idle(async () => { for (const [id] of AREAS) if (id !== areaId) await app.preload(id); });
   const hint = document.createElement('div'); hint.id = 'hint';
-  hint.textContent = 'WASD move · drag look · E/Q up/down · Shift fast · G walk';
-  document.body.appendChild(hint); setTimeout(() => hint.classList.add('gone'), 6000);
+  hint.textContent = 'Free cam: WASD move · drag look · E/Q up/down · Shift fast · G walk · V robot';
+  document.body.appendChild(hint); hint.classList.add('gone');
+
+  // Player robot (phase 7). Look is saved locally; a join-screen customiser will write the same object later.
+  let look: RobotLook = { ...DEFAULT_LOOK };
+  try { look = { ...look, ...JSON.parse(localStorage.getItem('city.robotLook') ?? '{}') }; } catch { /* default look */ }
+  const robot = await loadRobot(look); app.scene.add(robot.root);
+  const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
+  const ctl = createRobotController(robot, app.camera, canvas, app.world);
+  const hud = createRobotHud();
+  const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
+  let robotMode = qs.get('mode') !== 'free';
+  const setRobotMode = (on: boolean) => {
+    robotMode = on; ctl.setEnabled(on); app.controls.setEnabled(!on); hud.setVisible(on); thrust.setVisible(on);
+    app.setFocus(on ? ctl.pos : null);
+    if (!on) { app.camera.fov = 55; app.camera.updateProjectionMatrix(); app.controls.syncAngles(); hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 5000); }
+  };
+  dropIn(); setRobotMode(robotMode);
+  addEventListener('keydown', (e) => {
+    if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+    if (e.code === 'KeyV' && !e.repeat) { if (!robotMode) dropIn(40); setRobotMode(!robotMode); }
+    if (e.code === 'KeyR' && !e.repeat && robotMode) dropIn();
+  });
 
   const statsEl = document.getElementById('stats')!;
   const showStats = qs.get('perf') === '1';
@@ -58,12 +83,14 @@ createScene(canvas, areaId).then((app) => {
   w.__cityCam = app.camera; w.__cityControls = app.controls;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
+  w.__robot = { ctl, model: robot, setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => { robot.setLook(l); localStorage.setItem('city.robotLook', JSON.stringify({ ...look, ...l })); } };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
   let frames = 0, last = performance.now(), t = 0;
   const timer = new THREE.Timer();
   app.renderer.setAnimationLoop(() => {
     timer.update(); const dt = timer.getDelta(); t += dt;
+    if (robotMode) { ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); hud.update(dt, ctl); }
     app.update(dt, t); rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     app.renderer.render(app.scene, app.camera);
     frames++;
@@ -72,7 +99,7 @@ createScene(canvas, areaId).then((app) => {
       const fps = (frames * 1000) / (now - last); frames = 0; last = now;
       const r = app.renderer.info.render;
       if (showStats) statsEl.textContent = `${fps.toFixed(0)} fps · ${r.drawCalls ?? r.calls} calls · ${(r.triangles / 1e3).toFixed(0)}k tris · ${app.backend}`;
-      w.__city = { fps, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, ready: true };
+      w.__city = { fps, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, robot: robotMode ? { mode: ctl.mode, anim: ctl.anim, pos: ctl.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(ctl.vel.length() * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2) } : null, ready: true };
     }
   });
 }).catch((e) => {

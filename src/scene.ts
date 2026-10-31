@@ -11,6 +11,7 @@ import { buildOcean } from './area/water';
 import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
+import { createCollision } from './robot/collision';
 import { vertexColor, uniform as tslUniform } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import type { WeatherKind } from './weather';
@@ -106,6 +107,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     group.add(buildTerrain(terrain, groundMat), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     const interiors = createInteriors(area.buildings, terrain); group.add(interiors.group);
+    const collision = createCollision(area.buildings, terrain);
     if (inland) { // land skirt beyond the bake so an inland city doesn't float in a void; fog hides the seam
       const { nx, nz, h, cell, x0, z0 } = terrain; const edge: number[] = [];
       for (let i = 0; i < nx; i++) edge.push(h[i], h[(nz - 1) * nx + i]); for (let j = 0; j < nz; j++) edge.push(h[j * nx], h[j * nx + nx - 1]);
@@ -115,7 +117,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const skirt = new THREE.Mesh(new THREE.ShapeGeometry(ring).rotateX(-Math.PI / 2), new THREE.MeshLambertNodeMaterial({ color: 0x2b2a22 }));
       skirt.position.y = y; skirt.name = 'skirt'; group.add(skirt);
     }
-    return { id, area, terrain, group, ocean, lamps, trees, grass, ferry, blds, interiors,
+    return { id, area, terrain, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
       dispose() { group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   let cur = await buildContent(areaId);
@@ -156,10 +158,25 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   let weather: [WeatherKind, number] = ['clear', 0.6];
 
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); });
-  addEventListener('keydown', (e) => { if (e.code === 'KeyG') controls.setWalk(!controls.walk); });
+  addEventListener('keydown', (e) => { if (e.code === 'KeyG' && controls.enabled) controls.setWalk(!controls.walk); });
+  /** Robot mode hands the camera to the robot; `focus` is the point that drives interiors/streaming. */
+  let focus: THREE.Vector3 | null = null;
+  /** Robot world queries: walkable floor (interior slab, roof when above it, ground, sea level) and wall blocking. */
+  const world = {
+    floorAt(x: number, z: number, y: number) {
+      const fl = cur.interiors.floorAt(x, z), th = cur.terrain.heightAt(x, z), roof = cur.collision.roofAt(x, z);
+      if (roof !== null && y >= roof) return { y: roof, water: false, roof: true };
+      if (fl !== null) return { y: fl, water: false, roof: false };
+      return { y: Math.max(th, 0), water: th < 0, roof: false };
+    },
+    blocked(x: number, z: number, y: number) { const r = cur.collision.roofAt(x, z); return r !== null && y < r && cur.interiors.floorAt(x, z) === null; },
+  };
 
   return {
-    renderer, scene, camera, controls, sky, backend, setView,
+    renderer, scene, camera, controls, sky, backend, setView, world,
+    setFocus(p: THREE.Vector3 | null) { focus = p; },
+    /** Drop-in point: the street start view (on a road) if the area has one, else the first view's look target. */
+    spawnPoint() { const vs = viewsOf(cur.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
     get areaId() { return cur.id; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
     get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, lamps: a.lamps.length, chunks: cur.blds.group.children.length, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
     /** Warm the fetch cache for an area (data only; cheap, run when idle). */
@@ -176,7 +193,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       this.setWeather(...weather);
       old.dispose();
     },
-    update(dt: number, t = 0) { controls.update(dt); sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(camera.position, ground(camera.position.x, camera.position.z), dt); },
+    update(dt: number, t = 0) { if (!focus) controls.update(dt); const f = focus ?? camera.position; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(focus ? new THREE.Vector3(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
     /** Stand outside (or inside) a generated interior near the area origin; loads it immediately. */
     enterBuilding(inside = false) { const e = cur.interiors.entry(); if (!e) return null; e.show(); const p = inside ? e.in : e.out; camera.position.set(p[0], p[1] + 1.7, p[2]); camera.lookAt(...e.look); if (inside) { const d = new THREE.Vector3(...e.look).sub(camera.position).setY(0).normalize(); camera.lookAt(camera.position.x + d.x, camera.position.y, camera.position.z + d.z); } controls.syncAngles(); controls.setWalk(true); return e.i; },
     /** One place that sets every weather-driven uniform. k = intensity 0..1. */
