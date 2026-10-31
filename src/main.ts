@@ -57,6 +57,7 @@ createScene(canvas, areaId).then((app) => {
   w.__setWeather = (k: WeatherKind, i = 0.6) => weatherUI.set(k, i);
   w.__cityCam = app.camera; w.__cityControls = app.controls;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
+  w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
   let frames = 0, last = performance.now(), t = 0;
