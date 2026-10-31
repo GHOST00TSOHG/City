@@ -9,3 +9,4 @@ html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; fon
 .glogo { font-family: 'Inter', Arial, sans-serif; font-weight: 500; font-size: 15px; line-height: 18px; height: 18px; color: #fff; }
 #gcopy { opacity: .9; }
 #stats { position: fixed; top: 12px; right: 14px; font: 11px ui-monospace, monospace; background: rgba(0,0,0,.5); padding: 4px 6px; border-radius: 4px; }
+#credits a { color: inherit; text-decoration: none; } #credits a:hover { text-decoration: underline; }

@@ -1,0 +1,49 @@
+{
+  "area": "keywest",
+  "grid": {
+    "nx": 532,
+    "nz": 363,
+    "m": 8
+  },
+  "waterPolys": 37,
+  "counts": {
+    "buildings": 7625,
+    "roads": 2870,
+    "pools": 1103,
+    "piers": 213,
+    "trees": 133,
+    "lamps": 29
+  },
+  "buildingSources": {
+    "osm": 7557,
+    "overture": 68,
+    "parts": 24,
+    "outlinesReplacedByParts": 7
+  },
+  "masks": "none",
+  "heightSource": {
+    "default": 3110,
+    "roof:tag": 79,
+    "overture": 4266,
+    "roof:flat-fallback": 942,
+    "levels:tag": 244,
+    "height:tag": 5
+  },
+  "roofs": {
+    "skillion": 398,
+    "flat": 1672,
+    "gabled": 3754,
+    "hipped": 1799,
+    "pyramidal": 2
+  },
+  "sizes": {
+    "area.json": {
+      "bytes": 1732971,
+      "gzip": 497680
+    },
+    "terrain.bin": {
+      "bytes": 579372,
+      "gzip": 58815
+    }
+  }
+}
