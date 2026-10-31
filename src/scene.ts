@@ -10,13 +10,13 @@ export function createScene(canvas: HTMLCanvasElement) {
   renderer.setPixelRatio(Math.min(devicePixelRatio, mobile ? 1.5 : 2));
   renderer.setSize(innerWidth, innerHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 0.85;
+  renderer.toneMappingExposure = 1.3;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
   const nightSky = new THREE.Color(0x070a14);
   scene.background = nightSky;
-  scene.fog = new THREE.FogExp2(0x0b1020, 0.0011); // light distance fog
+  scene.fog = new THREE.FogExp2(0x141c33, 0.0005); // light distance fog
 
   // ENU local frame: x east, -z north, y up (meters). Camera looks NW over the bay toward NYC.
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 1, 40000);
@@ -32,10 +32,10 @@ export function createScene(canvas: HTMLCanvasElement) {
   controls.update();
 
   // Lighting: cool moon key, faint sky/ground fill, warm sodium city glow.
-  const moon = new THREE.DirectionalLight(0x9fb4ff, 0.9);
+  const moon = new THREE.DirectionalLight(0xb4c4ff, 2.4);
   moon.position.set(-2000, 3000, -1500);
   scene.add(moon);
-  scene.add(new THREE.HemisphereLight(0x23304f, 0x0a0806, 0.5));
+  scene.add(new THREE.HemisphereLight(0x5a6c9e, 0x1a140e, 1.5));
   const glow = new THREE.PointLight(0xffa04a, 2.5, 2500, 1.2); // sodium glow from town
   glow.position.set(0, 120, 0);
   scene.add(glow);

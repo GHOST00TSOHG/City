@@ -20,7 +20,7 @@ export function createBackdrop(apiToken: string, camera: THREE.PerspectiveCamera
     s.traverse((o: any) => {
       if (o.material) {
         const m = o.material;
-        const lit = new THREE.MeshStandardMaterial({ map: m.map, roughness: 0.6, metalness: 0.1, color: 0x6a7388 });
+        const lit = new THREE.MeshStandardMaterial({ map: m.map, roughness: 0.6, metalness: 0.1, color: 0xc9d1e8 });
         m.dispose?.(); o.material = lit;
       }
     });
