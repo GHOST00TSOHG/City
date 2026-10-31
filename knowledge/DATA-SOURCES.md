@@ -8,3 +8,4 @@ Every data source, model reference, and license used in City. Add a row before m
 | Newark to Sandy Hook ferry route + Newark Ferry Dock | Original, made up for City | MIT (our own) | **FICTION**, no real route exists |
 | Google Photorealistic 3D Tiles | Google Map Tiles API | Google terms; never cached, copied or traced | Temporary backdrop only; drop later |
 | Inter font | @fontsource/inter (npm), bundled | SIL OFL 1.1 | UI font, no CDN |
+| Google Maps logo (attribution) | Google Maps attribution assets zip, https://developers.google.com/maps/documentation/tile/policies | Google trademark; unmodified, attribution use only | `public/attribution/google-maps/`, shown only while Google tiles are on |

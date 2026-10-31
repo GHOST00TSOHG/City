@@ -12,7 +12,7 @@ export function createBackdrop(apiToken: string, camera: THREE.PerspectiveCamera
   const tiles = new TilesRenderer();
   tiles.registerPlugin(new GoogleCloudAuthPlugin({ apiToken, autoRefreshToken: true }));
   tiles.registerPlugin(new ReorientationPlugin({ lat: START.lat * THREE.MathUtils.DEG2RAD, lon: START.lon * THREE.MathUtils.DEG2RAD, height: 0, recenter: true }));
-  tiles.errorTarget = matchMedia('(pointer: coarse)').matches ? 48 : 28; // coarser on phones for perf
+  tiles.errorTarget = 28; // keeps the laptop view within the 150 draw-call budget
   tiles.setCamera(camera);
   tiles.setResolutionFromRenderer(camera, renderer);
   // Darken the daytime photo textures toward night.
