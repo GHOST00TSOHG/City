@@ -15,7 +15,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     if (!rings.length) continue;
     const outer = rings[0], [cx, cz] = [b.o[0] / 10, b.o[1] / 10];
     const key = `${Math.floor(cx / CHUNK)},${Math.floor(cz / CHUNK)}`;
-    let s = chunks.get(key); if (!s) chunks.set(key, (s = new Soup()));
+    let s = chunks.get(key); if (!s) { chunks.set(key, (s = new Soup())); s.f = []; }
     wall.setHex(b.wc); roof.setHex(b.rc); trim.copy(wall).multiplyScalar(0.82);
     let gmin = Infinity; for (const [x, z] of outer) gmin = Math.min(gmin, terrain.heightAt(x, z));
     gmin = Math.max(gmin, 0.2);
@@ -23,6 +23,11 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     const top = gmin + b.h;
     const pitched = b.s !== 'flat' && b.rh > 0.2;
     const eave = pitched ? top - b.rh : top;
+    // Facade kind (inferred): 1 = house (small, pitched, low), 2 = commercial/apartment; parts floating above ground get none.
+    const area = Math.abs(signedArea(outer));
+    const kind = b.m > 2 ? 0 : (pitched || b.h < 7.5) && area < 400 ? 1 : 2;
+    const seed = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0;
+    s.cur = [base, eave, kind, (seed % 997) / 997];
     // Walls: darker at the foot (cheap contact shading), lighter under the eave.
     for (const ring of rings) {
       const sign = signedArea(ring) > 0 ? 1 : -1;
@@ -34,6 +39,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
         s.quad([x0, base, z0], [x1, base, z1], [x1, eave, z1], [x0, eave, z0], wall, nrm, [foot, foot, 1, 1]);
       }
     }
+    s.cur = [base, eave, 0, 0]; // roofs, gables, soffits: no windows
     if (!pitched) {
       flatPoly(s, outer, rings.slice(1), top, roof);
       // Parapet lip on larger flat roofs reads as a real roof edge instead of a cut box.
