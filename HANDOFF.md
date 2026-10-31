@@ -44,3 +44,9 @@ Keyed test: put the key in env only. It is referrer-restricted, so serve on `:51
 
 ## Usage notes
 Built on Grok Bot (no Claude). Estimate for v01 streets: medium.
+
+## Phase 2 (facades, lamps, trees)
+- `src/area/facade.ts`: procedural window shader (TSL) driven by the per-vertex `facade` attribute from buildings.ts.
+- `src/area/lamps.ts`: instanced posts with a small emissive lens, plus additive ground pools that fade out between 90 and 260 m from the camera, so none show from the air.
+- `src/area/trees.ts`: palms and broadleaf trees built from alpha-tested cards on a canvas-drawn atlas, with wind sway and hi/lo LOD (hi within 170 m, re-sorted after the camera moves 12 m). 4 draw calls.
+- Sea: procedural swell normals for moon glints. Terrain: 4 blur passes near the coast to remove stepping.

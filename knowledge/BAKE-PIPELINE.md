@@ -32,3 +32,8 @@ Defaults: `building=yes` is classed by footprint (<22 m² shed, <320 m² house, 
 
 ## Privacy
 Masks (the home area) live only in `config.private.json` (gitignored): `{"masks":[{"area":"<id>","lat":..,"lon":..,"radiusM":..}]}`. The bake drops buildings, pools and trees inside a mask and writes only a count to the manifest. Use a generous radius. Never commit coordinates.
+
+## Phase 2: lamps, trees, facades (heuristics)
+- **Lamps:** OSM `highway=street_lamp` nodes (masked like everything else) plus inferred lamps. Inferred: major roads every 32 m on alternating sides, minor streets every 42 m on one side. Each lamp is kept at least 14 m from other lamps and is skipped on water, in masked areas and on buildings. Record `[x dm, z dm, inferred 0/1, arm heading mrad]`, with the arm pointing at the nearest road.
+- **Trees:** OSM `natural=tree` nodes plus `tree_row` ways (one tree every 8 m), plus a seeded scatter by land cover (per m²: wood 1/45, wetland 1/120, land 1/260, grass 1/320). A tree needs 2 m of clearance from buildings, pools and roads. 55% are palms (25% in wood/wetland). Palms are 7–15 m tall, broadleaf trees 5–12 m. Stored as a flat array `[x, z, kind, height dm, seed] …`.
+- **Facades (client):** inferred type. Houses (pitched or under 7.5 m, under 400 m²) get small windows with shutters. Other buildings get a regular grid with a storefront on the ground floor. About 22–30% of windows are lit warm and a few cool. The shader uses no textures.

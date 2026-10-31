@@ -4,6 +4,10 @@ import { createFlyControls } from './flyControls';
 import { loadArea } from './area/data';
 import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
 import { buildBuildings } from './area/buildings';
+import { createFacadeMaterial } from './area/facade';
+import { buildLamps } from './area/lamps';
+import { buildTrees } from './area/trees';
+import { positionWorld, sin, cos, vec3, time, normalize, transformNormalToView } from 'three/tsl';
 
 export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
 /** Start views per area (public places only). Key West origin = Southernmost Point Buoy. */
@@ -38,7 +42,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const sky = createSky(moonDir); scene.add(sky.group);
 
   const { area, terrain } = await loadArea(areaId);
-  const lambert = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
+  const facade = createFacadeMaterial(); const lambert = facade.material;
   const groundMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   const roadMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const tMesh = buildTerrain(terrain, groundMat);
@@ -47,8 +51,17 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const blds = buildBuildings(area.buildings, terrain, lambert);
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(60000, 60000).rotateX(-Math.PI / 2),
     new THREE.MeshStandardNodeMaterial({ color: 0x16404a, roughness: 0.22, metalness: 0, transparent: true, opacity: 0.82, depthWrite: false }));
+  { // moonlit water: a few travelling sine swells perturb the normal so the moon glints break up
+    const p = positionWorld, t = time;
+    const dx = cos(p.x.mul(0.045).add(t.mul(0.6))).mul(0.06).add(cos(p.x.mul(0.17).add(p.z.mul(0.09)).add(t.mul(1.3))).mul(0.035));
+    const dz = cos(p.z.mul(0.05).sub(t.mul(0.5))).mul(0.06).add(cos(p.z.mul(0.21).sub(p.x.mul(0.07)).add(t.mul(1.1))).mul(0.03));
+    (sea.material as THREE.MeshStandardNodeMaterial).normalNode = transformNormalToView(normalize(vec3(dx.negate(), 1, dz.negate())));
+    void sin;
+  }
+  const lamps = buildLamps(area.lamps, terrain);
+  const trees = buildTrees(area.trees as number[], terrain);
   sea.name = 'sea'; sea.position.y = 0; sea.renderOrder = 1;
-  scene.add(tMesh, roads, pools, blds.group, sea);
+  scene.add(tMesh, roads, pools, blds.group, sea, lamps.posts, lamps.pools, trees.group);
 
   const ground = (x: number, z: number) => Math.max(terrain.heightAt(x, z), 0);
   const controls = createFlyControls(camera, canvas, ground);
@@ -85,8 +98,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
 
   return {
     renderer, scene, camera, controls, sky, backend, area, views, setView,
-    stats: { buildings: blds.count, chunks: blds.group.children.length, roads: area.roads.length },
-    update(dt: number) { controls.update(dt); sky.follow(camera); },
-    setRainLook(k: number) { sky.setOvercast(k); (scene.fog as THREE.FogExp2).density = 0.00016 + k * 0.0012; },
+    stats: { buildings: blds.count, trees: area.trees.length / 5, lamps: area.lamps.length, chunks: blds.group.children.length, roads: area.roads.length },
+    update(dt: number) { controls.update(dt); sky.follow(camera); trees.update(camera.position); },
+    setRainLook(k: number) { sky.setOvercast(k); (scene.fog as THREE.FogExp2).density = 0.00016 + k * 0.0012; trees.uWind.value = 1 + k * 1.8; },
   };
 }
