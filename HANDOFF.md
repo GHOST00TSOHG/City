@@ -28,7 +28,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Jonn directions for the rebuild | bot/websmith-jonn-directions | Grok Bot (Websmith) | PR open | 2026-10-31 |
-| Landmark #2 Cathedral Basilica (FIRST) | bot/jonn-cathedral | (unclaimed, Jonn) | open | |
+| Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | in progress | 2026-10-31 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
