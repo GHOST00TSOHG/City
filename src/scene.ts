@@ -16,6 +16,8 @@ import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
 import { createCollision } from './robot/collision';
+import { buildLandmarks } from './area/landmarks';
+import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import type { WeatherKind } from './weather';
@@ -111,8 +113,11 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     group.add(buildTerrain(terrain, groundMat), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
+    const origin = (areaDefs as Record<string, any>)[id]?.origin as { lat: number; lon: number } | undefined;
+    const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [] } : await buildLandmarks(id, origin, terrain, renderer);
+    group.add(landmarks.group);
     const interiors = createInteriors(area.buildings, terrain); group.add(interiors.group);
-    const collision = createCollision(area.buildings, terrain);
+    const collision = createCollision(area.buildings, terrain, landmarks.colliders);
     if (inland) { // land skirt beyond the bake so an inland city doesn't float in a void; fog hides the seam
       const { nx, nz, h, cell, x0, z0 } = terrain; const edge: number[] = [];
       for (let i = 0; i < nx; i++) edge.push(h[i], h[(nz - 1) * nx + i]); for (let j = 0; j < nz; j++) edge.push(h[j * nx], h[j * nx + nx - 1]);
