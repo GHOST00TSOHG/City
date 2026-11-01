@@ -93,7 +93,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       if (build[p.slot] !== p.opt) return;
       A.set(...p.ap).applyMatrix4(R.by.get(p.a)!.matrixWorld).applyMatrix4(inv); B.set(...p.bp).applyMatrix4(R.by.get(p.b)!.matrixWorld).applyMatrix4(inv);
       const a = pist[i * 2], b = pist[i * 2 + 1];
-      a.position.copy(A); b.position.copy(B); a.scale.setScalar(ballForm > 0.5 ? 0 : 1); b.scale.setScalar(ballForm > 0.5 ? 0 : 1); // pistons vanish into the closed ball
+      a.position.copy(A); b.position.copy(B); const ps = 1 - Math.min(1, Math.max(0, (ballForm - 0.15) / 0.35)); a.scale.setScalar(ps); b.scale.setScalar(ps); // pistons retract smoothly with the fold (both ends stay on their bones), no pop
       const d = B.clone().sub(A).normalize(); a.quaternion.setFromUnitVectors(Y, d); b.quaternion.setFromUnitVectors(Y, d.negate());
     });
   };
@@ -108,7 +108,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt, s.gs ?? 0); ballForm = type === 'heavy' ? s.form ?? 0 : 0; aimPistons(); },
+    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt, s.gs ?? 0); ballForm = type === 'heavy' || type === 'scout' ? s.form ?? 0 : 0; aimPistons(); },
     dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); xfx.dispose(); },
   };
   model.setLook({}); aimPistons();

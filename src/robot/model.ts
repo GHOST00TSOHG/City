@@ -61,7 +61,7 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
   let fistC = 0, openC = 0;
   const rest = new Map<THREE.Object3D, THREE.Quaternion>();
   for (const o of Object.values(b)) if (o) rest.set(o, o.quaternion.clone());
-  const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), e = new THREE.Euler();
+  const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), qe = new THREE.Quaternion(), e = new THREE.Euler();
   const set = (name: keyof Bones, x: number, y: number, z: number, k: number) => {
     const o = b[name]; if (!o) return;
     let v = cur.get(name); if (!v) cur.set(name, (v = new THREE.Vector3()));
@@ -214,6 +214,13 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     set('LeftUpLeg', lu[0], lu[1], lu[2], k); set('RightUpLeg', ru[0], ru[1], ru[2], k); set('LeftLeg', ll[0], ll[1], ll[2], k); set('RightLeg', rl[0], rl[1], rl[2], k);
     set('LeftFoot', lft[0], lft[1], lft[2], k); set('RightFoot', rft[0], rft[1], rft[2], k);
     const bobM = mocap(p, dt); if (b.Hips) b.Hips.position.y += bobM;
+    // Scout elbow limit: his forearm shell is long and wide at the elbow, so the mocap walk/run elbow bend (up to ~1.2 rad) drove the
+    // forearm and hand up into the bicep. Cap the elbow at 0.55 rad from rest on foot (the bike fold below still uses its own overrides).
+    if (style === 'scout') for (const n of ['LeftForeArm', 'RightForeArm'] as const) {
+      const o = b[n]; if (!o) continue; const r = rest.get(o)!;
+      const ang = 2 * Math.acos(Math.min(1, Math.abs(qe.copy(r).invert().multiply(o.quaternion).w)));
+      if (ang > 0.55) { const cq = o.quaternion.clone(); o.quaternion.copy(r).slerp(cq, 0.55 / ang); }
+    }
     // ---- per-type run / slide / landing overlays (blend weights come from the controller)
     const fm = p.form ?? 0, sl = p.slide ?? 0, ph2 = Math.sin(p.phase), bl = style === 'heavy' ? fm : 0, hv = style === 'scout' ? fm : 0, gl = style === 'medic' ? fm : 0;
     // foldable bones go back to their rest offset / scale every frame, then the active transformation moves them (staged by the form progress 0..1)
@@ -224,7 +231,10 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
       ovr('LeftArm', -1.2, 0.5, 0.3, sA); ovr('RightArm', -1.2, -0.5, -0.3, sA); ovr('LeftForeArm', -1.7, 0, 0, sA); ovr('RightForeArm', -1.7, 0, 0, sA);
       ovr('LeftUpLeg', -2.0, 0, 0.1, sL); ovr('RightUpLeg', -2.0, 0, -0.1, sL); ovr('LeftLeg', 2.3, 0, 0, sL); ovr('RightLeg', 2.3, 0, 0, sL); ovr('LeftFoot', -1.6, 0, 0, sL); ovr('RightFoot', -1.6, 0, 0, sL);
       ovr('Spine', 0.75, 0, 0, sS); ovr('Head', 0.5, 0, 0, sHd);
-      fold('LeftArm', 0.07, 0, 0.5, 0.04, sInA); fold('RightArm', 0.07, 0, 0.5, 0.04, sInA); fold('LeftUpLeg', 0.07, 0, 0.36, 0.0, sInL); fold('RightUpLeg', 0.07, 0, 0.36, 0.0, sInL); // arms AND legs sink into the dome (centre of the sphere)
+      // arms AND legs shrink at their own joint first (so they never detach from the body), and only once they are small slide into the dome centre
+      const scl = (n: string, sc: number, w: number) => { const o = b[n]; if (o && w > 0) o.scale.setScalar(1 + (sc - 1) * w); };
+      fold('LeftArm', 1, 0, 0.5, 0.04, sstep(bl, 0.72, 0.95)); fold('RightArm', 1, 0, 0.5, 0.04, sstep(bl, 0.72, 0.95)); fold('LeftUpLeg', 1, 0, 0.36, 0.0, sstep(bl, 0.75, 0.97)); fold('RightUpLeg', 1, 0, 0.36, 0.0, sstep(bl, 0.75, 0.97));
+      scl('LeftArm', 0.07, sInA); scl('RightArm', 0.07, sInA); scl('LeftUpLeg', 0.07, sInL); scl('RightUpLeg', 0.07, sInL);
       fold('Head', 0.1, 0, 0.5, 0, sHd); fold('Spine', 1, 0, -0.3, 0.02, sS); if (b.Hips) b.Hips.position.y -= 0.62 * sstep(bl, 0.3, 1); // the dome settles over the pelvis; the ball sits on the ground
     }
     if (hv > 0) { // Scout MOTORCYCLE mode: torso is the bike body (horizontal), the head swells into the giant round headlight, the arms become the front forks, the legs become two tailpipes pointing straight back (flames trail behind)
@@ -232,7 +242,10 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
       ovr('Hips', 1.38, 0, 0, sS); ovr('Spine', 0.06, 0, 0, sS); ovr('Head', -1.35, 0, 0, sS);
       ovr('LeftArm', -1.62, 0, 0.04, sA); ovr('RightArm', -1.62, 0, -0.04, sA); ovr('LeftForeArm', -0.12, 0, 0, sA); ovr('RightForeArm', -0.12, 0, 0, sA);
       ovr('LeftUpLeg', 0.19, 0, 0.0, sL); ovr('RightUpLeg', 0.19, 0, 0.0, sL); ovr('LeftLeg', 0, 0, 0, sL); ovr('RightLeg', 0, 0, 0, sL); ovr('LeftFoot', 0, 0, 0, sL); ovr('RightFoot', 0, 0, 0, sL);
-      fold('LeftUpLeg', 0.95, 0.2, 0, 0.02, sL); fold('RightUpLeg', 0.95, -0.2, 0, 0.02, sL); fold('LeftArm', 1, 0.2, 0.34, -0.04, sA); fold('RightArm', 1, -0.2, 0.34, -0.04, sA); fold('Head', 2.3, 0, 0.6, 0.02, sH);
+      // only the bike shows: arms and head fold into the body (the lens is the headlight), the legs shrink to stubs at the rear of the hips; their foot
+      // nozzles end up there and transform.ts mounts two chrome tailpipes on them (flames still come out of the pipe ends)
+      const sAi = sstep(hv, 0.15, 0.6), sLi = sstep(hv, 0.25, 0.75);
+      fold('LeftUpLeg', 0.04, 0.13, -0.02, -0.06, sLi); fold('RightUpLeg', 0.04, -0.13, -0.02, -0.06, sLi); fold('LeftArm', 0.04, 0.05, 0.3, -0.02, sAi); fold('RightArm', 0.04, -0.05, 0.3, -0.02, sAi); fold('Head', 0.05, 0, 0.6, 0.02, sH);
       if (b.Hips) b.Hips.position.y -= 0.52 * sS;
     }
     if (sl > 0) { ovr('Spine', -0.32, 0, 0, sl * (1 - hv * 0.6)); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl * (1 - hv)); ovr('LeftLeg', 2.0, 0, 0, sl * (1 - hv)); ovr('RightUpLeg', -0.5, 0, -0.14, sl * (1 - hv)); ovr('RightLeg', 0.25, 0, 0, sl * (1 - hv));

@@ -9,7 +9,7 @@ import type { RobotType } from './types';
  *  - flyby-mono is spatialised with a PannerNode (HRTF) driven by the robot position and the camera as listener.
  * Lazy: nothing is fetched until the first user gesture unlocks audio.
  */
-const LOOPS = new Set(['moto-engine', 'thrust-burn', 'thrust-hum', 'hover-sprint', 'roll', 'tread-growl', 'tread-clatter', 'water-skim']);
+const LOOPS = new Set(['moto-engine', 'thrust-burn', 'thrust-hum', 'hover-sprint', 'roll', 'tread-growl', 'tread-clatter', 'water-skim', 'run-loop']);
 const LAND: Record<RobotType, string> = { heavy: 'land-slam', scout: 'land-knee', worker: 'land-hiss', glitch: 'land-reform' };
 /** The landing strength (0..1) at or above which the _heavy variant plays (below: _light). */
 export const LAND_HEAVY_AT = 0.5;
@@ -112,6 +112,8 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
     /** Glitch on foot (Luis's pick): `teleport-snap_01..03` while running as a cloud, `dissolve` when it starts, `reform` when he re-forms. */
     snap() { const now = ctx?.currentTime ?? 0; snaps = snaps.filter((s) => s.until > now); if (snaps.length >= SNAP_VOICES) return; const v = { until: now + 0.6 }; snaps.push(v); void play(pick('teleport-snap')).then((src) => { if (src && ctx) v.until = ctx.currentTime + (src.buffer?.duration ?? 0.5); else v.until = 0; }); }, // reserves a voice synchronously: at most SNAP_VOICES (2) overlapping
     glitch(phase: 'dissolve' | 'reform') { void play(phase); },
+    /** Glitch run bed (Luis's pick, option G): continuous ogg loop the whole time he runs as a cloud, under the teleport snaps; ~80 ms fade out when the run ends. */
+    runBed(on: boolean) { loop('run-loop', on ? 1 : 0, 1, { fade: 0.05, out: 0.08 }); },
     /** Spatial flyby (mono file through an HRTF PannerNode; the clip peaks 1.3 s in = closest approach). Call updateSpatial every frame afterwards. */
     flyby(at: { x: number; y: number; z: number }) {
       if (!ctx || !master || !type || !exists(type, 'flyby-mono')) return; const c = ctx, p = c.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 12; p.rolloffFactor = 1; p.connect(master); P(at.x, at.y, at.z, p); fly = { panner: p, until: c.currentTime + AUDIO_TIMING.flyby + 0.2 };
