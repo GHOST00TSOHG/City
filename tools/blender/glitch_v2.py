@@ -111,7 +111,7 @@ def build():
     for k_ in list(J):
         if not k_.startswith(('Hips', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot')): J[k_] = lean @ J[k_]
 
-def shardify(n_total=3400, seed=7):
+def shardify(n_total=3400, seed=7, crack_n=40):
     """Area-weighted plate shards on every proxy surface; returns per (slot,opt,bone) parts and builds a Blender
     mesh of the shards for the stills."""
     import bmesh
@@ -127,6 +127,7 @@ def shardify(n_total=3400, seed=7):
             if area > 1e-7: faces.append((o, vs, nrm, area, min(o.dimensions)))
     glows = [o.matrix_world.translation.copy() for o in objs if o.active_material and o.active_material.name.startswith('glow') and o['slot'] == 'body']
     tot = sum(f[3] for f in faces); parts = {}
+    skin = math.sqrt(1.7 * tot / n_total / 2.6)  # v3c: tiles overlap ~1.7x -> closed dark surface
     acc = 0.0; step = tot / n_total; nxt = rnd.random() * step
     def tri_pt(vs):
         a, b, c = vs[0], vs[rnd.randrange(1, len(vs) - 1)], None
@@ -142,19 +143,20 @@ def shardify(n_total=3400, seed=7):
             pt = tri_pt(vs); key = (o['slot'], o['opt'], o['bone'])
             mn = o.active_material.name if o.active_material else 'frame'
             c = CAT.get(mn.split('.')[0], 0 if mn.startswith('armor') else 1)
-            # v3b: fewer, larger plates lying flat on the armour (aligned to the part's long axis); glow parts get
-            # small flush tiles so the visor, core and piping stay readable; thin parts cap the plate size
+            # v3c: solid dark armour skin: flush, overlapping dark tiles sized from the area budget (no light "paper"
+            # plates); glow parts keep small bright tiles; edge cracks are added separately in edge_cracks()
             gl = c == 2
-            if not gl and any((pt - g).length < 0.075 for g in glows): continue  # v3b: keep visor/core/piping clear
-            s = (0.012 + rnd.random() * 0.006) if gl else (0.038 + rnd.random() * 0.03)
-            s = min(s, max(0.008, mind * 0.55))
+            if not gl and any((pt - g).length < 0.05 for g in glows): continue
+            if not gl: c = 1
+            s = (0.012 + rnd.random() * 0.006) if gl else skin * rnd.uniform(0.9, 1.15)
+            s = min(s, max(0.008, mind * 0.28))
             ax_ = (o.matrix_world.to_3x3() @ V((0, 0, 1))).normalized()
             tng = (ax_ - nrm * ax_.dot(nrm)); tng = tng.normalized() if tng.length > 1e-3 else nrm.cross(V((0, 0, 1)) if abs(nrm.z) < 0.9 else V((1, 0, 0))).normalized()
-            tng = Quaternion(nrm, rnd.uniform(-0.08, 0.08)) @ tng
+            tng = Quaternion(nrm, rnd.uniform(-0.05, 0.05)) @ tng
             bit = nrm.cross(tng)
             q = Matrix((tng, bit, nrm)).transposed().to_quaternion()  # local x=tangent, y=bitangent, z=normal
-            hx, hy, hz = s * rnd.uniform(0.9, 1.15), s * rnd.uniform(1.1, 1.5), s * (0.2 if gl else 0.09)
-            pos = pt + nrm * hz * 0.15
+            hx, hy, hz = s, s * 1.3, s * (0.2 if gl else 0.04)
+            pos = pt + nrm * hz * 0.1
             bn = o['bone']; jb = J[bn] if bn in J else (lambda v: V((-v.x, v.y, v.z)))(J[bn.replace('Right', 'Left')])
             rel = pos - jb
             # game frame: (x, z, -y); quaternion basis change likewise
@@ -162,7 +164,42 @@ def shardify(n_total=3400, seed=7):
             parts.setdefault(key, []).append([round(rel.x, 4), round(rel.z, 4), round(-rel.y, 4), round(hx, 4), round(hy, 4), round(hz, 4),
                                               round(gq.x, 4), round(gq.y, 4), round(gq.z, 4), round(gq.w, 4), c])
             geo.setdefault(key, []).append((pos, q, (hx, hy, hz), c))
+    edge_cracks(objs, parts, geo, rnd, n=crack_n)
     return parts, geo, objs
+
+def edge_cracks(objs, parts, geo, rnd, n=40):
+    """v3c: a few dozen shallow light plates hinged on sharp armour edges, lifted slightly like cracked-off scale."""
+    edges = []
+    for o in objs:
+        if o.get('opt', 'base') != 'base' or o['slot'] != 'body': continue
+        mn = o.active_material.name if o.active_material else ''
+        if not mn.startswith('armor'): continue
+        mw = o.matrix_world; nm = mw.inverted_safe().transposed().to_3x3(); me = o.data
+        ef = {}
+        for p in me.polygons:
+            for k in p.edge_keys: ef.setdefault(k, []).append(p)
+        for (i, j), fs in ef.items():
+            if len(fs) != 2 or fs[0].normal.angle(fs[1].normal, 0) < 0.6: continue
+            a, b = mw @ me.vertices[i].co, mw @ me.vertices[j].co; L = (b - a).length
+            if L < 0.03: continue
+            nr = (nm @ (fs[0].normal + fs[1].normal)).normalized(); edges.append((o, a, b, nr, L))
+    tot = sum(e[4] for e in edges)
+    for k in range(n if edges else 0):
+        r = rnd.random() * tot
+        for o, a, b, nr, L in edges:
+            r -= L
+            if r <= 0: break
+        pt = a.lerp(b, rnd.uniform(0.15, 0.85)); tng = (b - a).normalized(); bit = nr.cross(tng).normalized()
+        tq = Quaternion(tng, rnd.uniform(0.12, 0.3) * (1 if rnd.random() < 0.5 else -1))   # lifted off the edge
+        R = Matrix((tng, bit, nr)).transposed(); q = (tq.to_matrix() @ R).to_quaternion()
+        s = rnd.uniform(0.022, 0.04); hx, hy, hz = s * 1.4, s * 0.8, s * 0.07
+        pos = pt + nr * 0.006
+        key = (o['slot'], o['opt'], o['bone']); bn = o['bone']
+        jb = J[bn] if bn in J else (lambda v: V((-v.x, v.y, v.z)))(J[bn.replace('Right', 'Left')])
+        rel = pos - jb; gq = Quaternion((q.w, q.x, q.z, -q.y))
+        parts.setdefault(key, []).append([round(rel.x, 4), round(rel.z, 4), round(-rel.y, 4), round(hx, 4), round(hy, 4), round(hz, 4),
+                                          round(gq.x, 4), round(gq.y, 4), round(gq.z, 4), round(gq.w, 4), 0])
+        geo.setdefault(key, []).append((pos, q, (hx, hy, hz), 0))
 
 SHARD_V = [(0, 1, 0), (0, -1, 0), (1, 0, 0), (-1, 0, 0), (0, 0, 1), (0, 0, -1)]
 SHARD_F = [(0, 2, 4), (0, 4, 3), (0, 3, 5), (0, 5, 2), (1, 4, 2), (1, 3, 4), (1, 5, 3), (1, 2, 5)]
@@ -201,47 +238,24 @@ def fx_dressing(shards):
             bm = bmesh.new(); bm.from_mesh(g.data)
             dead = [f for i, f in enumerate(bm.faces) if (i // 8) % 4]
             bmesh.ops.delete(bm, geom=dead, context='FACES'); bm.to_mesh(g.data); bm.free()
-    import bmesh
-    bm = bmesh.new()
-    for i in range(70):
-        a = rnd.uniform(0, 6.28); r = rnd.uniform(0.45, 0.8); z = rnd.uniform(0.9, 1.9)
-        c = V((math.cos(a) * r, math.sin(a) * r, z)); s = rnd.uniform(0.02, 0.05)
-        R = Quaternion(V((rnd.random(), rnd.random(), rnd.random())).normalized(), rnd.uniform(0, 3)).to_matrix()
-        vv = [bm.verts.new(c + R @ V((x * s, y * s * 1.6, z_ * s * 0.35))) for x, y, z_ in SHARD_V]
-        for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = 0 if i % 5 else 1
-    me = bpy.data.meshes.new('orbit_shards'); bm.to_mesh(me); bm.free(); me.materials.append(WH); me.materials.append(GL)
-    o = bpy.data.objects.new('orbit_shards', me); bpy.context.scene.collection.objects.link(o)
-    # trails: each of 26 orbit shards drags a fading arc of tiny glow flecks behind it
-    tr = [mat(f'trail_{k}', (0, 0, 0), 0.5, 0, (0.69, 0.29, 1.0) if k % 2 else (0.0, 0.85, 1.0), 9 - k * 2) for k in range(4)]
-    bm = bmesh.new(); rnd = random.Random(11)
-    for i in range(26):
-        a0 = rnd.uniform(0, 6.28); r = rnd.uniform(0.45, 0.75); z = rnd.uniform(1.0, 1.85); tilt = rnd.uniform(-0.25, 0.25)
-        for j in range(14):
-            a = a0 - j * 0.05; c = V((math.cos(a) * r, math.sin(a) * r, z + tilt * math.sin(a))); s = 0.012 * (1 - j / 16)
-            vv = [bm.verts.new(c + V((x * s, y * s, z_ * s))) for x, y, z_ in SHARD_V]
-            for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = min(3, j // 4)
-        cc = V((math.cos(a0) * r, math.sin(a0) * r, z + tilt * math.sin(a0))); s = 0.035
-        vv = [bm.verts.new(cc + V((x * s, y * s * 1.6, z_ * s * 0.35))) for x, y, z_ in SHARD_V]
-        for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = 0
-    me = bpy.data.meshes.new('orbit_trails'); bm.to_mesh(me); bm.free()
+    # v3c: no shard cloud. One thin dash trail behind the body: four streaks of tiny flecks from the shoulders and
+    # hips, receding back-right and fading out
+    tr = [mat(f'trail_{k}', (0, 0, 0), 0.5, 0, (0.69, 0.29, 1.0) if k % 2 else (0.0, 0.85, 1.0), 7 - k * 1.5) for k in range(4)]
+    bm = bmesh.new(); rnd = random.Random(11); back = V((0.85, 0.75, 0.05)).normalized()
+    for i, st in enumerate((V((0.3, 0.12, 1.62)), V((-0.3, 0.14, 1.6)), V((0.15, 0.1, 1.0)), V((-0.12, 0.12, 1.2)))):
+        for j in range(22):
+            t = j / 22; c = st + back * (0.08 + t * 0.9) + V((0, 0, -0.04 * t)) + V((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))) * 0.01
+            sz = 0.009 * (1 - t * 0.7)
+            vv = [bm.verts.new(c + V((x * sz * (2.2 if x else 1), y * sz, z_ * sz * 0.5))) for x, y, z_ in SHARD_V]
+            for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = min(3, int(t * 4))
+    me = bpy.data.meshes.new('dash_trail'); bm.to_mesh(me); bm.free()
     for m in tr: me.materials.append(m)
-    ot = bpy.data.objects.new('orbit_trails', me); bpy.context.scene.collection.objects.link(ot); ot.visible_shadow = False
-    # blink-dash afterimage: a sparse magenta copy of the whole body left behind, dissolving into flecks
-    gm = mat('dash_ghost', (0, 0, 0), 0.5, 0, (1.0, 0.1, 0.7), 2.2)
-    for sh in [x for x in shards if x['slot'] == 'body']:
-        g = sh.copy(); g.data = sh.data.copy(); g.data.materials.clear(); g.data.materials.append(gm)
-        bpy.context.scene.collection.objects.link(g); g.location += V((1.25, 0.9, 0)); g.visible_shadow = False
-        bm = bmesh.new(); bm.from_mesh(g.data)
-        for f in bm.faces: f.material_index = 0
-        dead = [f for i, f in enumerate(bm.faces) if (i // 8) % 9]  # v3b: sparser afterimage
-        bmesh.ops.delete(bm, geom=dead, context='FACES')
-        for v in bm.verts: v.co += V((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))) * 0.02 * max(0, v.co.z - 0.4)
-        bm.to_mesh(g.data); bm.free()
+    ot = bpy.data.objects.new('dash_trail', me); bpy.context.scene.collection.objects.link(ot); ot.visible_shadow = False
 
 def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
-    n = 450 if S.FAST else 900
+    n = 600 if S.FAST else 1400
     parts, geo, proxies = shardify(n)
     import v2export as X
     X.write_skeleton('glitch', proxies)
@@ -266,8 +280,8 @@ def main():
             l = bpy.data.lights.new(name, 'AREA'); l.energy = e; l.size = 0.8; l.color = col
             ob = bpy.data.objects.new(name, l); bpy.context.scene.collection.objects.link(ob); ob.location = loc
             ob.rotation_euler = (V((0, 0, 1.5)) - V(loc)).to_track_quat('-Z', 'Y').to_euler()
-        rim('rim_glitch_c', (-1.6, 1.9, 2.3), 1300, (0.1, 0.85, 1.0))  # hard cyan rim, back left
-        rim('rim_glitch_m', (1.8, 1.6, 1.9), 900, (1.0, 0.15, 0.75))  # magenta kicker, back right
+        rim('rim_glitch_c', (-1.6, 1.9, 2.3), 450, (0.1, 0.85, 1.0))  # cyan rim, back left
+        rim('rim_glitch_m', (1.8, 1.6, 1.9), 300, (1.0, 0.15, 0.75))  # magenta kicker, back right
         S.render(S.OUT.replace('.png', '-34.png'), tgt=(0.15, 0.1, 1.15), dist=6.4)
         S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-0.45, cam_el=0.08, res=(1500, 1200), tgt=(0.05, -0.05, 1.62), dist=2.7, lens=60, setup=False); return
     bpy.ops.wm.save_as_mainfile(filepath='/workspace/private/glitch_v2.blend')
