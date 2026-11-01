@@ -76,10 +76,10 @@ def face_plate():
             r.append(bm.verts.new(p))
         rows.append(r)
     for a, b in zip(rows, rows[1:]):
-        for i in range(NT): bm.faces.new((a[i], a[i + 1], b[i + 1], b[i]))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+        for i in range(NT): bm.faces.new((a[i], a[i + 1], b[i + 1], b[i]))   # winding gives outward (-Y) normals; open sheet, so no recalc
     o = obj_from_bm('face_plate', bm, FACE)
     for p in o.data.polygons: p.use_smooth = True
+    print('FACE normal y', sum(p.normal.y for p in o.data.polygons) / len(o.data.polygons), flush=True)
     return o
 
 def in_face(p):
