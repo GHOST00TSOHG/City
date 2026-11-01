@@ -1,6 +1,6 @@
 {
  "mode": "after",
- "generated": "2026-11-01T09:18:47.869Z",
+ "generated": "2026-11-01T09:52:42.573Z",
  "areas": {
   "keywest": {
    "counts": {
@@ -20,9 +20,13 @@
     "bridgeNoClearance": 0,
     "overpassMissing": 0,
     "pilingThroughDeck": 0,
-    "pilingMisplaced": 0
+    "pilingMisplaced": 0,
+    "foundationExposed": 2
    },
    "totals": {
+    "maxExposedFoundation": 1.53,
+    "meanExposedFoundation": 0.092,
+    "exposedOver3m": 0,
     "buildings": 7560,
     "roads": 2859,
     "trees": 24618,
@@ -30,7 +34,7 @@
     "pools": 1103,
     "piers": 213,
     "bridges": 32,
-    "seawallSegments": 710,
+    "seawallSegments": 712,
     "shoreSegments": 3682
    },
    "fixes": {
@@ -46,6 +50,8 @@
     "buildingsShoreFilled": 13,
     "buildingsRemovedOnRoad": 25,
     "buildingsRemovedOverlap": 3,
+    "steepLotsGraded": 17,
+    "gradeFillVerts": 42,
     "buildingsSnapped": 7523,
     "buildingsKept": 7560,
     "buildingsRemoved": 65,
@@ -53,18 +59,31 @@
     "treesRemovedBuilding": 31,
     "treesRemovedRoad": 2,
     "lampsRemovedBuilding": 1,
-    "seawallSegments": 710,
-    "seawallMetres": 4363,
-    "beachVerts": 2152,
+    "seawallSegments": 712,
+    "seawallMetres": 4378,
+    "beachVerts": 2148,
     "docks": {
      "pilings": 9839,
      "cleats": 2824,
-     "bumpers": 4869,
+     "bumpers": 4868,
      "ladders": 328,
      "boats": 192
     }
    },
-   "examples": {}
+   "examples": {
+    "foundationExposed": [
+     {
+      "x": 1731,
+      "z": -1816,
+      "exposed": 1.53
+     },
+     {
+      "x": 2341,
+      "z": -2238,
+      "exposed": 1.33
+     }
+    ]
+   }
   },
   "bayshore": {
    "counts": {
@@ -84,9 +103,13 @@
     "bridgeNoClearance": 0,
     "overpassMissing": 0,
     "pilingThroughDeck": 0,
-    "pilingMisplaced": 0
+    "pilingMisplaced": 0,
+    "foundationExposed": 19
    },
    "totals": {
+    "maxExposedFoundation": 6.09,
+    "meanExposedFoundation": 0.789,
+    "exposedOver3m": 8,
     "buildings": 120,
     "roads": 703,
     "trees": 28787,
@@ -94,7 +117,7 @@
     "pools": 0,
     "piers": 81,
     "bridges": 6,
-    "seawallSegments": 452,
+    "seawallSegments": 461,
     "shoreSegments": 1425
    },
    "fixes": {
@@ -105,15 +128,17 @@
     "pierBents": 135,
     "overpassesBuilt": 0,
     "causewayVerts": 0,
+    "steepLotsGraded": 49,
+    "gradeFillVerts": 407,
     "buildingsSnapped": 118,
     "buildingsKept": 120,
     "buildingsRemoved": 0,
     "treesRemovedWater": 44,
     "treesRemovedRoad": 2,
     "lampsRemovedWater": 4,
-    "seawallSegments": 452,
-    "seawallMetres": 2790,
-    "beachVerts": 668,
+    "seawallSegments": 461,
+    "seawallMetres": 2858,
+    "beachVerts": 662,
     "docks": {
      "pilings": 3130,
      "cleats": 1025,
@@ -122,7 +147,35 @@
      "boats": 65
     }
    },
-   "examples": {}
+   "examples": {
+    "foundationExposed": [
+     {
+      "x": -1564,
+      "z": -1406,
+      "exposed": 2.46
+     },
+     {
+      "x": -754,
+      "z": -438,
+      "exposed": 3.59
+     },
+     {
+      "x": -606,
+      "z": -780,
+      "exposed": 1.26
+     },
+     {
+      "x": -589,
+      "z": -317,
+      "exposed": 6.09
+     },
+     {
+      "x": -525,
+      "z": -720,
+      "exposed": 1.26
+     }
+    ]
+   }
   },
   "sandyhook": {
    "counts": {
@@ -142,9 +195,13 @@
     "bridgeNoClearance": 0,
     "overpassMissing": 0,
     "pilingThroughDeck": 0,
-    "pilingMisplaced": 0
+    "pilingMisplaced": 0,
+    "foundationExposed": 8
    },
    "totals": {
+    "maxExposedFoundation": 11.58,
+    "meanExposedFoundation": 0.847,
+    "exposedOver3m": 5,
     "buildings": 70,
     "roads": 566,
     "trees": 33750,
@@ -152,7 +209,7 @@
     "pools": 0,
     "piers": 95,
     "bridges": 3,
-    "seawallSegments": 769,
+    "seawallSegments": 771,
     "shoreSegments": 2773
    },
    "fixes": {
@@ -165,23 +222,53 @@
     "causewayVerts": 10,
     "buildingsRemovedInWater": 171,
     "buildingsShoreFilled": 2,
+    "steepLotsGraded": 11,
+    "gradeFillVerts": 246,
     "buildingsSnapped": 63,
     "buildingsKept": 70,
     "buildingsRemoved": 171,
     "treesRemovedWater": 142,
     "treesRemovedBuilding": 1,
-    "seawallSegments": 769,
-    "seawallMetres": 6266,
-    "beachVerts": 1158,
+    "seawallSegments": 771,
+    "seawallMetres": 6286,
+    "beachVerts": 1157,
     "docks": {
-     "pilings": 4977,
+     "pilings": 4963,
      "cleats": 1566,
      "bumpers": 2665,
      "ladders": 108,
      "boats": 57
     }
    },
-   "examples": {}
+   "examples": {
+    "foundationExposed": [
+     {
+      "x": -548,
+      "z": -1041,
+      "exposed": 1.37
+     },
+     {
+      "x": -548,
+      "z": -1041,
+      "exposed": 1.25
+     },
+     {
+      "x": 12,
+      "z": -797,
+      "exposed": 3.73
+     },
+     {
+      "x": 19,
+      "z": -530,
+      "exposed": 6.95
+     },
+     {
+      "x": 138,
+      "z": -253,
+      "exposed": 3.7
+     }
+    ]
+   }
   },
   "newark": {
    "counts": {
@@ -201,9 +288,13 @@
     "bridgeNoClearance": 0,
     "overpassMissing": 0,
     "pilingThroughDeck": 0,
-    "pilingMisplaced": 0
+    "pilingMisplaced": 0,
+    "foundationExposed": 84
    },
    "totals": {
+    "maxExposedFoundation": 6.03,
+    "meanExposedFoundation": 0.268,
+    "exposedOver3m": 13,
     "buildings": 10241,
     "roads": 1807,
     "trees": 17842,
@@ -211,7 +302,7 @@
     "pools": 2,
     "piers": 0,
     "bridges": 28,
-    "seawallSegments": 457,
+    "seawallSegments": 458,
     "shoreSegments": 493
    },
    "fixes": {
@@ -224,12 +315,14 @@
     "causewayVerts": 0,
     "poolsLevelled": 2,
     "buildingsRemovedOnRoad": 8,
+    "steepLotsGraded": 701,
+    "gradeFillVerts": 1991,
     "buildingsSnapped": 10240,
     "buildingsKept": 10241,
     "buildingsRemoved": 8,
     "treesRemovedBuilding": 32,
-    "seawallSegments": 457,
-    "seawallMetres": 2959,
+    "seawallSegments": 458,
+    "seawallMetres": 2968,
     "beachVerts": 36,
     "docks": {
      "pilings": 0,
@@ -239,7 +332,35 @@
      "boats": 0
     }
    },
-   "examples": {}
+   "examples": {
+    "foundationExposed": [
+     {
+      "x": -1075,
+      "z": 2205,
+      "exposed": 1.39
+     },
+     {
+      "x": -946,
+      "z": 1762,
+      "exposed": 2.85
+     },
+     {
+      "x": -897,
+      "z": 306,
+      "exposed": 1.89
+     },
+     {
+      "x": -852,
+      "z": 1657,
+      "exposed": 1.64
+     },
+     {
+      "x": -840,
+      "z": 2256,
+      "exposed": 2.09
+     }
+    ]
+   }
   },
   "passaic": {
    "counts": {
@@ -259,9 +380,13 @@
     "bridgeNoClearance": 0,
     "overpassMissing": 0,
     "pilingThroughDeck": 0,
-    "pilingMisplaced": 0
+    "pilingMisplaced": 0,
+    "foundationExposed": 51
    },
    "totals": {
+    "maxExposedFoundation": 6.69,
+    "meanExposedFoundation": 0.209,
+    "exposedOver3m": 14,
     "buildings": 5034,
     "roads": 2297,
     "trees": 7556,
@@ -269,7 +394,7 @@
     "pools": 5,
     "piers": 6,
     "bridges": 22,
-    "seawallSegments": 429,
+    "seawallSegments": 436,
     "shoreSegments": 724
    },
    "fixes": {
@@ -284,15 +409,17 @@
     "buildingsRemovedInWater": 2,
     "buildingsRemovedOnRoad": 11,
     "buildingsRemovedOverlap": 4,
+    "steepLotsGraded": 132,
+    "gradeFillVerts": 785,
     "buildingsSnapped": 5019,
     "buildingsKept": 5034,
     "buildingsRemoved": 17,
     "treesRemovedRoad": 4,
     "treesRemovedBuilding": 15,
     "treesRemovedWater": 13,
-    "seawallSegments": 429,
-    "seawallMetres": 2933,
-    "beachVerts": 171,
+    "seawallSegments": 436,
+    "seawallMetres": 2982,
+    "beachVerts": 167,
     "docks": {
      "pilings": 459,
      "cleats": 146,
@@ -301,7 +428,35 @@
      "boats": 5
     }
    },
-   "examples": {}
+   "examples": {
+    "foundationExposed": [
+     {
+      "x": -1244,
+      "z": -895,
+      "exposed": 2.66
+     },
+     {
+      "x": -1212,
+      "z": -890,
+      "exposed": 2.34
+     },
+     {
+      "x": -1202,
+      "z": -428,
+      "exposed": 1.66
+     },
+     {
+      "x": -1164,
+      "z": -347,
+      "exposed": 1.26
+     },
+     {
+      "x": -1153,
+      "z": -1069,
+      "exposed": 1.96
+     }
+    ]
+   }
   }
  },
  "total": {
@@ -321,6 +476,7 @@
   "bridgeNoClearance": 0,
   "overpassMissing": 0,
   "pilingThroughDeck": 0,
-  "pilingMisplaced": 0
+  "pilingMisplaced": 0,
+  "foundationExposed": 164
  }
 }
