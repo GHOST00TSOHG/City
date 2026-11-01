@@ -62,10 +62,13 @@ def build():
     # ---- head: low armoured wedge sunk in the collar, sensor rail with eye array (no face)
     bone('Head'); J['Head'] = V((0, -0.12, 1.86))
     up.append(loft('head', [(1.80, 0, -0.12, 0.15, 0.14), (1.92, 0, -0.14, 0.18, 0.16), (2.02, 0, -0.13, 0.15, 0.14), (2.07, 0, -0.11, 0.08, 0.09)], GUN, e=4.5))
-    up.append(box('brow', (0, -0.3, 1.99), (0.2, 0.07, 0.035), GUN, rx=0.5))
+    for s in (1, -1):  # V-brow: two angled slabs meeting low in the middle, glaring
+        up.append(box(f'brow_{s}', (0.085 * s, -0.31, 1.975), (0.1, 0.06, 0.022), GUN, rx=0.45, ry=0.32 * s, bev=0.2))
+        up.append(box(f'horn_{s}', (0.16 * s, -0.17, 2.04), (0.022, 0.1, 0.03), YLW, rx=-0.5, ry=-0.4 * s, bev=0.2))
+        up.append(box(f'eye_slit_{s}', (0.07 * s, -0.31, 1.94), (0.05, 0.005, 0.007), VIS, ry=-0.3 * s, bev=0.3))
+    up.append(box('face_mask', (0, -0.3, 1.875), (0.1, 0.03, 0.04), FR, rx=-0.25, bev=0.2))
+    for i in range(3): up.append(box(f'mask_vent_{i}', (0, -0.33, 1.86 + i * 0.016), (0.07, 0.005, 0.004), ST, rx=-0.25, bev=0.2))
     up.append(box('visor_well', (0, -0.29, 1.935), (0.17, 0.02, 0.022), FR, bev=0.3))
-    up.append(box('visor', (0, -0.305, 1.935), (0.155, 0.006, 0.006), VIS, bev=0.3))
-    for i in (-1, 1): up.append(cyl(f'visor_eye_{i}', V((0.06 * i, -0.3, 1.935)), V((0.06 * i, -0.315, 1.935)), 0.011, VIS, n=12))
     up.append(box('cheek_guard', (0, -0.27, 1.86), (0.13, 0.045, 0.04), GUN, rx=-0.3, bev=0.3))
     for s in (1, -1):
         up.append(box(f'jaw_{s}', (0.09 * s, -0.25, 1.86), (0.07, 0.05, 0.05), FR, rz=-0.5 * s))
@@ -110,7 +113,7 @@ def build():
     slot('arms', 'gatling')
     for i in range(3): cyl(f'a_gat{i}_L', el + V((0.14 + 0.03 * math.cos(i * 2.1), 0.03 * math.sin(i * 2.1) - 0.08, -0.06)), wr + V((0.14, -0.2, -0.05)), 0.016, FR)
     slot('body')
-    S.build_hand('L', wr - fd * 0.01, fd, fingers=5, size=2.0, curl=0.55, armor_m=GUN, digit_m=FR, thick=1.25)
+    S.build_hand('L', wr - fd * 0.01, fd, fingers=5, size=2.5, curl=0.55, armor_m=GUN, digit_m=FR, thick=1.25)
     arm = [o for o in ALL if o['bone'].startswith(('LeftArm', 'LeftFore', 'LeftHand', 'LeftF'))]
     up += arm; up += mirror(arm)
     # ---- legs: armoured columns, knee bastions, braced pistons, splayed armoured feet
@@ -118,19 +121,31 @@ def build():
     hip, knee, ank = V((0.24, 0, 0.92)), V((0.28, -0.08, 0.55)), V((0.30, 0.02, 0.2))
     J['LeftUpLeg'], J['LeftLeg'], J['LeftFoot'] = hip.copy(), knee.copy(), ank.copy()
     joint('hip_L', hip, (1, 0, 0), 0.09, 0.16)
-    th = loft('thigh_L', [(0, 0, 0, 0.13, 0.13), (0.2, 0, 0, 0.16, 0.15), (0.36, 0, 0, 0.13, 0.12)], GUN, e=4); place(th, hip, knee)
+    th = loft('thigh_L', [(0, 0, 0, 0.11, 0.11), (0.2, 0, 0, 0.13, 0.12), (0.36, 0, 0, 0.11, 0.1)], FR, e=6, n=8); place(th, hip, knee)
     tdv = (knee - hip).normalized(); ty = tdv.cross(V((1, 0, 0))).normalized()
-    S._box('thigh_plate_L', hip.lerp(knee, 0.5) - ty * 0.15, (V((1, 0, 0)), ty, tdv), (0.11, 0.02, 0.13), ORG, bev=0.35)
-    S._box('thigh_side_L', hip.lerp(knee, 0.5) + V((0.15, 0, 0)), (V((1, 0, 0)), ty, tdv), (0.02, 0.1, 0.12), GUN, bev=0.35)
+    X_ = V((1, 0, 0)); tm = hip.lerp(knee, 0.5)
+    S._box('thigh_plate_L', tm - ty * 0.14, (X_, ty, tdv), (0.13, 0.025, 0.15), ORG, bev=0.12)
+    for sx_ in (1, -1):  # chamfered front facets either side of the plate
+        S._box(f'thigh_facet_{sx_}_L', tm - ty * 0.11 + X_ * 0.14 * sx_, (X_, ty, tdv), (0.03, 0.02, 0.14), ORG, bev=0.12)
+    S._box('thigh_side_L', tm + X_ * 0.14, (X_, ty, tdv), (0.025, 0.12, 0.15), GUN, bev=0.12)
+    S._box('thigh_side_in_L', tm - X_ * 0.12, (X_, ty, tdv), (0.02, 0.1, 0.13), GUN, bev=0.12)
+    S._box('thigh_back_L', tm + ty * 0.13, (X_, ty, tdv), (0.11, 0.02, 0.13), GUN, bev=0.12)
+    piston('thigh_piston_L', hip + X_ * 0.17 - ty * 0.05, knee + X_ * 0.17 - ty * 0.02 + tdv * -0.04, r=0.026)
     bone('LeftLeg')
     joint('knee_L', knee, (1, 0, 0), 0.09, 0.2)
     box('kneecap_L', knee + V((0, -0.14, 0.03)), (0.12, 0.055, 0.11), YLW, rx=0.2, bev=0.3)
     box('kneecap_spike_L', knee + V((0, -0.19, 0.05)), (0.05, 0.03, 0.06), GUN, rx=0.35, bev=0.4)
-    sh_ = loft('shin_L', [(0, 0, 0, 0.15, 0.15), (0.18, 0, 0, 0.19, 0.18), (0.34, 0, 0, 0.17, 0.16)], ORG, e=4.2); place(sh_, knee, ank)
+    sh_ = loft('shin_L', [(0, 0, 0, 0.11, 0.11), (0.18, 0, 0, 0.13, 0.13), (0.34, 0, 0, 0.12, 0.12)], FR, e=6, n=8); place(sh_, knee, ank)
     sdv = (ank - knee).normalized(); sy = sdv.cross(V((1, 0, 0))).normalized()
-    S._box('shin_plate_L', knee.lerp(ank, 0.45) - sy * 0.19, (V((1, 0, 0)), sy, sdv), (0.12, 0.02, 0.12), GUN, bev=0.35)
-    for i in range(3): box(f'shin_vent{i}_L', knee.lerp(ank, 0.62 + i * 0.07) + V((0, -0.175, 0)), (0.09, 0.012, 0.01), FR)
-    piston('shin_piston_L', knee + V((0.17, 0.05, -0.02)), ank + V((0.16, 0.05, 0.08)), r=0.024)
+    sm = knee.lerp(ank, 0.45)
+    S._box('shin_front_L', sm - sy * 0.15, (X_, sy, sdv), (0.15, 0.03, 0.17), ORG, bev=0.12)
+    S._box('shin_plate_L', knee.lerp(ank, 0.32) - sy * 0.185, (X_, sy, sdv), (0.1, 0.012, 0.08), GUN, bev=0.2)
+    for sx_ in (1, -1):
+        S._box(f'shin_side_{sx_}_L', sm + X_ * 0.16 * sx_, (X_, sy, sdv), (0.025, 0.14, 0.16), ORG if sx_ > 0 else GUN, bev=0.12)
+    S._box('shin_calf_L', sm + sy * 0.14, (X_, sy, sdv), (0.13, 0.03, 0.15), GUN, bev=0.12)
+    for i in range(3): box(f'shin_vent{i}_L', knee.lerp(ank, 0.58 + i * 0.07) + V((0, -0.19, 0)), (0.09, 0.012, 0.01), FR)
+    piston('shin_piston_L', knee + V((0.2, 0.02, -0.02)), ank + V((0.2, 0.03, 0.08)), r=0.026)
+    piston('calf_piston_L', knee + V((0, 0.19, -0.02)), ank + V((0, 0.19, 0.06)), r=0.026)
     slot('legs', 'piston'); piston('l_piston_L', hip + V((0, -0.16, -0.05)), knee.lerp(ank, 0.5) + V((0, -0.17, 0)), r=0.03)
     slot('legs', 'reverse'); box('l_rev_L', knee + V((0, 0.17, -0.05)), (0.08, 0.08, 0.14), GUN)
     slot('legs', 'armored'); box('l_arm_L', hip.lerp(knee, 0.5) + V((0.12, -0.05, 0)), (0.04, 0.17, 0.19), GUN)
@@ -169,7 +184,7 @@ def addon_pass():
             c.scale = (0.5, 0.3, 0.014) if nm == 'chest' else (0.1, 0.1, 0.012); bpy.ops.object.transform_apply(scale=True)
             A.hops_boolean(o, c)
         S.sanitize(o, bb)
-    for o in S.ARMOR + [x for x in S.ALL if x.name.startswith(('pauldron', 'foot', 'box', 'bicep', 'kneecap', 'back_plate'))]:
+    for o in S.ARMOR + [x for x in S.ALL if x.name.startswith(('pauldron', 'foot', 'box', 'bicep', 'kneecap', 'back_plate', 'thigh_', 'shin_', 'brow_', 'horn_'))]:
         A.hops_bevel(o, width=0.005, segments=2, angle=35); A.apply_all(o)
     yield 0.1
     others = [o for o in bpy.data.objects if o.type == 'MESH']
@@ -200,7 +215,8 @@ def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
     if '--preview' in S.argv:
-        S.render(S.OUT.replace('.png', '-34.png'), tgt=(0, 0, 1.1), dist=6.2); return
+        S.render(S.OUT.replace('.png', '-34.png'), tgt=(0, 0, 1.1), dist=6.2)
+        S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-0.6, cam_el=0.15, res=(1500, 1200), tgt=(0.62, -0.2, 1.05), dist=2.2, lens=60, setup=False); return
     if '--skel' in S.argv if 'heavy' != 'scout' else '--skel' in argv:
         import v2export as X; X.write_skeleton('heavy', [o for o in bpy.data.objects if o.type == 'MESH']); return
     yield from addon_pass()
