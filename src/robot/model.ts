@@ -215,8 +215,13 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     const bobM = mocap(p, dt); if (b.Hips) b.Hips.position.y += bobM;
     // ---- per-type run / slide / landing overlays (blend weights come from the controller)
     const gl = p.gallop ?? 0, bl = p.ball ?? 0, sl = p.slide ?? 0, ph2 = Math.sin(p.phase);
-    if (bl > 0) { const w = bl; ovr('LeftUpLeg', -2.0, 0, 0, w); ovr('RightUpLeg', -2.0, 0, 0, w); ovr('LeftLeg', 2.3, 0, 0, w); ovr('RightLeg', 2.3, 0, 0, w); ovr('Spine', 0.75, 0, 0, w); ovr('Head', 0.5, 0, 0, w);
-      ovr('LeftArm', -1.2, 0, 0.3, w); ovr('RightArm', -1.2, 0, -0.3, w); ovr('LeftForeArm', -1.7, 0, 0, w); ovr('RightForeArm', -1.7, 0, 0, w); ovr('LeftFoot', -1.6, 0, 0, w); ovr('RightFoot', -1.6, 0, 0, w); if (b.Hips) b.Hips.position.y -= 0.18 * w; } // Heavy: armour folds into a ball
+    if (style === 'heavy' && b.Head) { const h = b.Head; const p0 = (h.userData.p0 ??= h.position.clone()) as THREE.Vector3, sH = sstep(bl, 0.2, 0.6); h.position.set(p0.x, p0.y - 0.3 * sH, p0.z + 0.04 * sH); h.scale.setScalar(1 - 0.35 * sH); } // head retracts into the chest dome
+    if (bl > 0) { // Heavy: staged transform into the armoured ball (0 standing .. 1 closed): arms tuck, then legs fold, head retracts, spine curls, plates close
+      const sA = sstep(bl, 0, 0.45), sL = sstep(bl, 0.2, 0.75), sS = sstep(bl, 0.4, 0.95), sHd = sstep(bl, 0.2, 0.6);
+      ovr('LeftArm', -1.2, 0.5, 0.3, sA); ovr('RightArm', -1.2, -0.5, -0.3, sA); ovr('LeftForeArm', -1.7, 0, 0, sA); ovr('RightForeArm', -1.7, 0, 0, sA);
+      ovr('LeftUpLeg', -2.0, 0, 0.1, sL); ovr('RightUpLeg', -2.0, 0, -0.1, sL); ovr('LeftLeg', 2.3, 0, 0, sL); ovr('RightLeg', 2.3, 0, 0, sL); ovr('LeftFoot', -1.6, 0, 0, sL); ovr('RightFoot', -1.6, 0, 0, sL);
+      ovr('Spine', 0.75, 0, 0, sS); ovr('Head', 0.5, 0, 0, sHd); if (b.Hips) b.Hips.position.y -= 0.18 * sstep(bl, 0.3, 1);
+    }
     if (gl > 0) { ovr('Spine', 1.0, 0, 0, gl); ovr('Head', -0.7, 0, 0, gl); ovr('Hips', 0.22, 0, 0, gl); ovr('LeftArm', -1.0 + 0.7 * ph2, 0, 0.16, gl); ovr('RightArm', -1.0 + 0.7 * ph2, 0, -0.16, gl); ovr('LeftForeArm', -0.35 - 0.3 * ph2, 0, 0, gl); ovr('RightForeArm', -0.35 - 0.3 * ph2, 0, 0, gl); if (b.Hips) b.Hips.position.y -= 0.16 * gl; } // Worker: four-limbed gallop
     if (sl > 0) { ovr('Hips', 0, 0, 0, 0); ovr('Spine', -0.32, 0, 0, sl); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl); ovr('LeftLeg', 2.0, 0, 0, sl); ovr('RightUpLeg', -0.5, 0, -0.14, sl); ovr('RightLeg', 0.25, 0, 0, sl);
       ovr('LeftFoot', -0.4, 0, 0, sl); ovr('RightFoot', 0.2, 0, 0, sl); ovr('LeftArm', 0.3, 0, 0.95, sl); ovr('RightArm', 0.3, 0, -0.95, sl); if (b.Hips) b.Hips.position.y -= 0.34 * sl; } // Scout: thruster-assisted slide

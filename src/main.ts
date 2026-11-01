@@ -96,6 +96,7 @@ createScene(canvas, areaId).then(async (app) => {
     else if (kind === 'voxel') { fx.impact(p, 0.25 + 0.3 * s); }
   };
   ctl.onScrape = (p, v, k) => thrust.scrape(p, v, k);
+  ctl.onBall = (ph) => { sfx.hook('heavy-transform'); fx.kick(ph === 'closed' || ph === 'open' ? 0.3 : 0.12); }; // clunks as the armour starts folding, locks shut, starts unfolding, locks open
   ctl.onHop = (a, b, phase) => { if (phase === 'depart') robot.trail(a, b); };
   ctl.onSpecial = (kind, phase) => { if (phase === 'start') sfx.special(kind); if (phase === 'hit') fx.kick(kind === 'groundpound' ? 1 : 0.35); };
   let lastStep = 0, lastBurst = 0;

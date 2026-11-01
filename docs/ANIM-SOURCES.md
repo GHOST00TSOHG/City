@@ -29,3 +29,8 @@ Everything in `public/robot/anim/clips.json` (about 120 KB) is **baked, retarget
 
 - No CMU/Mixamo clip exists for a rolling armoured ball, a four-limbed gallop, a thruster slide, a teleport hop or a superhero/slam landing. Those poses are procedural overlays (`model.ts`) driven by the controller; the **legs and arms underneath** come from the baked run/jog/landing data. The landing crouch uses the CMU forward-jump landing (`jump_a`) at weight 0.25 to 0.35 under the per-type pose.
 - Worker's gallop arms and the tool rattle, Heavy's ball tuck, Scout's slide pose and Glitch's hop crouch are hand-authored.
+
+## Landings and the Heavy transformation
+
+- **Landings** (Heavy slam, Scout one-knee, Worker four-limb, Glitch voxel rain): the leg/arm crouch underneath is the CMU `16_05` forward-jump landing (`jump_a`, frames 44 to 66, CMU free-use licence above); the per-type poses and effects are procedural. Same sources, same licence rules, nothing new added for them.
+- **Heavy ball transformation** is hand-authored (staged bone motion, no mocap exists for it). Sources: none.

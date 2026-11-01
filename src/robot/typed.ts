@@ -92,7 +92,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    animate(s: PoseInput, dt: number) { pose(s, dt); clampFeet(s.anim); aimPistons(); },
+    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.ball ?? 0) < 0.9) clampFeet(s.anim); aimPistons(); },
     dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); },
   };
   model.setLook({}); aimPistons();

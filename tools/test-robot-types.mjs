@@ -68,6 +68,13 @@ for (const t of (process.env.TYPES || 'scout,heavy,worker,glitch').split(',')) {
     for (let i = 0; i < 6; i++) { await p.waitForTimeout(150); const f = await feet(); worst = Math.min(worst, f.LeftFoot.gap, f.RightFoot.gap); }
     await p.evaluate(() => window.__robot.ctl.press('KeyW', false));
     check(worst >= -0.015, `${t} feet while walking: lowest sole ${worst} m vs floor (no sinking)`);
+    if (t === 'heavy') { // transform: fold on run start, roll, unfold on stop; feet on the floor at both ends
+      await p.evaluate(() => { window.__robot.ctl.press('KeyW', true); window.__robot.ctl.press('ShiftLeft', true); }); await p.waitForTimeout(1800);
+      const closed = await p.evaluate(() => window.__robot.ctl.ball);
+      await p.evaluate(() => { window.__robot.ctl.press('KeyW', false); window.__robot.ctl.press('ShiftLeft', false); }); await p.waitForTimeout(2600);
+      const open = await p.evaluate(() => window.__robot.ctl.ball), fe = await feet();
+      check(closed >= 0.99 && open === 0 && Math.abs(fe.LeftFoot.gap) <= 0.02 && Math.abs(fe.RightFoot.gap) <= 0.02, `heavy transform: closed=${closed} reopened=${open} feet after unfold ${JSON.stringify(fe)}`);
+    }
   }
   await p.waitForTimeout(4000);
   await p.screenshot({ path: `${out}-${t}-world.png`, timeout: 240000 });

@@ -16,7 +16,9 @@ export const GLITCH_THRUST_HOOKS = { hum: 'glitch-thrust-hum', crackle: 'glitch-
 const HOOK_FILE: Record<string, string> = { 'glitch-thrust-hum': 'thrust_hum', 'glitch-thrust-crackle': 'thrust_crackle' };
 const HAVE = new Set<string>([]);
 /** Other named hooks (silent until the file is added): worker-land-hiss = public/audio/robots/worker/worker_land_hiss.{ogg,m4a}. */
-HOOK_FILE['worker-land-hiss'] = 'land_hiss'; // add 'glitch-thrust-hum' / 'glitch-thrust-crackle' when Echo's files land
+HOOK_FILE['worker-land-hiss'] = 'land_hiss';
+/** heavy-transform = mechanical clunks of the armour folding into / out of the ball: public/audio/robots/heavy/heavy_transform.{ogg,m4a} (not in the repo yet; silent until added to HAVE). */
+HOOK_FILE['heavy-transform'] = 'transform'; // add 'glitch-thrust-hum' / 'glitch-thrust-crackle' when Echo's files land
 
 export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots/`) {
   let hum: AudioBufferSourceNode | null = null, humGain: GainNode | null = null, humBusy = false, crackT = 0;
