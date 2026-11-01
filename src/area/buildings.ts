@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { Building, Terrain } from './data';
 import { Soup, ringPts, signedArea, flatPoly } from './geom';
-import { type AreaStyle, styleFor, pick, WALL, ROOF } from './textures';
+import { type AreaStyle, styleFor, pick, WALL, ROOF, SHINGLE } from './textures';
 
 const CHUNK = 600; // m — one merged mesh per chunk keeps draw calls low and still frustum-culls
 const UP: [number, number, number] = [0, 1, 0];
@@ -27,7 +27,8 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     const rm = pitchedR ? pick(style.roofPitched, h3) : ROOF.gravel;
     if (wm === WALL.brick || wm === WALL.concrete) wall.setRGB(1, 1, 1).multiplyScalar(0.92 + h2 * 0.16); // real material colour, slight variation
     else wall.setHex(style.paints[Math.floor(h2 * style.paints.length) % style.paints.length]).lerp(new THREE.Color(b.wc), 0.25);
-    roof.setRGB(1, 1, 1).multiplyScalar(0.85 + h3 * 0.3); trim.copy(wall).multiplyScalar(0.82);
+    if (rm === ROOF.shingle) roof.setHex(SHINGLE[((seed0 >>> 5) % SHINGLE.length)]).multiplyScalar(0.85 + h2 * 0.3);
+    else roof.setRGB(1, 1, 1).multiplyScalar(0.85 + h3 * 0.3); trim.copy(wall).multiplyScalar(0.82);
     const pack = wm * 4 + rm * 32;
     let gmin = Infinity; for (const [x, z] of outer) gmin = Math.min(gmin, terrain.heightAt(x, z));
     gmin = Math.max(gmin, 0.2);

@@ -55,3 +55,5 @@ export const WALL_GAIN = [1, 1, 1, 1, 2.4];                 // brick as-is, dark
 export const ROOF_GAIN = [3, 1, 0.5];                       // shingle ~0.08, terracotta as-is, gravel ~0.34
 export const GROUND_GAIN = [1.1, 1.15, 0.85, 0.9];
 export const GROUND_SCALE = [3.5, 5, 6, 3];
+// Asphalt-shingle colours (linear-ish sRGB hex), picked per building so pitched roofs aren't one dark mass.
+export const SHINGLE = [0x4f4c48, 0x625a52, 0x6e4c3c, 0x4a5257, 0x7a4236, 0x83807a, 0x5a5f4c, 0x3c3a38, 0x8a6e58];

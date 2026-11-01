@@ -85,7 +85,9 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const wTex = texture(tex.walls, vec2(along, up.add(seed.mul(13))).div(wScale)).depth(wallMat).rgb;
   const painted = byLayer(wallMat, WALL_PAINTED);
   const wallAlb = mix(wTex.mul(byLayer(wallMat, WALL_GAIN)), vec3(luminance(wTex).div(byLayer(wallMat, WALL_MEAN))).clamp(0.4, 1.6), painted).mul(vertexColor());
-  const rTex = texture(tex.roofs, positionWorld.xz.div(3.2)).depth(roofMat).rgb.mul(byLayer(roofMat, ROOF_GAIN));
+  // Shingles (layer 0) are painted: the near-black texture gives relief only, the vertex colour picks the shingle colour.
+  const rRaw = texture(tex.roofs, positionWorld.xz.div(3.2)).depth(roofMat).rgb;
+  const rTex = select(roofMat.lessThan(0.5), vec3(luminance(rRaw).div(0.027)).clamp(0.35, 1.7), rRaw.mul(byLayer(roofMat, ROOF_GAIN)));
   const wall = mix(wallAlb, rTex.mul(vertexColor()), isRoof);
   const frameDark = mix(float(1), float(0.82), clamp(win.mul(inWall).mul(3), 0, 1).mul(crisp));
   let col: any = wall.mul(frameDark);

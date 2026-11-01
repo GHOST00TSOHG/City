@@ -85,7 +85,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     // Ground albedo: CC0 texture layers blended by the per-vertex `gmat` weights; a low-frequency second grass sample
     // breaks up tiling. Under water (weights 0) the vertex colour (seabed) is used as before.
     const gw = attribute('gmat', 'vec4'), gws = gw.x.add(gw.y).add(gw.z).add(gw.w);
-    const L = (i: number) => tslTexture(tex.ground, p.xz.div(GROUND_SCALE[i])).depth(float(i)).rgb.mul(GROUND_GAIN[i]);
+    const L = (i: number) => tslTexture(tex.ground, p.xz.div(GROUND_SCALE[i])).depth(float(i)).rgb.mul(GROUND_GAIN[i]).mul(i === 0 ? vec3(0.72, 1.0, 1.9) : vec3(1)); // grass: shift the yellow CC0 grass to a natural green
     const macro = tslTexture(tex.ground, p.xz.div(41)).depth(float(2)).rgb.mul(1.6).add(0.45).clamp(0.6, 1.25);
     const texMix = L(0).mul(gw.x).add(L(1).mul(gw.y)).add(L(2).mul(gw.z)).add(L(3).mul(gw.w)).div(gws.max(0.001)).mul(macro);
     const groundAlbedo = mix(vertexColor(), texMix.mul(vertexColor()), gws.clamp(0, 1));
