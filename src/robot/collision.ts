@@ -1,8 +1,9 @@
 import type { Building, Terrain } from '../area/data';
 import { ringPts } from '../area/geom';
+import { colliderTopAt, type LandmarkCollider } from '../area/landmarks';
 
 /** Spatial grid of building footprints → roof height at a point (land on roofs, block walls in flight). */
-export function createCollision(list: Building[], terrain: Terrain) {
+export function createCollision(list: Building[], terrain: Terrain, landmarks: LandmarkCollider[] = []) {
   const CELL = 24, grid = new Map<number, number[]>();
   const polys: { pts: [number, number][]; top: number; minX: number; maxX: number; minZ: number; maxZ: number }[] = [];
   const key = (ix: number, iz: number) => ix * 73856093 ^ iz * 19349663;
@@ -26,9 +27,9 @@ export function createCollision(list: Building[], terrain: Terrain) {
   return {
     /** Highest roof under (x, z), or null. */
     roofAt(x: number, z: number) {
-      const a = grid.get(key(Math.floor(x / CELL), Math.floor(z / CELL))); if (!a) return null;
-      let best: number | null = null;
-      for (const i of a) { const p = polys[i]; if (x < p.minX || x > p.maxX || z < p.minZ || z > p.maxZ) continue; if (inside(p.pts, x, z) && (best === null || p.top > best)) best = p.top; }
+      const a = grid.get(key(Math.floor(x / CELL), Math.floor(z / CELL))); if (!a && !landmarks.length) return null;
+      let best: number | null = landmarks.length ? colliderTopAt(landmarks, x, z) : null;
+      for (const i of a ?? []) { const p = polys[i]; if (x < p.minX || x > p.maxX || z < p.minZ || z > p.maxZ) continue; if (inside(p.pts, x, z) && (best === null || p.top > best)) best = p.top; }
       return best;
     },
   };
