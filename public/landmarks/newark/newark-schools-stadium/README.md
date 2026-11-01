@@ -1,30 +1,32 @@
 # Newark Schools Stadium
 
-Exterior only. Area `newark`. Standard triangle budget. Rebuilt 2026-11-01 for the enclosure review.
+Exterior only. Area `newark`. Standard triangle budget. Rebuilt 2026-11-01 for the enclosure review; Websmith takeover fixes 2026-11-01 (PR #19 round 2).
 
-Closed bowl: a continuous ring of seats around the 400 m track, including the end zones, with one grandstand wall on the outside of that ring. An outer facade follows the OSM stadium polygon, with gate openings and the Bloomfield Avenue arch wall. The clock tower sits on that front wall, not behind it. A perimeter fence, site pad, front plaza, concourse, and a parking edge sit inside and just outside the wall. Four floodlight banks, goal posts, and a scoreboard are included. No school name or logo.
+Closed bowl: a continuous ring of seats around the 400 m track, including the end zones, with one grandstand wall on the outside of that ring. An outer facade follows the OSM stadium polygon, with gate openings and the Bloomfield Avenue arch wall. The clock tower sits on that front wall, not behind it. A press box with windows sits atop the home (west) stand. A perimeter fence, site pad, front plaza, concourse, and a parking edge sit inside and just outside the wall. Four floodlight banks, goal posts, and a scoreboard are included. No school name or logo.
 
 ## Numbers
 
 | LOD | Triangles | Materials |
 |---|---|---|
-| LOD0 | 8670 | 4 (`newark-schools-stadium-main`, `emissive-windows`, `emissive-lamp`, `emissive-sign`) |
-| LOD1 | 5034 | 4, same textures, same heights |
-| LOD2 | 2572 | 4, same textures, same heights |
+| LOD0 | ~8770 | 4 (`newark-schools-stadium-main`, `emissive-windows`, `emissive-lamp`, `emissive-sign`) |
+| LOD1 | ~5100 | 4, same textures, same heights |
+| LOD2 | ~2572 | 4, same textures, same heights |
 
 Stand top is 7.68 m on every LOD. Window bands stay at 1.55–3.35 m and 4.15–5.50 m. Arch crowns stay at 9.14 m. Light heads stay at 24 m. There is no second slab on the west stand deck.
 
-`newark-schools-stadium_COL` sits under LOD0: 36 triangles, no material. Do not draw it.
+`newark-schools-stadium_COL` sits under LOD0: 324 triangles, no material. Do not draw it. Collision is stand backs, arch wall, tower, support, and press box only (no filled bowl over the pitch).
 
 Textures: one 2048 atlas (baseColor, normal, ORM) plus one 1024 window image used as baseColor and emissive. LOD1 and LOD2 reuse them. KTX2 in the glb: ETC1S on baseColor, ORM, and the window image. UASTC on the normal. ORM is occlusion in R, roughness in G, metal in B. No baked daylight or shadows.
 
-Files: `.glb` 0.76 MB (782 KB), `.blend` 0.37 MB (377 KB). Source PNGs are in `art/landmarks/newark/newark-schools-stadium/textures/`.
+Files: `.glb` ~0.56 MB, `.blend` ~0.47 MB. Source PNGs are in `art/landmarks/newark/newark-schools-stadium/textures/`. Re-export: `blender -b --python art/landmarks/newark/newark-schools-stadium/fix_stadium_takeover.py` (needs `ktx` on PATH).
 
-Nodes: `newark-schools-stadium_LOD0`, `_LOD1`, `_LOD2`. Children `body-lodN`, `windows-lodN`, `lamps-lodN`, `scoreboard-lodN`. Collision is `newark-schools-stadium_COL`.
+Nodes: `newark-schools-stadium_LOD0`, `_LOD1`, `_LOD2`. Children `body-lodN`, `windows-lodN`, `lamps-lodN`, `scoreboard-lodN`, plus `press-box*` on LOD0/LOD1. Collision is `newark-schools-stadium_COL`.
 
-Window, lamp, and sign emission strength in the glb is 0.45.
+Emissive in the glb: windows 0.55, lamps 1.35, sign 0.7. The loader adds stadium flood point lights and a small emissive boost at runtime (`src/area/landmarks.ts`).
 
 The glb is `uastc` on the normal slot, `etc1s` on baseColor, ORM, and emissive, then `meshopt`. `join` is not used, so the LOD nodes stay separate.
+
+Field / track geometry is lifted +0.22 m in model space so the turf sits above the baked terrain and avoids z-fighting.
 
 ## Placement
 

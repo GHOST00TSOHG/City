@@ -36,7 +36,7 @@ export function createThrust(scene: THREE.Scene, count: number) {
   const emit = (p: THREE.Vector3, v: THREE.Vector3, life: number, size: number, grow: number, col: number) => {
     const i = next, o = P[i]; next = (next + 1) % N; o.p.copy(p); o.v.copy(v); o.life = o.max = life; o.s = size; o.g = grow; puffs.setColorAt(i, c.set(col));
   };
-  const tmp = new THREE.Vector3(), dir = new THREE.Vector3(), rv = new THREE.Vector3();
+  const jit = new THREE.Vector3(), tmp = new THREE.Vector3(), dir = new THREE.Vector3(), rv = new THREE.Vector3();
   return {
     /** power 0..1 per frame (0 hides), burst 0..1; ground = height under the robot, water = it's over sea. */
     update(dt: number, power: number, burst: number, vel: THREE.Vector3, ground: number | null, water: boolean) {
@@ -55,7 +55,7 @@ export function createThrust(scene: THREE.Scene, count: number) {
       while (acc >= 1) { acc -= 1;
         for (const f of flames) { if (!f.visible) continue;
           dir.set(0, -1, 0).applyQuaternion(f.quaternion); tmp.copy(f.position).addScaledVector(dir, f.scale.y * 0.9);
-          rv.copy(vel).multiplyScalar(0.15).addScaledVector(dir, 2.5).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.4, (Math.random() - 0.5) * 0.6));
+          rv.copy(vel).multiplyScalar(0.15).addScaledVector(dir, 2.5).add(jit.set((Math.random() - 0.5) * 0.6, 0.4, (Math.random() - 0.5) * 0.6));
           if (burst > 0.2 && Math.random() < 0.5) emit(tmp, rv, 0.35, 0.18, 1.5, 0xdff1ff); // white-hot trail
           else emit(tmp, rv, 0.7 + Math.random() * 0.4, 0.12, 2.2, 0x1c1c1e);
           if (ground !== null && f.position.y - ground < 6 && Math.random() < 0.6) { // dust / spray where the jet hits
