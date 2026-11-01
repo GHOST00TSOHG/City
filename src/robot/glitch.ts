@@ -121,19 +121,11 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       pVel.set([S3.x, S3.y, S3.z], i * 3); pLife[i] = pMax[i] = life * (0.6 + Math.random() * 0.6);
     }
   };
-  let hopOn = false, voxPrev = 0, cloudPrev = 0, uCloudOn = false; let visN = n, dashPrev = 0, wasDash = false, moshT = 0, trailAcc = 0;
+  let voxPrev = 0, cloudPrev = 0, uCloudOn = false; let visN = n, dashPrev = 0, wasDash = false, moshT = 0, trailAcc = 0;
   const lastRoot = new THREE.Vector3(), curRoot = new THREE.Vector3();
   return {
     get cloudOn() { return uCloudOn; },
     meshes: [body, cloud, particles], count: n, uniforms: { uDash, uBurst, uMosh, uFly, uRain, uCloud },
-    /** Fading cube trail along a hop from a to b (world space), shed by the reforming body. */
-    trail(a: THREE.Vector3, b: THREE.Vector3) {
-      const nT = 70; for (let k = 0; k < nT; k++) {
-        const t = k / nT, i = pHead; pHead = (pHead + 1) % PN; const w = 0.12;
-        pPos.set([a.x + (b.x - a.x) * t + (Math.random() - 0.5) * w, a.y + 0.15 + Math.random() * 1.7, a.z + (b.z - a.z) * t + (Math.random() - 0.5) * w], i * 3);
-        pVel.set([(Math.random() - 0.5) * 0.6, 0.2 + Math.random() * 0.6, (Math.random() - 0.5) * 0.6], i * 3); pLife[i] = pMax[i] = 0.7 + Math.random() * 0.6 - t * 0.3;
-      }
-    },
     setLook(look: RobotLook) {
       data.parts.forEach((p, k) => (vis[k] = p.slot === 'body' || (look as any)[p.slot] === p.opt ? 1 : 0));
       const idx: number[] = []; all.forEach((a, i) => vis[a.pi] && idx.push(i));
@@ -151,12 +143,10 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       uCenter.value.set(0, 0, 0).applyMatrix4(boneMats[Math.max(0, boneNames.indexOf('Spine'))]);
       // blink-dash timeline (seconds since trigger): dissolve 0-0.12, travel, reassemble 0.3-0.5 with a burst at 0.42
       const sp = s.special ?? 0, dash = sp > 0 && sp < 0.6;
-      const hop = s.hop ?? 0, vx = s.vox ?? 0;
-      // hop (running): dissolve at 0.15-0.42, gone until the teleport at 0.48, reform 0.5-0.82; vox (landing): dissolve a few feet up, rain, reform on the ground
-      const hopW = hop <= 0 ? 0 : hop < 0.15 ? 0 : hop < 0.42 ? (hop - 0.15) / 0.27 : hop < 0.5 ? 1 : hop < 0.82 ? 1 - (hop - 0.5) / 0.32 : 0;
-      const want = Math.max(!dash ? 0 : sp < 0.12 ? sp / 0.12 : sp < 0.3 ? 1 : Math.max(0, 1 - (sp - 0.3) / 0.14), hopW, vx * 0.9);
+      const vx = s.vox ?? 0;
+      // vox (landing): dissolve a few feet up, rain, reform on the ground
+      const want = Math.max(!dash ? 0 : sp < 0.12 ? sp / 0.12 : sp < 0.3 ? 1 : Math.max(0, 1 - (sp - 0.3) / 0.14), vx * 0.9);
       uDash.value = want; uRain.value = vx; const cl = s.cloud ?? 0; uCloud.value = cl; if (cloudPrev > 0.5 && cl <= 0.5) { emit(90, 2.2, 0.5); uBurst.value = Math.max(uBurst.value, 0.6); } cloudPrev = cl; uCloudOn = cl > 0.55;
-      if (hopW > 0.05 && !hopOn) { emit(110, 2.2, 0.6); hopOn = true; } else if (hopW <= 0.05 && hopOn) { hopOn = false; emit(90, 3, 0.5); uBurst.value = Math.max(uBurst.value, 0.7); }
       if (voxPrev > 0.5 && vx <= 0.5) { emit(170, 4.5, 0.65); uBurst.value = 1; } // reform on the ground with a violet pulse
       voxPrev = vx;
       if (dash && !wasDash) emit(140, 2.5, 0.7);

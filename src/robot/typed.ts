@@ -7,7 +7,7 @@ import { loadKit, buildSkinned, createKitUniforms, plateKey, type Kit } from './
 import { createTransformFx, plateHash, type PlateRec } from './transform';
 
 export type KitU = ReturnType<typeof createKitUniforms>;
-export interface TypedRobot extends RobotModel { type: RobotType; uniforms: KitU; joints: THREE.Object3D[]; trail?: (a: THREE.Vector3, b: THREE.Vector3) => void }
+export interface TypedRobot extends RobotModel { type: RobotType; uniforms: KitU; joints: THREE.Object3D[] }
 const buildOf = (l: RobotLook) => Object.fromEntries(SLOT_KEYS.map((k) => [k, l[k]])) as SlotBuild;
 const sameBuild = (a: SlotBuild, b: SlotBuild) => SLOT_KEYS.every((k) => a[k] === b[k]);
 
@@ -107,7 +107,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt); aimPistons(); },
+    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt, s.gs ?? 0); aimPistons(); },
     dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); xfx.dispose(); },
   };
   model.setLook({}); aimPistons();
@@ -124,7 +124,6 @@ export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u:
   const model: TypedRobot = {
     ...base,
     setLook(l) { base.setLook(l); G.setLook(look); },
-    trail: (a: THREE.Vector3, b: THREE.Vector3) => G.trail(a, b),
     animate(s, dt) {
       base.animate(s, dt); G.update(s, dt, list);
       const hide = G.uniforms.uDash.value > 0.5 || G.cloudOn; for (const m of bodyMeshes) m.visible = !hide; // blink-dash: the body dissolves into shards
@@ -152,7 +151,7 @@ export async function createRobotSwitch(type: RobotType, look: RobotLook) {
   cur = await make(type, look); root.add(cur.root);
   const sw = {
     root, uniforms: u, onSwap: (_m: TypedRobot) => {},
-    get type() { return cur.type; }, get nozzles() { return cur.nozzles; }, get height() { return cur.height; }, get joints() { return cur.joints; }, get inner() { return cur; }, trail(a: THREE.Vector3, b: THREE.Vector3) { cur.trail?.(a, b); },
+    get type() { return cur.type; }, get nozzles() { return cur.nozzles; }, get height() { return cur.height; }, get joints() { return cur.joints; }, get inner() { return cur; },
     setLook(l: Partial<RobotLook>) { cur.setLook(l); },
     animate(s: PoseInput, dt: number) { cur.animate(s, dt); },
     async setType(t: RobotType, l: RobotLook) {

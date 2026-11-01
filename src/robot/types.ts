@@ -20,7 +20,7 @@ export interface TypeDef {
   /** per-type flight: thruster look, takeoff wind-up, hover bob (thrust.ts, controller.ts, makePoser) */
   flight: FlightProfile;
   /** mocap blend + amplitude (model.ts makePoser), the run style the controller drives, and the landing style scaled by fall speed */
-  gait: GaitProfile; run: { kind: 'ball' | 'sprint' | 'gallop' | 'cloud' }; land: { kind: LandKind };
+  gait: GaitProfile; run: { kind: 'ball' | 'sprint' | 'tread' | 'cloud' }; land: { kind: LandKind };
 }
 /**
  * style picks the takeoff / hover / cruise / landing poses. Flames: core (white-hot) -> mid -> edge colours, len/width
@@ -60,7 +60,7 @@ export const TYPES: Record<RobotType, TypeDef> = {
     label: 'Worker', blurb: 'Combat medic. Regen core, injector arm, heal emitter.', height: 2.4, sole: -0.16, tris: 26_000,
     motion: { mass: 1.3, bob: 1.1, sway: 1.1, stride: 0.95, arms: 0.9, limp: 0.35, hunch: 0.08, curl: 0.4, special: 'none' }, specialDur: 0.8,
     flight: { style: 'medic', flame: 1.15, width: 1.1, core: '#eefff2', hot: '#c8ffd8', mid: '#8dff9e', edge: '#2fc25a', pulse: 0.2, dust: 1, launch: 0.2, bob: 0.025, smoke: 0.5 },
-    gait: { wMoc: 0.9, idleW: 0.4, landW: 0.35, maxRate: 1.9, amp: { arms: 1, legs: 1, spine: 1 }, bob: 1.2 }, run: { kind: 'gallop' }, land: { kind: 'quad' },
+    gait: { wMoc: 0.9, idleW: 0.4, landW: 0.35, maxRate: 1.9, amp: { arms: 1, legs: 1, spine: 1 }, bob: 1.2 }, run: { kind: 'tread' }, land: { kind: 'quad' },
     slots: { helmet: ['boxcam', 'welder', 'lamp'], arms: ['claw', 'drill', 'welder'], bionics: ['tanks', 'battery', 'reel'], legs: ['cans', 'strut', 'ribbed'], thrusters: ['stacks', 'fans', 'rocket'], boots: ['stabilizer', 'wheels', 'clamp'] },
     names: { boxcam: 'Box cam', welder: 'Welder', lamp: 'Lamp head', claw: 'Cargo claw', drill: 'Drill', tanks: 'Gas tanks', battery: 'Battery crate', reel: 'Cable reel', cans: 'Twin cans', strut: 'Strut', ribbed: 'Ribbed', stacks: 'Exhaust stacks', fans: 'Lift fans', rocket: 'Rocket can', stabilizer: 'Stabilisers', wheels: 'Wheels', clamp: 'Clamp feet' },
     paint: { shell: '#616c38', joints: '#2b2e33', torso: '#4a5530', shorts: '#2f8a3e', backpack: '#3c3f45', visor: '#ff3020', decalColor: '#3dff6e' },

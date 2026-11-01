@@ -66,7 +66,9 @@ for (const t of (process.env.TYPES || 'scout,heavy,worker,glitch').split(',')) {
   { // feet while walking: sample 6 frames, no foot may sink below the floor
     await p.evaluate(() => window.__robot.ctl.press('KeyW', true)); let worst = 0;
     for (let i = 0; i < 6; i++) { await p.waitForTimeout(150); const f = await feet(); worst = Math.min(worst, f.LeftFoot.gap, f.RightFoot.gap); }
+    const fWalk = await p.evaluate(() => window.__robot.ctl.form); // slow walk / jog stays upright: no transformation without Shift
     await p.evaluate(() => window.__robot.ctl.press('KeyW', false));
+    check(fWalk === 0, `${t} stays upright while walking (form ${fWalk})`);
     check(worst >= -0.015, `${t} feet while walking: lowest sole ${worst} m vs floor (no sinking)`);
     if (['heavy', 'scout', 'worker'].includes(t)) { // on-foot transformation: fold on run start, closed form, unfold on stop; feet on the floor at both ends
       await p.evaluate(() => { window.__robot.ctl.press('KeyW', true); window.__robot.ctl.press('ShiftLeft', true); }); await p.waitForTimeout(2000);

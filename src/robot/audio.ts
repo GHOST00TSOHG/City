@@ -9,10 +9,10 @@ import type { RobotType } from './types';
  */
 const EXT = (() => { try { return new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'm4a'; } catch { return 'm4a'; } })();
 const STEPS = ['footstep_01', 'footstep_02', 'footstep_03'];
-const LOOPS = new Set(['thruster_burn_loop', 'roll_loop', 'thrust_hum', 'cloud_loop']);
+const LOOPS = new Set(['thruster_burn_loop', 'roll_loop', 'thrust_hum', 'cloud_loop', 'tread_growl', 'tread_clatter']);
 /** Every slot name the game can play (documentation + preload list). */
 export const SLOTS = ['footstep_01', 'footstep_02', 'footstep_03', 'power_up', 'boost', 'hit', 'land_light', 'land_heavy', 'transform', 'unfold', 'thruster_ignite', 'thruster_burn_loop', 'thruster_cutoff',
-  'roll_loop', 'land_hiss', 'thrust_hum', 'thrust_crackle', 'dissolve', 'cloud_loop', 'reform', 'special_groundpound', 'special_blinkdash'] as const;
+  'roll_loop', 'tread_transform', 'tread_unfold', 'tread_growl', 'tread_clatter', 'land_hiss', 'thrust_hum', 'thrust_crackle', 'dissolve', 'cloud_loop', 'reform', 'special_groundpound', 'special_blinkdash'] as const;
 /** The landing strength (0..1) at or above which the _heavy variant plays. */
 export const LAND_HEAVY_AT = 0.5;
 
@@ -56,7 +56,9 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
     /** Landing by strength 0..1: _light below LAND_HEAVY_AT, _heavy at or above it. */
     land(strength: number) { void play(strength >= LAND_HEAVY_AT ? 'land_heavy' : 'land_light'); },
     /** Transformation: 'fold' start (the clip carries the clunks and the lock), 'unfold' start. */
-    transform(phase: 'fold' | 'unfold') { void play(phase === 'fold' ? 'transform' : 'unfold'); },
+    transform(phase: 'fold' | 'unfold') { const w = type === 'worker'; void play(phase === 'fold' ? (w ? 'tread_transform' : 'transform') : w ? 'tread_unfold' : 'unfold'); },
+    /** Worker tread mode (treads out and locked): diesel growl (pitch follows speed) + track clatter (rate follows speed). speed01 = ground speed / run speed. */
+    tread(on: boolean, speed01: number) { const v = Math.min(1.2, speed01); loop('tread_growl', on ? Math.min(1, 0.35 + 0.65 * v) : 0, 0.75 + 0.5 * v); loop('tread_clatter', on ? Math.min(1, 0.3 + 0.7 * v) : 0, 0.6 + 0.9 * v); },
     /** Thrusters (flying only): ignite one-shot when the rockets light, burn loop follows the throttle, cutoff one-shot when they stop. Glitch: hum + crackle instead. */
     thrusters(flying: boolean, level: number, dt: number) {
       if (!type) return;

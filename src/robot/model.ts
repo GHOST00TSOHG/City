@@ -38,8 +38,8 @@ export interface RobotModel {
 export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number; fist?: number; special?: number; damage?: number;
   /** flight: launch = take-off wind-up 0..1 (crouch), flyT = s since the rockets lit, thrust = throttle 0..1 */
   launch?: number; flyT?: number; thrust?: number;
-  /** ground speed m/s (stride-matches the mocap), gallop / ball / slide = style blends 0..1 from the controller, hop = Glitch hop phase 0..1 (0 = not hopping) */
-  gs?: number; gallop?: number; ball?: number; slide?: number; hop?: number; vox?: number; form?: number; cloud?: number; bodyYaw?: number;
+  /** ground speed m/s (stride-matches the mocap), form = transformation progress 0..1, slide / cloud / vox = style blends 0..1 from the controller */
+  gs?: number; slide?: number; vox?: number; form?: number; cloud?: number;
   /** landing by fall speed: kind from types.ts, seconds since touch-down, strength 0..1, planned duration */
   landKind?: LandKind; landT?: number; landS?: number; landDur?: number }
 export type LandKind = 'none' | 'slam' | 'knee' | 'quad' | 'voxel';
@@ -237,14 +237,13 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     }
     if (sl > 0) { ovr('Spine', -0.32, 0, 0, sl * (1 - hv * 0.6)); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl * (1 - hv)); ovr('LeftLeg', 2.0, 0, 0, sl * (1 - hv)); ovr('RightUpLeg', -0.5, 0, -0.14, sl * (1 - hv)); ovr('RightLeg', 0.25, 0, 0, sl * (1 - hv));
       ovr('LeftFoot', -0.4, 0, 0, sl * (1 - hv)); ovr('RightFoot', 0.2, 0, 0, sl * (1 - hv)); ovr('LeftArm', 0.3, 0, 0.95, sl * (1 - hv)); ovr('RightArm', 0.3, 0, -0.95, sl * (1 - hv)); if (b.Hips) b.Hips.position.y -= 0.34 * sl * (1 - hv); } // Scout: thruster-assisted slide (rides on the hover form)
-    if (gl > 0) { // Worker: gorilla knuckle-run (docs/WORKER-GALLOP.md): body yawed to the path (root, controller bodyYaw), shoulders lead off-axis, limbs straight and reaching toward the travel direction
-      const by = p.bodyYaw ?? 0, tw = 0.3, w = sstep(gl, 0, 0.8), ll2 = Math.sin(p.phase), rr2 = Math.sin(p.phase + 2.2), ord = 'YXZ' as const;
-      ovr('Hips', 0.2, 0, 0, w, ord); ovr('Spine', 0.95, tw, 0, w, ord); ovr('Head', -0.85, -tw - 0.1, 0, w, ord);
-      ovr('LeftArm', -1.28 + 0.42 * ll2, -(by + tw), 0.1, w, ord); ovr('RightArm', -1.28 + 0.42 * rr2, -(by + tw), -0.1, w, ord); ovr('LeftForeArm', -0.06, 0, 0, w); ovr('RightForeArm', -0.06, 0, 0, w);
-      ovr('LeftUpLeg', 0, by * 0.6 * -1, 0, w * 0.5, ord); ovr('RightUpLeg', 0, by * 0.6 * -1, 0, w * 0.5, ord); if (b.Hips) b.Hips.position.y -= 0.2 * w;
+    if (gl > 0) { // Worker tread mode: legs fold up (thigh forward, shin tucked), hips drop onto the treads (transform.ts), arms hold forward like a forklift, fists closed
+      const sL = sstep(gl, 0.1, 0.6), sB = sstep(gl, 0.15, 0.8);
+      ovr('LeftUpLeg', -1.9, 0, 0.12, sL); ovr('RightUpLeg', -1.9, 0, -0.12, sL); ovr('LeftLeg', 2.5, 0, 0, sL); ovr('RightLeg', 2.5, 0, 0, sL); ovr('LeftFoot', -0.8, 0, 0, sL); ovr('RightFoot', -0.8, 0, 0, sL);
+      ovr('Spine', 0.2, 0, 0, sB); ovr('LeftArm', -0.55, 0, 0.3, sB); ovr('RightArm', -0.55, 0, -0.3, sB); ovr('LeftForeArm', -0.5, 0, 0, sB); ovr('RightForeArm', -0.5, 0, 0, sB);
+      fold('LeftUpLeg', 0.85, 0.16, 0.0, 0.0, sL); fold('RightUpLeg', 0.85, -0.16, 0.0, 0.0, sL); if (b.Hips) b.Hips.position.y -= 0.4 * sB;
     }
     if (style === 'medic') { const rat = gl * 0.9 + (p.anim === 'run' ? 0.35 : 0); if (rat > 0.02) for (const n of ['LeftForeArm', 'RightForeArm', 'Spine'] as const) { const o = b[n]; if (o) { o.rotateX(Math.sin(p.t * 53 + n.length) * 0.05 * rat); o.rotateZ(Math.sin(p.t * 67 + n.length * 3) * 0.035 * rat); } } } // tools rattle
-    if ((p.hop ?? 0) > 0 && b.Hips) b.Hips.position.y -= 0.16 * Math.sin(Math.min(1, p.hop! * 1.6) * Math.PI) * (1 - Math.min(1, p.hop!)); // Glitch: crouch into the hop
     // fingers: relaxed curl in idle/walk, fist on boost / special; thumb curls less
     // medic: open flat hands while the palm jets fire, back to fists (palms to the thighs) on landing
     openC += (open - openC) * (1 - Math.exp(-dt * 10));

@@ -27,14 +27,14 @@ Everything in `public/robot/anim/clips.json` (about 120 KB) is **baked, retarget
 
 ## What is NOT mocap (be honest)
 
-- No CMU/Mixamo clip exists for a rolling armoured ball, a four-limbed gallop, a thruster slide, a teleport hop or a superhero/slam landing. Those poses are procedural overlays (`model.ts`) driven by the controller; the **legs and arms underneath** come from the baked run/jog/landing data. The landing crouch uses the CMU forward-jump landing (`jump_a`) at weight 0.25 to 0.35 under the per-type pose.
-- Worker's gallop arms and the tool rattle, Heavy's ball tuck, Scout's slide pose and Glitch's hop crouch are hand-authored.
+- No CMU/Mixamo clip exists for a rolling armoured ball, a tread-mode transformation, a thruster slide, a teleport hop or a superhero/slam landing. Those poses are procedural overlays (`model.ts`) driven by the controller; the **legs and arms underneath** come from the baked run/jog/landing data. The landing crouch uses the CMU forward-jump landing (`jump_a`) at weight 0.25 to 0.35 under the per-type pose.
+- Worker's folded-leg tread pose and the tool rattle, Heavy's ball tuck, Scout's slide pose and Glitch's hop crouch are hand-authored.
 
 ## Landings and the Heavy transformation
 
 - **Landings** (Heavy slam, Scout one-knee, Worker four-limb, Glitch voxel rain): the leg/arm crouch underneath is the CMU `16_05` forward-jump landing (`jump_a`, frames 44 to 66, CMU free-use licence above); the per-type poses and effects are procedural. Same sources, same licence rules, nothing new added for them.
 - **Heavy ball transformation** is hand-authored (staged bone motion, no mocap exists for it). Sources: none.
 
-## On-foot transformations (Heavy ball, Scout hover-sprint, Worker beast) and Glitch's particle cloud
+## On-foot transformations (Heavy ball, Scout hover-sprint, Worker tread mode) and Glitch's particle cloud
 
-All hand-authored; **no mocap source** (none exists for these). Plate choreography: `src/robot/transform.ts`; staged bone folds: `makePoser` in `src/robot/model.ts`. Worker's gorilla posture notes and the sources consulted: `docs/WORKER-GALLOP.md`. Glitch does not transform: running turns him into a calm voxel cloud (`uCloud` in `glitch.ts`), replacing the earlier teleport hops. The mocap legs under the run forms still come from the CMU clips listed above.
+All hand-authored; **no mocap source** (none exists for these). Plate choreography: `src/robot/transform.ts`; staged bone folds: `makePoser` in `src/robot/model.ts`. Worker's tread units are generated geometry in `transform.ts`. Glitch does not transform: running turns him into a calm voxel cloud (`uCloud` in `glitch.ts`), replacing the earlier teleport hops. The mocap legs under the run forms still come from the CMU clips listed above.
