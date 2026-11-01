@@ -61,7 +61,7 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
   let fistC = 0, openC = 0;
   const rest = new Map<THREE.Object3D, THREE.Quaternion>();
   for (const o of Object.values(b)) if (o) rest.set(o, o.quaternion.clone());
-  const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), e = new THREE.Euler();
+  const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), qe = new THREE.Quaternion(), e = new THREE.Euler();
   const set = (name: keyof Bones, x: number, y: number, z: number, k: number) => {
     const o = b[name]; if (!o) return;
     let v = cur.get(name); if (!v) cur.set(name, (v = new THREE.Vector3()));
@@ -214,6 +214,13 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     set('LeftUpLeg', lu[0], lu[1], lu[2], k); set('RightUpLeg', ru[0], ru[1], ru[2], k); set('LeftLeg', ll[0], ll[1], ll[2], k); set('RightLeg', rl[0], rl[1], rl[2], k);
     set('LeftFoot', lft[0], lft[1], lft[2], k); set('RightFoot', rft[0], rft[1], rft[2], k);
     const bobM = mocap(p, dt); if (b.Hips) b.Hips.position.y += bobM;
+    // Scout elbow limit: his forearm shell is long and wide at the elbow, so the mocap walk/run elbow bend (up to ~1.2 rad) drove the
+    // forearm and hand up into the bicep. Cap the elbow at 0.55 rad from rest on foot (the bike fold below still uses its own overrides).
+    if (style === 'scout') for (const n of ['LeftForeArm', 'RightForeArm'] as const) {
+      const o = b[n]; if (!o) continue; const r = rest.get(o)!;
+      const ang = 2 * Math.acos(Math.min(1, Math.abs(qe.copy(r).invert().multiply(o.quaternion).w)));
+      if (ang > 0.55) { const cq = o.quaternion.clone(); o.quaternion.copy(r).slerp(cq, 0.55 / ang); }
+    }
     // ---- per-type run / slide / landing overlays (blend weights come from the controller)
     const fm = p.form ?? 0, sl = p.slide ?? 0, ph2 = Math.sin(p.phase), bl = style === 'heavy' ? fm : 0, hv = style === 'scout' ? fm : 0, gl = style === 'medic' ? fm : 0;
     // foldable bones go back to their rest offset / scale every frame, then the active transformation moves them (staged by the form progress 0..1)
