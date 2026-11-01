@@ -14,7 +14,7 @@ export interface ShardData {
 
 const BOX = new THREE.BoxGeometry(2, 2, 2);
 const hash = (x: any) => fract(sin(x.mul(12.9898)).mul(43758.5453));
-const CLOUD = 320;
+const CLOUD = 520;
 
 /**
  * The Glitch v5 body: the voxel skin (~2.2k cubes, ONE instanced draw) over the kit's dark machinery, a drifting cube cloud
@@ -77,9 +77,11 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   cMat.positionNode = Fn(() => {
     const s: any = aCS, rate = hash(s.add(11)).mul(0.12).add(0.08);
     const ph = fract(time.mul(rate).add(s)), base: any = (uBones.element(aE.w.toInt()) as any).mul(vec4(aE.xyz, 1)).xyz;
-    const hc: any = (uBones.element(headI) as any).mul(vec4(0, 0.17, 0, 1)).xyz;
-    const out = normalize(base.sub(hc).add(vec3(hash(s.add(1)).sub(0.5), hash(s.add(2)).mul(0.6).add(0.3), hash(s.add(3)).sub(0.5)).mul(1.3)));
-    const dist = ph.pow(0.8).mul(hash(s.add(4)).mul(0.25).add(0.25)).mul(uDash.mul(3).add(1)).add(0.01);
+    // drift away from the body axis (whole body sheds cubes), biased upward
+    const ax: any = vec3(0, base.y, 0), hc: any = (uBones.element(headI) as any).mul(vec4(0, 0.1, 0, 1)).xyz;
+    const from: any = mix(ax, hc, step(hc.y.sub(0.12), base.y));
+    const out = normalize(base.sub(from).normalize().add(vec3(hash(s.add(1)).sub(0.5), hash(s.add(2)).mul(0.6).add(0.3), hash(s.add(3)).sub(0.5)).mul(1.3)));
+    const dist = ph.pow(0.8).mul(hash(s.add(4)).mul(0.2).add(0.18)).mul(uDash.mul(3).add(1)).add(0.01);
     const size = smoothstep(0, 0.06, ph).mul(float(1).sub(ph.mul(0.75))).mul(hash(s.add(5)).mul(0.45).add(0.7)).mul(ch).mul(energy.mul(0.2).add(1));
     const a = ph.mul(2).add(s.mul(6.28)), ca = cos(a), sa = sin(a), l: any = (positionLocal as any).mul(size);
     const spun = vec3(l.x.mul(ca).sub(l.z.mul(sa)), l.y, l.x.mul(sa).add(l.z.mul(ca)));
