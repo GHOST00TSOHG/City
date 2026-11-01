@@ -33,6 +33,9 @@ for (const t of (process.env.TYPES || 'scout,heavy,worker,glitch').split(',')) {
   const g = await p.evaluate(() => ({ calls: window.__city.calls, pressed: document.querySelector('#hangar .types [aria-pressed="true"]')?.dataset.t, slots: document.querySelectorAll('#hangar .opts button').length }));
   const tris = await robotTris();
   check(g.pressed === t && g.slots === 18, `${t} garage: picker=${g.pressed} slot buttons=${g.slots} calls=${g.calls} robot tris=${tris}`);
+  // loader self-check against public/robot/<type>/manifest.json: no missing / cut / zero-triangle / unbound parts
+  const kr = await p.evaluate(() => window.__robot.kitReport());
+  check(!!kr && kr.ok && kr.expectedMeshes > 0 && !kr.unknownBone.length, `${t} kit parts: expected ${kr?.expectedNodes} nodes / ${kr?.expectedMeshes} meshes / ${kr?.expectedTris} tris, loaded ${kr?.loadedMeshes} meshes; missing=${JSON.stringify(kr?.missing)} cut=${JSON.stringify(kr?.cut)} zeroTri=${JSON.stringify(kr?.zeroTri)} unboundBone=${JSON.stringify(kr?.unknownBone)} ignored=${JSON.stringify(kr?.ignored)}`);
   // every garage colour slot must visibly recolour the robot (material color/emissive or shader colour uniforms)
   const colRes = await p.evaluate(async () => {
     const seen = () => { const h = new Set(); window.__robot.model.root.traverse((o) => { if (!o.isMesh) return; for (const m of [].concat(o.material)) { for (const k of ['color', 'emissive']) if (m[k]?.isColor) h.add('#' + m[k].getHexString()); for (const u of Object.values(m.uniforms || {})) if (u.value?.isColor) h.add('#' + u.value.getHexString()); for (const u of Object.values(m.userData || {})) if (u?.value?.isColor) h.add('#' + u.value.getHexString()); } }); return h; };

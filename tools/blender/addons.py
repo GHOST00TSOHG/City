@@ -29,17 +29,22 @@ def _select(objs, active):
     bpy.context.view_layer.objects.active = active
 
 def hops_boolean(target, cutter, mode='difference'):
-    """Hard Ops boolean (difference / inset / union / knife) with `cutter`, then apply + delete the cutter."""
+    """Hard Ops boolean (difference / inset / union / knife) with `cutter`, then apply + delete the cutter.
+    ROOT CAUSE FIX: the operator also spawns the cut-off pieces as new objects (`<target>.001`, `.002`, ...) that inherit the target's
+    slot/bone properties and used to be exported as loose sheets. We snapshot the scene objects first and delete every NEW object that is
+    not the target, whatever its name (the old code only deleted objects named like the cutter)."""
     if not available('HOps'): return False
-    pre = cutter.name.split('.')[0]
+    before = set(bpy.data.objects)
     _select([target, cutter], target)
     with bpy.context.temp_override(**_ctx()):
         try: r = getattr(bpy.ops.hops, 'bool_' + mode)()
         except Exception as e: print('hops bool failed', e); return False
     if 'FINISHED' not in r: return False
     _apply_all(target)
+    pre = cutter.name.split('.')[0]
     for o in list(bpy.data.objects):
-        if o != target and o.name.startswith(pre): bpy.data.objects.remove(o)
+        if o is target: continue
+        if o not in before or o.name.startswith(pre) or o is cutter: bpy.data.objects.remove(o)
     USED['HOps bool_' + mode] += 1; return True
 
 def hops_bevel(target, width=0.006, segments=2, angle=30):

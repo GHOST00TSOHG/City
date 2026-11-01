@@ -49,6 +49,12 @@ def turnaround(name, tgt_z=1.0, dist=5.2, extra=(), slots=None):
 def export_kit(rtype, slots, budget=28500, screens=None, extra_meta=None):
     sc = bpy.context.scene
     objs = [o for o in sc.objects if o.type == 'MESH' and 'bone' in o]
+    # a `<name>.NNN` object whose `<name>` also exists is a boolean remnant unless it is registered as a deliberate copy ('_copy')
+    names = {o.name for o in objs}
+    for o in list(objs):
+        m = re.match(r'^(.*)\.\d{3}$', o.name)
+        if m and m.group(1) in names and not o.get('_copy') and (max(o.dimensions) > 3 * max(bpy.data.objects[m.group(1)].dimensions) or tris(o) > 3 * tris(bpy.data.objects[m.group(1)])):
+            print('EXPORT: dropping boolean remnant', o.name, flush=True); objs.remove(o); bpy.data.objects.remove(o)
     for o in objs: o.hide_render = False; o['_hide'] = False
     for o in sc.objects: o.select_set(False)
     # apply modifiers, make single-user
@@ -104,12 +110,12 @@ def export_kit(rtype, slots, budget=28500, screens=None, extra_meta=None):
     tr = {}
     for (sl, op, b), e in groups.items():
         k = f'{sl}:{op}'; tr[k] = tr.get(k, 0) + sum(tris(c) for c in e.children)
-    meta = {'type': rtype, 'version': 2, 'slots': slots, 'pistons': [], 'tris': tr, 'tris_total': sum(tr.values()),
-            'addons_used': dict(A.USED), 'screens': screens or {}}
+    meta = {'type': rtype, 'version': 2, 'slots': slots, 'pistons': [], 'screens': screens or {}}
     if extra_meta: meta.update(extra_meta)
     json.dump(meta, open(f'{out}/kit.json', 'w'), separators=(',', ':'))
     write_skeleton(rtype, objs)
-    print('EXPORTED', rtype, 'tris', meta['tris_total'], flush=True)
+    print('EXPORTED', rtype, 'tris', sum(tr.values()), flush=True)
+    print('NEXT: node tools/kit-manifest.mjs write', rtype, '&& node tools/kit-manifest.mjs verify', rtype, '(verify fails on slice remnants, zero-tri meshes, unknown bones)', flush=True)
     return meta
 
 JOV = None   # set by a script run as __main__ (its globals are not in sys.modules)
@@ -135,7 +141,6 @@ def write_skeleton(rtype, objs):
         bones[b] = game(v)
     zs = [(o.matrix_world @ v.co).z for o in objs for v in o.data.vertices]
     path = f'{REPO}/src/robot/skeleton.json'; d = json.load(open(path))
-    d[rtype] = {'height': round(max(zs), 3), 'sole': round(min(zs) - J['LeftFoot'].z, 3),
-                'hand': round(J['LeftHand'].z - J['LeftForeArm'].z, 3), 'bones': bones, 'parents': {b: par[b] for b in bones}}
+    d[rtype] = {'hand': round(J['LeftHand'].z - J['LeftForeArm'].z, 3), 'bones': bones, 'parents': {b: par[b] for b in bones}}   # (height/sole were taken from debris vertices and unused: dropped)
     txt = json.dumps(d, indent=1)
     open(path, 'w').write(txt)

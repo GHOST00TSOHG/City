@@ -76,11 +76,11 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    equip() { /* parts come with the kit */ },
     animate(s: PoseInput, dt: number) { pose(s, dt); aimPistons(); },
     dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); },
   };
   model.setLook({}); aimPistons();
+  (model as any).kitReport = kit.report;
   return model;
 }
 
@@ -122,7 +122,6 @@ export async function createRobotSwitch(type: RobotType, look: RobotLook) {
     root, uniforms: u, onSwap: (_m: TypedRobot) => {},
     get type() { return cur.type; }, get nozzles() { return cur.nozzles; }, get height() { return cur.height; }, get joints() { return cur.joints; }, get inner() { return cur; },
     setLook(l: Partial<RobotLook>) { cur.setLook(l); },
-    equip() {},
     animate(s: PoseInput, dt: number) { cur.animate(s, dt); },
     async setType(t: RobotType, l: RobotLook) {
       if (t === cur.type) { cur.setLook(l); return; }

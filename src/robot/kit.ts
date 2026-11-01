@@ -5,7 +5,7 @@ import { uniform, uv, texture, positionLocal, fract, floor, abs, smoothstep, sin
 import type { RobotType, Slot, SlotBuild } from './types';
 
 /**
- * Per-type Blender kit (tools/blender/robot_types.py → public/robot/<type>/{parts.glb, masks.webp, normal.webp, kit.json}).
+ * Per-type Blender kit (tools/blender/<type>_v2.py → public/robot/<type>/{parts.glb, kit.json, manifest.json}).
  * Nodes are `<slot>__<option>__<Bone>` authored in bone space ('body' = always on, bone 'P<n>' = runtime piston half).
  * Shading: one material per region. Paint regions read the baked masks (R = AO, G = edge wear, B = grime) and the baked
  * normal map; glow regions pulse with `energy`; decal samples the shared atlas through UV1. Damage scorch + repair sweep
@@ -18,11 +18,16 @@ export const createKitUniforms = () => ({ energy: uniform(1), damage: uniform(0)
   screen: uniform(new THREE.Vector4(0, 0, 0, 0)), squint: uniform(0), xeyes: uniform(0) });
 type U = ReturnType<typeof createKitUniforms>;
 export interface Piston { slot: Slot; opt: string; a: string; ap: [number, number, number]; b: string; bp: [number, number, number]; objA: string; objB: string }
-export interface KitMeta { type: RobotType; slots: Record<Slot, string[]>; pistons: Piston[]; tris: Record<string, number>; addons_used?: Record<string, number>; screens?: Record<string, [number, number, number, number, number]> }
+export interface KitMeta { type: RobotType; slots: Record<Slot, string[]>; pistons: Piston[]; screens?: Record<string, [number, number, number, number, number]> }
+/** public/robot/<type>/manifest.json (tools/kit-manifest.mjs write): every node and mesh the kit is supposed to contain. */
+export interface KitManifest { type: RobotType; nodes: { name: string; slot: string; opt: string; bone: string; meshes: { name: string; region: string; tris: number }[] }[] }
+/** Loader self-check: anything the manifest promises that did not make it onto the robot. Empty arrays = complete. */
+export interface KitReport { type: RobotType; expectedNodes: number; expectedMeshes: number; expectedTris: number; loadedMeshes: number; missing: string[]; cut: string[]; zeroTri: string[]; unknownBone: string[]; ignored: string[]; badRegion: string[]; ok: boolean }
 export interface Kit {
   meta: KitMeta;
   nodes: { slot: string; opt: string; bone: string; meshes: { geo: THREE.BufferGeometry; region: string }[] }[];
   mats: Record<string, THREE.MeshStandardNodeMaterial>;
+  report: KitReport;
 }
 export const PAINT = ['shell', 'joints', 'torso', 'shorts', 'backpack'] as const;
 const GLOW = ['visor', 'decalColor', 'screen'];
@@ -41,7 +46,8 @@ export function makeKitMaterials(u: U, masks: THREE.Texture | null, normal: THRE
   const pulse = sin(time.mul(2.6)).mul(0.25).add(0.85).mul(u.energy);
   const hurt = float(1).sub(u.damage.mul(0.6));
   const mk = (region: string) => {
-    const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.55, metalness: 0.1 }); m.name = region;
+    // DoubleSide: add-on bevel/boolean plates are thin shells whose back faces must not vanish (no culling differences between Chrome and WebKit)
+    const m = new THREE.MeshStandardNodeMaterial({ roughness: 0.55, metalness: 0.1, side: THREE.DoubleSide }); m.name = region;
     const uCol = uniform(new THREE.Color(FIXED[region]?.[0] ?? '#ffffff')); m.userData.uCol = uCol;
     const mk4 = masks ? texture(masks, uv()) : null;
     const ao = mk4 ? mk4.r : float(1), edge = mk4 ? mk4.g : float(0), grime = mk4 ? mk4.b : float(0);
@@ -95,15 +101,17 @@ export async function loadKit(type: RobotType, u: U, base = `${import.meta.env.B
   decalTex ??= loadTex(`${base}decals.webp`, true);
   const meta = await fetch(`${dir}kit.json`).then((r) => r.json() as Promise<KitMeta & { version?: number }>);
   const baked = (meta.version ?? 1) < 2; // v2 kits are add-on modelled with real bevels: no baked mask/normal atlases
+  const manifest = await fetch(`${dir}manifest.json`).then((r) => (r.ok ? (r.json() as Promise<KitManifest>) : null)).catch(() => null);
+  if (!manifest) console.error(`[kit:${type}] manifest.json missing: part validation is OFF (run node tools/kit-manifest.mjs write ${type})`);
   const [gltf, masks, normal, decals] = await Promise.all([
     new GLTFLoader().loadAsync(`${dir}parts.glb`),
     baked ? loadTex(`${dir}masks.webp`, false).catch(() => null) : null, baked ? loadTex(`${dir}normal.webp`, false).catch(() => null) : null, decalTex,
   ]);
   const mats = makeKitMaterials(u, masks, normal, decals);
   gltf.scene.updateMatrixWorld(true);
-  const nodes: Kit['nodes'] = [];
+  const nodes: Kit['nodes'] = [], ignored: string[] = [];
   for (const o of [...gltf.scene.children]) {
-    const [slot, opt, bone] = o.name.split('__'); if (!bone) continue;
+    const [slot, opt, bone] = o.name.split('__'); if (!bone) { ignored.push(o.name); continue; }
     const inv = o.matrixWorld.clone().invert(), meshes: Kit['nodes'][number]['meshes'] = [];
     o.traverse((c: any) => {
       if (!c.isMesh) return;
@@ -117,15 +125,35 @@ export async function loadKit(type: RobotType, u: U, base = `${import.meta.env.B
     });
     nodes.push({ slot, opt, bone, meshes });
   }
-  return { meta, nodes, mats };
+  return { meta, nodes, mats, report: checkKit(type, manifest, nodes, mats, ignored) };
+}
+
+function checkKit(type: RobotType, man: KitManifest | null, nodes: Kit['nodes'], mats: Kit['mats'], ignored: string[]): KitReport {
+  const r: KitReport = { type, expectedNodes: man?.nodes.length ?? 0, expectedMeshes: 0, expectedTris: 0, loadedMeshes: nodes.reduce((a, n) => a + n.meshes.length, 0), missing: [], cut: [], zeroTri: [], unknownBone: [], ignored, badRegion: [], ok: false };
+  const tri = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
+  for (const n of nodes) for (const m of n.meshes) { if (!(tri(m.geo) > 0)) r.zeroTri.push(`${n.slot}__${n.opt}__${n.bone}`); if (!mats[m.region]) r.badRegion.push(`${n.slot}__${n.opt}__${n.bone}:${m.region}`); }
+  if (man) {
+    const have = new Map(nodes.map((n) => [`${n.slot}__${n.opt}__${n.bone}`, n]));
+    for (const e of man.nodes) {
+      r.expectedMeshes += e.meshes.length; r.expectedTris += e.meshes.reduce((a, m) => a + m.tris, 0);
+      const h = have.get(e.name); if (!h) { r.missing.push(e.name); continue; }
+      const got = h.meshes.reduce((a, m) => a + tri(m.geo), 0), want = e.meshes.reduce((a, m) => a + m.tris, 0);
+      if (h.meshes.length < e.meshes.length) r.missing.push(`${e.name} (${e.meshes.length - h.meshes.length} of ${e.meshes.length} meshes)`);
+      if (got < want) r.cut.push(`${e.name} ${want}->${got} tris`);
+    }
+  }
+  r.ok = !!man && !r.missing.length && !r.cut.length && !r.zeroTri.length && !r.ignored.length && !r.badRegion.length;
+  if (man) for (const k of ['missing', 'cut', 'zeroTri', 'ignored', 'badRegion'] as const) if (r[k].length) console.error(`[kit:${type}] ${k}: ${r[k].slice(0, 12).join(', ')}${r[k].length > 12 ? ' ...' : ''}`);
+  return r;
 }
 
 /** Merge the visible nodes of a build into one skinned geometry per region (rigid: one bone per vertex). */
 export function buildSkinned(kit: Kit, build: SlotBuild, boneIndex: (name: string) => number): Map<string, THREE.BufferGeometry> {
+  const lost = new Set<string>();
   const per = new Map<string, THREE.BufferGeometry[]>();
   for (const n of kit.nodes) {
     if (n.slot !== 'body' && build[n.slot as Slot] !== n.opt) continue;
-    const bi = boneIndex(n.bone); if (bi < 0) continue;
+    const bi = boneIndex(n.bone); if (bi < 0) { lost.add(`${n.slot}__${n.opt}__${n.bone}`); continue; } // a part bound to a bone the rig lacks would vanish silently
     for (const { geo, region } of n.meshes) {
       const g = geo.index ? geo.clone() : geo.clone(); const c = g.attributes.position.count;
       const si = new Uint16Array(c * 4), sw = new Float32Array(c * 4);
@@ -135,10 +163,11 @@ export function buildSkinned(kit: Kit, build: SlotBuild, boneIndex: (name: strin
       (per.get(r) ?? per.set(r, []).get(r)!).push(g);
     }
   }
+  if (lost.size) { kit.report.unknownBone = [...lost]; kit.report.ok = false; console.error(`[kit:${kit.meta.type}] parts bound to bones missing from the rig: ${[...lost].join(', ')}`); }
   const out = new Map<string, THREE.BufferGeometry>();
   for (const [r, list] of per) {
     const idx = list.some((g) => g.index), norm = idx ? list.map((g) => (g.index ? g : g.setIndex([...Array(g.attributes.position.count).keys()]))) : list;
-    const m = mergeGeometries(norm, false); if (m) out.set(r, m);
+    const m = mergeGeometries(norm, false); if (m) out.set(r, m); else { kit.report.missing.push(`region ${r} (geometries have different attribute sets)`); kit.report.ok = false; console.error(`[kit:${kit.meta.type}] region ${r} failed to merge: every part in it would vanish`); }
     list.forEach((g) => g.dispose());
   }
   return out;

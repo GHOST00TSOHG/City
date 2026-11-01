@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173 --strictPort",
+    "test:kits": "node tools/kit-manifest.mjs verify && node tools/kit-floaters.mjs",
     "test:smoke": "playwright test",
     "bake:fetch": "node tools/bake/fetch.mjs",
     "bake": "node tools/bake/bake.mjs"
