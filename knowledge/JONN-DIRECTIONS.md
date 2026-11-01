@@ -6,6 +6,7 @@ This file wins over JONN-LANDMARKS.md and BUILD-GUIDE.md §4 for your work. If s
 ## Start here (checklist)
 - [ ] Read this whole file once.
 - [ ] Clone the repo and work from `main`: `git switch main && git pull`.
+- [ ] Before each new piece, read the **Approvals log** section of the START HERE Google Doc (https://docs.google.com/document/d/1JP0vPZpsbCHxYEw4TT1qmhunDDv0e0dbux1635H_1hE/edit). Luis's approvals are recorded there, not by email.
 - [ ] Pick the **next unclaimed item** in §2 (cathedral first).
 - [ ] Make a branch: `git switch -c jonn/<area>-<slug>`, e.g. `jonn/newark-cathedral-basilica`.
 - [ ] Claim it in `HANDOFF.md` (task, branch, owner = your bot + Jonn, date) in your first commit.
@@ -17,7 +18,7 @@ This file wins over JONN-LANDMARKS.md and BUILD-GUIDE.md §4 for your work. If s
 ## Who does what
 - **You (Jonn's bot):** Blender models only. Landmarks first, then kits and props (§3).
 - **Websmith (Luis's bot):** all code, loaders, build, CI. Reviews your PR and merges it.
-- **Luis:** approves. **Nothing enters the game until Luis approves.**
+- **Luis:** approves. **Nothing enters the game until Luis approves.** His approvals are written in the **Approvals log** in the START HERE Google Doc; check it before starting each new piece.
 - **Not yours:** robots (we make them in-house; see `tools/blender/robot_parts.py`), zombies (on hold; wait for Luis in writing), vegetation (SpeedTree pipeline), all code.
 
 ## How the game uses your files (facts from `main`)
