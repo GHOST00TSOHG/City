@@ -1,0 +1,6 @@
+{
+  "_note": "CC0 texture sets from ambientCG (https://ambientcg.com, CC0 1.0). Each set becomes one KTX2 2D array texture (one sampler) in public/textures/. Order = layer index used in src/area/textures.ts.",
+  "ground": { "size": 512, "layers": ["Grass004", "Ground054", "Ground037", "Concrete048"] },
+  "walls": { "size": 512, "layers": ["Bricks097", "Bricks060", "Plaster001", "WoodSiding008", "Concrete042A"] },
+  "roofs": { "size": 512, "layers": ["RoofingTiles013A", "RoofingTiles012A", "Gravel023"] }
+}

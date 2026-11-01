@@ -1,13 +1,17 @@
 import * as THREE from 'three/webgpu';
-import { attribute, normalize, step, dot, positionWorld, normalWorld, vec2, vec3, float, fract, floor, fwidth, smoothstep, select, mix, hash, abs, max, min, clamp, vertexColor, uniform, cameraPosition, distance } from 'three/tsl';
+import type { MaterialTextures } from './textures';
+import { WALL_GAIN, WALL_PAINTED, WALL_MEAN, WALL_SCALE, ROOF_GAIN } from './textures';
+import { texture, mod, luminance, attribute, normalize, step, dot, positionWorld, normalWorld, vec2, vec3, float, fract, floor, fwidth, smoothstep, select, mix, hash, abs, max, min, clamp, vertexColor, uniform, cameraPosition, distance } from 'three/tsl';
 
 /** Procedural facades (TSL): window grid by inferred building type, lit / unlit windows, house shutters, storefronts.
  *  Reads the per-vertex `facade` attribute [baseY, wallTopY, kind, seed] written by buildings.ts. No textures. */
-export function createFacadeMaterial() {
+export function createFacadeMaterial(tex: MaterialTextures) {
   const uNight = uniform(1); // 0..1 how many windows are lit (scales with time of day later)
   const mat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   const fa = attribute('facade', 'vec4');
-  const base = fa.x, top = fa.y, kind = fa.z, seed = fa.w;
+  // fa.z packs kind (0 none, 1 house, 2 commercial) + 4 * wall material + 32 * roof material (see buildings.ts)
+  const base = fa.x, top = fa.y, kind = mod(fa.z, 4), seed = fa.w;
+  const wallMat = mod(floor(fa.z.div(4)), 8), roofMat = floor(fa.z.div(32));
   const isHouse = kind.lessThan(1.5);
   const n = normalWorld;
   const along = positionWorld.x.mul(n.z.negate()).add(positionWorld.z.mul(n.x)); // horizontal coord along the wall
@@ -73,7 +77,16 @@ export function createFacadeMaterial() {
   const tint = select(h2.greaterThan(0.9), vec3(0.75, 0.85, 1.0), warm); // a few cool LED rooms
   const glass = mix(vec3(0.07, 0.09, 0.12), roomCol.mul(lamp).mul(0.1), crisp.mul(0.7)); // dark room seen through unlit glass
   const shutterCol = mix(vec3(0.22, 0.42, 0.36), vec3(0.3, 0.42, 0.55), hash(seed.mul(311)));
-  const wall = vertexColor();
+  // Textured, painted walls and roofs (CC0 ambientCG, KTX2 arrays). Painted kinds take the texture's relief only, so the
+  // vertex colour (area palette, see buildings.ts) is the paint; brick/concrete show their real colour. True colours: no tint.
+  const byLayer = (idx: any, v: number[]) => v.slice(1).reduce((acc: any, x, i) => select(idx.greaterThan(i + 0.5), float(x), acc), float(v[0]));
+  const isRoof = smoothstep(0.35, 0.55, n.y);
+  const wScale = byLayer(wallMat, WALL_SCALE);
+  const wTex = texture(tex.walls, vec2(along, up.add(seed.mul(13))).div(wScale)).depth(wallMat).rgb;
+  const painted = byLayer(wallMat, WALL_PAINTED);
+  const wallAlb = mix(wTex.mul(byLayer(wallMat, WALL_GAIN)), vec3(luminance(wTex).div(byLayer(wallMat, WALL_MEAN))).clamp(0.4, 1.6), painted).mul(vertexColor());
+  const rTex = texture(tex.roofs, positionWorld.xz.div(3.2)).depth(roofMat).rgb.mul(byLayer(roofMat, ROOF_GAIN));
+  const wall = mix(wallAlb, rTex.mul(vertexColor()), isRoof);
   const frameDark = mix(float(1), float(0.82), clamp(win.mul(inWall).mul(3), 0, 1).mul(crisp));
   let col: any = wall.mul(frameDark);
   col = mix(col, shutterCol, shutter.mul(inWall).mul(crisp).mul(0.9));
