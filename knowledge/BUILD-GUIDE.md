@@ -51,8 +51,8 @@ Layout:
 src/            app code (scene, camera, weather, people)
 tools/          node scripts, run offline, outputs to public/data/
 public/data/<area>/  terrain.bin, buildings.json, roads.json, trees.bin
-landmarks/<area>/<slug>/<slug>.glb  landmark models + README (Jonn)
-landmarks.json  public landmark placements
+public/landmarks/<area>/<slug>/  <slug>.glb + manifest.json (placement, LOD, optional footprint/cullMarginM) + README (Jonn)
+public/landmarks/index.json      landmark slugs the game loads, per area
 ```
 Pipeline per area (script per step in `tools/`, outputs committed only if small; raw downloads go to `tools/cache/`, gitignored):
 1. **Area + origin:** each area has a fixed origin lat/lon at a *public* spot (park, town center) in `tools/areas.json`. All geometry uses a **local tangent plane (ENU)** around that origin: x = east (m), z = -north (m), y = up (m). Never move an origin after release.
