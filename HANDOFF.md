@@ -166,3 +166,4 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 ## Glitch v3 (2026-11-01)
 - glitch_v2.py rebuilt: V-chest, glow piping, dense small shards, orbit trails, dash afterimage; glitch_post.py adds RGB split/scanlines.
 - Renders: /workspace/robot-renders/glitch-v3-34.png, glitch-v3-closeup.png. Close-up still busy.
+- Glitch kit exported (3800 shards, 30,400 tris). Test TYPES=glitch: garage 44 calls / world 38 calls, 30,656 tris, 0 console errors.
