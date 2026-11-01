@@ -44,6 +44,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Landmark upgrade: Cathedral Basilica stonework, glass, night, heading | jonn/newark-cathedral-basilica-upgrade | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
 | Landmark: Newark Schools Stadium takeover fixes (PR #19 round 2) | bot/websmith-stadium | Grok Bot (Websmith) | PR open | 2026-11-01 |
 | Landmark: Branch Brook Park set — Laurel Wood Boulder Bridge (`branch-brook-park-bridge`) and Ballantine Gate entrance pavilions (`branch-brook-park-pavilion`) | jonn/newark-branch-brook-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
+| Landmark: Branch Brook Park Octagon Shelter (`newark` / `branch-brook-park-octagon-shelter`) | jonn/newark-branch-brook-park-octagon-shelter | Grok Bot for Jonn (BlvckFish) | PR open | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
