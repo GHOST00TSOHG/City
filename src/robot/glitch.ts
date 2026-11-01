@@ -43,14 +43,14 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   const aQ = instancedBufferAttribute(bQ, 'vec4') as any, aSeed = instancedBufferAttribute(bSeed, 'float') as any;
   const boneMats = boneNames.map(() => new THREE.Matrix4()), uBones = uniformArray(boneMats, 'mat4');
   const vis = data.parts.map(() => 1), uVis = uniformArray(vis, 'float');
-  const uFly = uniform(0), uRain = uniform(0), uCloud = uniform(0), uDash = uniform(0), uBurst = uniform(0), uMosh = uniform(0), uCenter = uniform(new THREE.Vector3(0, 1.3, 0));
+  const uFly = uniform(0), uRain = uniform(0), uCloud = uniform(0), uDash = uniform(0), uBurst = uniform(0), uMosh = uniform(0), uSolid = uniform(0), uCenter = uniform(new THREE.Vector3(0, 1.3, 0));
   const uWhite = uniform(new THREE.Color()), uGrey = uniform(new THREE.Color()), uGlow = uniform(new THREE.Color()), uPart = uniform(new THREE.Color());
   const cat = aDim.w.mod(4), part = floor(aDim.w.div(4)), seed = aSeed;
 
   // ---- voxel skin
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0 });
   mat.positionNode = Fn(() => {
-    const q: any = aQ, lp0: any = (positionLocal as any).mul(aDim.xyz).mul(1.4).mul(uVis.element(part.toInt()));
+    const q: any = aQ, lp0: any = (positionLocal as any).mul(aDim.xyz).mul(1.4).mul(uVis.element(part.toInt())).mul(float(1).sub(smoothstep(0.5, 1, uSolid)));
     const fph0 = fract(time.mul(hash(seed.add(12)).mul(0.6).add(0.7)).add(seed.mul(7)));
     const lp: any = lp0.mul(float(1).sub(uFly.mul(step(0.25, hash(seed.add(13)))).mul(smoothstep(uCenter.y.add(0.15), uCenter.y.sub(0.55), (uBones.element(aOff.w.toInt()) as any).mul(vec4(aOff.xyz, 1)).y)).mul(fph0.mul(0.75))));
     const t: any = (cross as any)(q.xyz, lp).add(lp.mul(q.w)), rp: any = lp.add((cross as any)(q.xyz, t).mul(2));
@@ -132,7 +132,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   const lastRoot = new THREE.Vector3(), curRoot = new THREE.Vector3();
   return {
     get cloudOn() { return uCloudOn; },
-    meshes: [body, cloud, particles], count: n, uniforms: { uDash, uBurst, uMosh, uFly, uRain, uCloud },
+    meshes: [body, cloud, particles], count: n, uniforms: { uDash, uBurst, uMosh, uFly, uRain, uCloud, uSolid }, skin: { uWhite, uGrey, uGlow },
     setLook(look: RobotLook) {
       data.parts.forEach((p, k) => (vis[k] = p.slot === 'body' || (look as any)[p.slot] === p.opt ? 1 : 0));
       const idx: number[] = []; all.forEach((a, i) => vis[a.pi] && idx.push(i));

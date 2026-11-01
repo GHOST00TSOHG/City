@@ -125,15 +125,24 @@ export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u:
   for (const nd of kit.nodes) { if (nd.slot !== 'body' || /Head|Hand|F\d_|Foot$/.test(nd.bone)) continue; for (const m of nd.meshes) { const g = m.geo, pos = g.attributes.position; g.computeBoundingBox(); const sz = g.boundingBox!.getSize(new THREE.Vector3()); if (Math.max(sz.x, sz.y, sz.z) < 0.04) continue;
     for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), k = `${nd.bone}:${Math.round(x / 0.03)}:${Math.round(y / 0.03)}:${Math.round(z / 0.03)}`; if (seen.has(k)) continue; seen.add(k); fill.push({ bone: nd.bone, x, y, z }); kitN++; } } }
   const G = createGlitchBody(data, list.map((b) => b.name), base.root, u.energy, u.damage, fill);
-  const bodyMeshes = base.root.children.filter((o) => (o as THREE.SkinnedMesh).isSkinnedMesh);
+  const bodyMeshes = base.root.children.filter((o) => (o as THREE.SkinnedMesh).isSkinnedMesh) as THREE.SkinnedMesh[];
+  // SMOOTH BODY: at rest / walking Glitch is one smooth solid skin (the machinery meshes repainted in the voxel skin colours) and the
+  // voxel cubes shrink away, so no cube edges or gaps read as lines; the cubes return only for the effects (cloud run, blink-dash,
+  // flight peel, landing rain, re-form). uSolid 0..1: in fast (0.06 s) when an effect starts, back over 0.3 s once it has settled.
+  const GLOW = /visor|decal|glow|light|screen|emis/i, skinMats = new Map<string, THREE.Material>(), kitMats = new Map<THREE.SkinnedMesh, THREE.Material>();
+  const skinMat = (region: string) => { let m = skinMats.get(region); if (!m) { const sm = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0 }); const c = region === 'shorts' || region === 'joints' ? G.skin.uGrey : G.skin.uWhite; sm.colorNode = c as any; sm.emissiveNode = (c as any).mul(0.3); m = sm; skinMats.set(region, m); } return m; };
+  let solid = 0, smoothOn = false; const forceCubes = /[?&]glitchcubes\b/.test(location.search);
   const model: TypedRobot = {
     ...base,
     setLook(l) { base.setLook(l); G.setLook(look); },
     animate(s, dt) {
       base.animate(s, dt); G.update(s, dt, list);
+      const U = G.uniforms, calm = !forceCubes && U.uDash.value < 0.005 && U.uCloud.value === 0 && U.uRain.value < 0.005 && U.uFly.value < 0.03 && U.uBurst.value < 0.05;
+      solid = calm ? Math.min(1, solid + dt / 0.3) : Math.max(0, solid - dt / 0.06); U.uSolid.value = solid;
+      const on = solid > 0.5; if (on !== smoothOn) { smoothOn = on; for (const m of bodyMeshes) { const r = m.name.split(':')[1] ?? 'shell'; if (!kitMats.has(m)) kitMats.set(m, m.material as THREE.Material); m.material = on && !GLOW.test(r) ? skinMat(r) : kitMats.get(m)!; } }
       const hide = G.uniforms.uDash.value > 0.5 || G.cloudOn; for (const m of bodyMeshes) m.visible = !hide; // blink-dash: the body dissolves into shards
     },
-    dispose() { base.dispose(); G.dispose(); },
+    dispose() { base.dispose(); G.dispose(); for (const m of skinMats.values()) m.dispose(); },
   };
   model.setLook({}); model.animate({ anim: 'idle', phase: 0, speed: 0, lean: 0, bank: 0, crouch: 0, t: 0 }, 0.016);
   return model;
