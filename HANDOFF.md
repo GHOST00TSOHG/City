@@ -216,3 +216,14 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 
 ## Slice effect removed
 - Deleted glitch_v4.py (displaced slices) and glitch_post.py (RGB split / scanlines). The runtime had no slice code left; glitch.ts keeps only the dash dissolve and rare datamosh.
+
+## Heavy v5 (round)
+- heavy_v2.py v5: torso from 2-heavy-mech.png (dome chest loft, small sunk head with visor slit, cylindrical disc-sided shoulder pods, exposed waist of rings/pistons/cables); Hulkbuster-inspired limbs (rounded bicep/forearm lofts, big curled fists palms-in, rounded thigh/shin, kneecaps, big rounded feet with toes). Shin heat vents (decalColor) kept. J joints unchanged from v4.
+- Renders: robot-renders/heavy-v5-34.png, heavy-v5-closeup.png. Export 28.4k → 25.7k in game after strip. TYPES=heavy: colours 7/7 ok, 48 garage / 43 world calls.
+
+## Kit debris strip
+- tools/kit-strip-strays.mjs drops triangles outside the body box or with edges > 0.5 m (add-on debris that rendered as huge stretched streaks, visible in flight clips). Applied to scout/worker/heavy. Re-run after any --kit export.
+- Known pre-existing: scout fails the decalColor check (fails on the committed kit too) — scout has no decalColor surface.
+
+## Flight (per type)
+- FlightProfile in types.ts; poser take-off/hover/cruise/land per style; controller crouch-launch + landing burn; thrust.ts single instanced flame draw + sparks; medic backpack + palm nozzles; glitch cube-stream dissolve. Clips: tools/clips-robot-fly.mjs → /workspace/robot-clips/<type>-fly.mp4 (~12 s/frame on SwiftShader, ~23 min per type).
