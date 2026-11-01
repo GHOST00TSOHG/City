@@ -104,6 +104,17 @@ export function wetRuns(pts: P[], t: Terrain) {
   if (a >= 0) runs.push([a, pts.length - 1]);
   return runs;
 }
+/** Keeps road pieces inside the baked terrain grid (a road outside it has no ground at all). */
+export function clipRoads(roads: AreaData['roads'], t: Terrain) {
+  const x1 = t.x0 + (t.nx - 1) * t.cell, z1 = t.z0 + (t.nz - 1) * t.cell, out: AreaData['roads'] = [];
+  for (const r of roads) {
+    let cur: number[] = [];
+    const flush = () => { if (cur.length >= 4) out.push({ ...r, p: cur }); cur = []; };
+    for (let i = 0; i + 1 < r.p.length; i += 2) { const x = r.p[i] / 10, z = r.p[i + 1] / 10; if (x < t.x0 || x > x1 || z < t.z0 || z > z1) flush(); else cur.push(r.p[i], r.p[i + 1]); }
+    flush();
+  }
+  return out;
+}
 const groundY = (t: Terrain, x: number, z: number) => Math.max(t.heightAt(x, z), 0.05);
 const LIFT = [0.16, 0.13, 0.1, 0.07];
 export function planRoads(roads: AreaData['roads'], t: Terrain, fix: boolean) {
@@ -190,12 +201,14 @@ export function cleanArea(area: AreaData, t: Terrain): CleanResult {
   const bump = (k: string, n = 1) => { st[k] = (st[k] ?? 0) + n; };
   const water = (x: number, z: number) => t.heightAt(x, z) < 0;
 
+  // 0) the bake can carry roads from outside the terrain grid (they would hang in the void): keep only the parts inside
+  const roads = clipRoads(area.roads, t); st.roadsClipped = area.roads.length - roads.length;
   // 1) ground under roads, bridges (before buildings are judged against the final shore)
-  const rp = planRoads(area.roads, t, true);
+  const rp = planRoads(roads, t, true);
   Object.assign(st, { causewaysBuilt: rp.stats.causeways, bridgesBuilt: rp.stats.bridges, bridgeMetres: Math.round(rp.stats.bridgeLen), pierBents: rp.stats.pierBents, causewayVerts: rp.stats.filledVerts });
 
   // 2) buildings: in water -> remove (or fill a wet corner), road / building overlap -> remove, then snap to ground
-  const infos = binfo(area.buildings), ri = roadIndex(area.roads), drop = new Set<number>();
+  const infos = binfo(area.buildings), ri = roadIndex(roads), drop = new Set<number>();
   const tiny = (q: BInfo) => q.b.m > 0; // elevated parts float on purpose
   for (const q of infos) {
     if (tiny(q)) continue;
@@ -221,16 +234,18 @@ export function cleanArea(area: AreaData, t: Terrain): CleanResult {
       if (c / n >= T.OVERLAP_FRAC) { drop.add(q.i); bump('buildingsRemovedOverlap'); break; }
     }
   }
-  const buildings: Building[] = [];
-  for (const q of infos) {
-    if (drop.has(q.i)) continue;
-    if (tiny(q)) { buildings.push(q.b); continue; }
-    // snap to ground: floor at the 35th percentile of the ground under the footprint, terrain levelled to it, foundation reaches the lowest sample
-    const hs: number[] = []; for (let k = 0; k < q.s.length; k += 2) hs.push(Math.max(t.heightAt(q.s[k], q.s[k + 1]), 0));
-    hs.sort((a, b) => a - b);
-    const pad = Math.max(hs[Math.floor(hs.length * 0.35)], 0.2);
+  const kept = infos.filter((q) => !drop.has(q.i));
+  const groundAt = (q: BInfo) => { const hs: number[] = []; for (let k = 0; k < q.s.length; k += 2) hs.push(Math.max(t.heightAt(q.s[k], q.s[k + 1]), 0)); return hs.sort((a, b) => a - b); };
+  for (const q of kept) { // pass A: terraced pad (levels the terrain under and around the footprint)
+    if (tiny(q)) continue;
+    const hs = groundAt(q), pad = Math.max(hs[Math.floor(hs.length * 0.6)], 0.2);
     vertsNear(t, q.outer, 1, (vi) => { if (Math.abs(t.h[vi] - pad) < T.PAD_TOL && t.h[vi] > 0) t.h[vi] = pad; });
-    let lo = Infinity; for (let k = 0; k < q.s.length; k += 2) lo = Math.min(lo, Math.max(t.heightAt(q.s[k], q.s[k + 1]), 0));
+  }
+  const buildings: Building[] = [];
+  for (const q of kept) { // pass B: floor + foundation from the final terrain, so nothing floats or sinks
+    if (tiny(q)) { buildings.push(q.b); continue; }
+    const hs = groundAt(q), lo = hs[0], hi = hs[hs.length - 1];
+    const pad = Math.max(hs[Math.floor(hs.length * 0.35)], Math.min(hi - 0.45, lo + 1.2), 0.2);
     buildings.push({ ...q.b, pad, fy: Math.min(lo, pad) - 0.3 });
     bump('buildingsSnapped');
   }
@@ -265,7 +280,7 @@ export function cleanArea(area: AreaData, t: Terrain): CleanResult {
     if (t.h[i - 1] < 0 || t.h[i + 1] < 0 || t.h[i - t.nx] < 0 || t.h[i + t.nx] < 0) { t.cover[i] = 2; beach++; }
   }
   Object.assign(st, { seawallSegments: walls.length, seawallMetres: Math.round(walls.reduce((q, s) => q + Math.hypot(s.x1 - s.x0, s.z1 - s.z0), 0)), beachVerts: beach });
-  const out: CleanResult = { area: { ...area, buildings, trees, lamps }, plans: rp.plans, bridges: rp.bridges, walls, stats: st };
+  const out: CleanResult = { area: { ...area, roads, buildings, trees, lamps }, plans: rp.plans, bridges: rp.bridges, walls, stats: st };
   done.set(area, out); return out;
 }
 
@@ -274,6 +289,7 @@ export interface WorldView {
   area: AreaData; terrain: Terrain;
   plans?: RoadPlan[]; bridges?: Bridge[]; walls?: ShoreSeg[];
   /** dock plan (see dockPlan.ts): per pier supports; null = raw bake (decks only) */
+  poolsRaised?: boolean;
   docks?: { piers: { over: number; pilings: number }[] } | null;
 }
 export const ISSUES = ['buildingInWater', 'buildingFloating', 'buildingSunk', 'buildingOverlap', 'buildingOnRoad', 'roadFloating', 'bridgeUnsupported', 'treeBadlyPlaced', 'propBadlyPlaced', 'shorelineGap', 'nonFlatWater', 'pierUnsupported'] as const;
@@ -336,7 +352,7 @@ export function auditWorld(w: WorldView): { counts: Record<Issue, number>; total
   for (const p of area.pools) {
     const pts = ringOf(p); if (pts.length < 3) continue; let lo = Infinity, hi = -Infinity;
     for (const [x, z] of pts) { const h = t.heightAt(x, z); lo = Math.min(lo, h); hi = Math.max(hi, h); }
-    if (hi - Math.max(lo, 0.2) > T.POOL_SPREAD) note('nonFlatWater', { x: Math.round(pts[0][0]), z: Math.round(pts[0][1]), spread: +(hi - lo).toFixed(2) });
+    if (hi - Math.max(w.poolsRaised ? hi : lo, 0.2) > T.POOL_SPREAD) note('nonFlatWater', { x: Math.round(pts[0][0]), z: Math.round(pts[0][1]), spread: +(hi - lo).toFixed(2) });
   }
   // piers over water need pilings
   area.piers.forEach((p, k) => {

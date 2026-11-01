@@ -29,7 +29,7 @@ for (const id of ids.length ? ids : AREAS) {
     const c = cleanArea(area, terrain);
     stats = c.stats;
     const docks = planDocks(c.area.piers, terrain);
-    world = { area: c.area, terrain, plans: c.plans, bridges: c.bridges, walls: c.walls, docks };
+    world = { area: c.area, terrain, plans: c.plans, bridges: c.bridges, walls: c.walls, docks, poolsRaised: true };
     stats.docks = { pilings: docks.pilings.length / 4, cleats: docks.cleats.length / 4, bumpers: docks.bumpers.length / 4, ladders: docks.ladders.length / 4, boats: docks.boats.length / 5 };
   }
   const r = auditWorld(world);
