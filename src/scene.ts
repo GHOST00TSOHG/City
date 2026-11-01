@@ -16,7 +16,7 @@ import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
 import { createCollision } from './robot/collision';
-import { buildLandmarks } from './area/landmarks';
+import { buildLandmarks, cullUnderLandmarks } from './area/landmarks';
 import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
@@ -106,18 +106,21 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   async function buildContent(id: string) {
     const { area, terrain, mask } = await loadArea(id);
     const group = new THREE.Group(); group.name = 'area:' + id;
-    const blds = buildBuildings(area.buildings, terrain, lambert);
+    // Landmarks first: their footprints decide which generated buildings are never built (once per area load).
+    const origin = (areaDefs as Record<string, any>)[id]?.origin as { lat: number; lon: number } | undefined;
+    const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [] } : await buildLandmarks(id, origin, terrain, renderer);
+    const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
+    if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
+    const blds = buildBuildings(buildings, terrain, lambert);
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
     const trees = await buildTrees(area.trees as number[], terrain);
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     group.add(buildTerrain(terrain, groundMat), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
-    const origin = (areaDefs as Record<string, any>)[id]?.origin as { lat: number; lon: number } | undefined;
-    const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [] } : await buildLandmarks(id, origin, terrain, renderer);
     group.add(landmarks.group);
-    const interiors = createInteriors(area.buildings, terrain); group.add(interiors.group);
-    const collision = createCollision(area.buildings, terrain, landmarks.colliders);
+    const interiors = createInteriors(buildings, terrain); group.add(interiors.group);
+    const collision = createCollision(buildings, terrain, landmarks.colliders);
     if (inland) { // land skirt beyond the bake so an inland city doesn't float in a void; fog hides the seam
       const { nx, nz, h, cell, x0, z0 } = terrain; const edge: number[] = [];
       for (let i = 0; i < nx; i++) edge.push(h[i], h[(nz - 1) * nx + i]); for (let j = 0; j < nz; j++) edge.push(h[j * nx], h[j * nx + nx - 1]);
@@ -127,7 +130,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const skirt = new THREE.Mesh(new THREE.ShapeGeometry(ring).rotateX(-Math.PI / 2), new THREE.MeshLambertNodeMaterial({ color: 0x2b2a22 }));
       skirt.position.y = y; skirt.name = 'skirt'; group.add(skirt);
     }
-    return { id, area, terrain, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
+    return { id, area, terrain, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   let cur = await buildContent(areaId);
@@ -188,7 +191,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     /** Drop-in point: the street start view (on a road) if the area has one, else the first view's look target. */
     spawnPoint() { const vs = viewsOf(cur.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
     get areaId() { return cur.id; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
-    get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, lamps: a.lamps.length, chunks: cur.blds.group.children.length, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
+    get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, lamps: a.lamps.length, chunks: cur.blds.group.children.length, landmarkCull: cur.landmarkCull, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
     /** Warm the fetch cache for an area (data only; cheap, run when idle). */
     interiorEntry(x: number, z: number) { return cur.interiors.entry(x, z); },
     preload(id: string) { return loadArea(id).then(() => undefined, () => undefined); },
