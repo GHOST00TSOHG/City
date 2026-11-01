@@ -243,9 +243,14 @@ class Kit:
         bm = bmesh.new(); bm.from_mesh(ob.data); bpy.data.objects.remove(ob); bpy.data.meshes.remove(me)
         return bm
 
-    def build(self, panel=True):
-        """bmesh pieces -> one Blender object per (slot, option, bone); returns tri counts per (slot, option)."""
-        import addons as A
+    def build(self, panel=True, cuts=None):
+        for _ in self.build_iter(panel, cuts): pass
+        return self.tris
+
+    def build_iter(self, panel=True, cuts=None):
+        """bmesh pieces -> one Blender object per (slot, option, bone); sets self.tris per (slot, option).
+        cuts: [(name_glob, face, u, v, w, h, depth, shape)] Boxcutter cuts (generator yields while they run)."""
+        import addons as A, fnmatch
         tris = {}; self.objs = []
         col = bpy.data.collections.new(self.type); bpy.context.scene.collection.children.link(col)
         grouped = {}
@@ -266,6 +271,17 @@ class Kit:
             if 'decal' not in me.uv_layers: me.uv_layers.new(name='decal')
             me.uv_layers.active_index = 0
             ob = bpy.data.objects.new(me.name, me); col.objects.link(ob); self.objs.append(ob)
+        if ADDONS and cuts and A.bc_available():
+            bpy.context.preferences.view.smooth_view = 0
+            for ob in self.objs:
+                others = [o for o in self.objs if o is not ob]
+                for (glob, face, u, v, w, h, depth, shape) in cuts:
+                    if not fnmatch.fnmatch(ob.name, glob): continue
+                    if face == 'S': face = 'R' if sum(c[0] for c in ob.bound_box) > 0 else 'L'
+                    yield from A.bc_cut(ob, others, face, u, v, w, h, depth, shape)
+            A.bc_cleanup()
+        for ob in self.objs:
+            me = ob.data; slot, opt, bone = ob.name.split('__')
             me.shade_smooth()
             if ADDONS and A.hops_bevel(ob, width=0.006, segments=1 if slot == 'body' else 2, angle=32):
                 A.hops_weighted_normal(ob); A.apply_all(ob)

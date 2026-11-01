@@ -190,6 +190,23 @@ FACTORY = {'scout': {'shell': (0.78, 0.79, 0.8), 'joints': (0.018, 0.019, 0.022)
 
 FACTORY.update(_hw.FACTORY)
 
+# Boxcutter cuts: (object glob, face F/B/S(outer side), u, v in the face's bbox, w, h metres, depth, shape)
+def _cuts(sc):
+    L = lambda g, f, u, v, w, h, d=0.004, sh='BOX': (g, f, u, v, w * sc, h * sc, d * sc, sh)
+    torso = [L('body__base__Spine', 'F', 0.5, 0.62, 0.30, 0.008), L('body__base__Spine', 'F', 0.5, 0.36, 0.008, 0.16),
+             *[L('body__base__Spine', 'F', u, v, 0.05, 0.012, 0.006) for u in (0.3, 0.7) for v in (0.28, 0.34, 0.40)],
+             L('body__base__Spine', 'F', 0.5, 0.16, 0.12, 0.05, 0.007),
+             *[L('body__base__Spine', 'B', 0.5, v, 0.16, 0.012, 0.006) for v in (0.25, 0.32, 0.39, 0.46)],
+             L('body__base__Spine', 'B', 0.25, 0.7, 0.035, 0, 0.008, 'CIRCLE'), L('body__base__Spine', 'B', 0.75, 0.7, 0.035, 0, 0.008, 'CIRCLE'),
+             L('body__base__Spine', 'S', 0.5, 0.5, 0.008, 0.2)]
+    limbs = [L('helmet__*', 'S', 0.5, 0.55, 0.12, 0.008), *[L('helmet__*', 'S', 0.5, v, 0.06, 0.01, 0.005) for v in (0.3, 0.38)],
+             L('legs__*__*UpLeg', 'F', 0.5, 0.55, 0.008, 0.18), *[L('legs__*__*UpLeg', 'S', 0.5, v, 0.07, 0.01, 0.005) for v in (0.4, 0.48)],
+             L('legs__*__*tLeg', 'F', 0.5, 0.45, 0.05, 0.08, 0.005), L('legs__*__*tLeg', 'S', 0.5, 0.6, 0.008, 0.14),
+             L('arms__*__*tArm', 'S', 0.5, 0.55, 0.03, 0, 0.006, 'CIRCLE'), L('arms__*__*tArm', 'F', 0.5, 0.45, 0.1, 0.008),
+             L('body__base__Hips', 'F', 0.5, 0.5, 0.2, 0.008), L('boots__*', 'S', 0.5, 0.6, 0.1, 0.008)]
+    return torso + limbs
+CUTS = {'scout': _cuts(1.0), 'heavy': _cuts(1.4), 'worker': _cuts(1.15)}
+
 def main():
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else ['scout']
     t = argv[0]; reset()
@@ -197,7 +214,10 @@ def main():
     kit.ADDONS = '--no-addons' not in argv and addons.available('HOps') and addons.available('MESHmachine')
     print('ADDONS', kit.ADDONS, flush=True)
     k = Kit(t); BUILDERS[t](k)
-    tris = k.build(); slots = SLOTS[t]
+    import addons as A
+    print('BOXCUTTER', A.bc_available(), flush=True)
+    yield from k.build_iter(cuts=None if '--no-bc' in argv else CUTS.get(t))
+    tris = k.tris; slots = SLOTS[t]
     body = sum(v for (s, o), v in tris.items() if s == 'body')
     builds = [{s: o[i] for s, o in slots.items()} for i in range(3)]
     for i, b in enumerate(builds): print(f'build {i}: tris', body + sum(tris[(s, o)] for s, o in b.items()))
@@ -213,12 +233,18 @@ def main():
         for i, b in enumerate(builds):
             k.preview(b, f'/workspace/city-shots/types-{t}-{tag}-b{i}.png', paint=FACTORY.get(t), samples=32 if size < 2048 else 64)
 
+_gen = None
 def _run():
-    try: main()
+    global _gen
+    try:
+        if _gen is None: _gen = main()
+        return next(_gen)  # Boxcutter steps yield back to the event loop
+    except StopIteration: pass
     except Exception: import traceback; traceback.print_exc()
     import addons; print('ADDONS_USED', dict(addons.USED), flush=True)
     if not bpy.app.background: bpy.ops.wm.quit_blender()
 
 if __name__ == '__main__':
-    if bpy.app.background: _run()
+    if bpy.app.background:
+        while _run() is not None: pass
     else: bpy.app.timers.register(_run, first_interval=1.5)  # GUI (xvfb) run: wait for the window so add-on operators get a context
