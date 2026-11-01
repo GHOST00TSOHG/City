@@ -1,0 +1,52 @@
+{
+  "id": "wars-of-america",
+  "name": "Wars of America",
+  "area": "newark",
+  "file": "wars-of-america.glb",
+  "lat": 40.7387587,
+  "lon": -74.1697587,
+  "headingDeg": 212.8,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [10184, 2688, 1140], "switchM": [150, 600] },
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "placement",
+      "source": "https://www.openstreetmap.org/node/4719897387",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "sword axis used for headingDeg",
+      "source": "https://www.openstreetmap.org/way/625105571",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "plan dimensions (42 ft by 18 ft by 17 ft) and the count of 42 figures and 2 horses",
+      "source": "https://npgallery.nps.gov/GetAsset/c9ba4252-6f30-4db4-999a-d7f8889d53bf",
+      "author": "National Register of Historic Places nomination, Wars of America (ref. 94001257)",
+      "license": "public domain"
+    },
+    {
+      "what": "sword-face and flank reference photos",
+      "source": "https://commons.wikimedia.org/wiki/File:WoA_2020a_jeh.jpg",
+      "author": "Jim.henderson",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "what": "southwestern section reference photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Warsofamernewarkjeh.JPG",
+      "author": "Jim.henderson",
+      "license": "public domain"
+    },
+    {
+      "what": "figure-group reference photos",
+      "source": "https://commons.wikimedia.org/wiki/File:Americas_Wars_Newark_NJ_1.JPG",
+      "author": "Smallbones",
+      "license": "CC0"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}

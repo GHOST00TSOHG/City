@@ -1,0 +1,40 @@
+{
+  "id": "military-park-pavilion",
+  "name": "Military Park Pavilion",
+  "area": "newark",
+  "file": "military-park-pavilion.glb",
+  "lat": 40.7391115,
+  "lon": -74.1691519,
+  "headingDeg": 223.4,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [1684, 248, 104], "switchM": [150, 600] },
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "footprint",
+      "source": "https://www.openstreetmap.org/way/511381537",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "which long wall faces the park",
+      "source": "https://www.openstreetmap.org/node/4719897387",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "2014 one-storey restaurant pavilion at the east end of the plaza",
+      "source": "https://www.h3hc.com/portfolio/newark-military-park/",
+      "author": "H3",
+      "license": "published project description"
+    },
+    {
+      "what": "massing reference beside Wars of America",
+      "source": "https://commons.wikimedia.org/wiki/File:WoA_2020b_jeh.jpg",
+      "author": "Jim.henderson",
+      "license": "CC BY-SA 4.0"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}

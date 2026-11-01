@@ -1,4 +1,4 @@
 {
   "_note": "Landmarks the game loads, per area id. Paths are public/landmarks/<area>/<slug>/manifest.json.",
-  "newark": ["cathedral-basilica-sacred-heart"]
+  "newark": ["cathedral-basilica-sacred-heart", "wars-of-america", "military-park-pavilion"]
 }
