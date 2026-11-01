@@ -9,7 +9,7 @@ export type SlotBuild = Record<Slot, string>;
 export interface Tuning { walk: number; run: number; cruise: number; burst: number; jump: number; turn: number; accel: number }
 export interface Bone { name: string; parent: string | null; pos: [number, number, number] }
 export interface TypeDef {
-  label: string; blurb: string; height: number; sole: number;
+  label: string; blurb: string; height: number; sole: number; soleZ?: number;
   slots: Record<Slot, readonly string[]>; names: Record<string, string>;
   paint: { shell: string; joints: string; torso: string; shorts: string; backpack: string; visor: string; decalColor: string };
   tune: Tuning; tris: number;
@@ -41,7 +41,7 @@ export const TYPES: Record<RobotType, TypeDef> = {
     tune: { walk: 1.15, run: 1.2, cruise: 1.15, burst: 1.2, jump: 1.12, turn: 1.3, accel: 1.3 },
   },
   heavy: {
-    label: 'Heavy', blurb: 'Siege frame. Slow, tanky, hydraulic pistons. Ground-pound (Q).', height: 2.6, sole: -0.16, tris: 30_000,
+    label: 'Heavy', blurb: 'Siege frame. Slow, tanky, hydraulic pistons. Ground-pound (Q).', height: 2.6, sole: -0.32, soleZ: 0.08, tris: 30_000,
     motion: { mass: 2.2, bob: 1.6, sway: 1.5, stride: 0.8, arms: 0.7, limp: 0, hunch: 0.12, curl: 0.45, special: 'groundpound' }, specialDur: 1.2,
     flight: { style: 'heavy', flame: 1.75, width: 1.9, core: '#fffaf0', mid: '#ffa030', edge: '#ff420a', pulse: 0, dust: 2.4, launch: 0.5, bob: 0.1, smoke: 1.4 },
     slots: { helmet: ['dome', 'slit', 'periscope'], arms: ['piledriver', 'shield', 'gatling'], bionics: ['reactor', 'plate', 'missiles'], legs: ['piston', 'reverse', 'armored'], thrusters: ['booster', 'cans', 'vectored'], boots: ['tank', 'claw', 'stomper'] },

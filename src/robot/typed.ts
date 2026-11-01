@@ -27,7 +27,7 @@ function rig(type: RobotType) {
   };
   if (TYPES[type].flight.style === 'medic') {
     noz('BackNozzle', 'Spine', 0, 0.2, -0.3, 1.35); noz('LeftPalmNozzle', 'LeftForeArm', 0, (SKEL as any)[type].hand - 0.07, 0, 0.5); noz('RightPalmNozzle', 'RightForeArm', 0, (SKEL as any)[type].hand - 0.07, 0, 0.5);
-  } else for (const s of ['Left', 'Right']) noz(s + 'FootNozzle', s + 'Foot', 0, TYPES[type].sole + 0.02, -0.03);
+  } else for (const s of ['Left', 'Right']) noz(s + 'FootNozzle', s + 'Foot', 0, TYPES[type].sole + 0.02, TYPES[type].soleZ ?? -0.03);
   const bones: Bones = {}; for (const [n, o] of by) (bones as any)[n] = o;
   const joints = [...by.values()].filter((o) => /^(Left|Right)(ForeArm|Leg|Arm)$|^Head$/.test(o.name));
   return { root, arm, by, list, nozzles, bones, joints };
