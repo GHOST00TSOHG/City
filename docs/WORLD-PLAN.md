@@ -59,3 +59,11 @@ What this means:
 - 6a: world.json places the compressed NJ layout and the Key West offset. It re-bakes shore and newark as merged extents.
 - 6b and 6c: unchanged.
 - 6d: the compressed NJ connector road plus terrain-only ocean tiles for the Key West flight. This replaces the real-length corridor.
+
+## Progress (bot/websmith-one-world)
+- [x] `tools/world/world.json`: one NJ frame centred on Twin Lights. Shore cluster at real offsets; Newark cluster shifted by (+9.0, +34.5) km so the real ~40 km becomes a **3.6 km** connector (`nj-connector`, 2-lane highway polyline, bayshore west edge → passaic east edge). Key West placed at (+9.0, -6.0) km over open water east of Sandy Hook, `flyOnly` (about 5.8 km of ocean from Sandy Hook's box). `node tools/world/check.mjs` checks no cross-cluster overlaps and that the connector ends at both areas.
+- [x] `src/world.ts`: typed accessors (`worldOffset`, `roadNeighbours`, `rebase`). Not wired into the scene yet.
+- [x] Merged bake extents in `tools/bake/areas.json`: `metro` (newark + passaic) and `shore` (bayshore + sandyhook, Sandy Hook moves 10 m → 8 m grid).
+- [x] Re-baked `metro` from fresh open data (OSM via Overpass, OpenFreeMap water, Overture 2026-10-21.0 buildings, Mapterhorn terrain z13). Licences in `public/areas/metro/attribution.json` (ODbL for OSM/Overture; Mapterhorn attribution list). 28.6k buildings, 8.3k roads, 7.1 MB area.json (2.1 MB gzip). Not loaded by the app yet; the shipped newark/passaic bakes are unchanged.
+- [ ] Re-bake `shore`: needs the gitignored private mask (`config.private.json`) on the baking machine; without it the bake is public-only (drops houses), so it was not run here.
+- [ ] Generate the connector road + low-detail terrain strip from `nj-connector` (6d), then place area groups by `worldOffset` (6a wiring), then the streamer (6b).
