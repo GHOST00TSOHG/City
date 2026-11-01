@@ -2,7 +2,9 @@
 // v1 save → v2 migration, each type in the garage then in the world (draw calls, robot tris, ground speed), type
 // switch persistence across reload, zero console errors. Screenshots: /workspace/city-shots/types-final-*.png
 import { chromium } from '@playwright/test';
-const port = process.argv[2] || '5180', out = '/workspace/city-shots/types-final';
+import fs from 'fs';
+const port = process.argv[2] || '5180', out = process.env.SHOTS || (fs.existsSync('/workspace') ? '/workspace/city-shots' : 'test-results/shots') + '/types-final';
+fs.mkdirSync(out.replace(/\/[^/]*$/, ''), { recursive: true });
 const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
 const errs = []; p.on('pageerror', (e) => errs.push('pageerror: ' + e.message)); p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
