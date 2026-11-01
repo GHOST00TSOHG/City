@@ -82,3 +82,36 @@ export function createWeatherUI(onChange: (kind: WeatherKind, intensity: number)
   slider.addEventListener('input', emit);
   return { set(k: WeatherKind, i?: number) { if (i !== undefined) slider.value = String(i); (el.querySelector(`[data-k="${k}"]`) as HTMLButtonElement | null)?.click(); } };
 }
+
+/**
+ * Weather as data. Each kind is a preset of target weights; `WeatherState` eases the live mix toward the target every frame
+ * so switches never pop, and ground wetness is a slow accumulator (soaks in under rain, dries over ~30 s after it stops,
+ * puddles last longest). Adding a kind = one entry here + whatever particle system reads its weight.
+ */
+export interface WeatherMix { rain: number; snow: number; fog: number; wet: number; snowCover: number }
+export const WEATHER_PRESETS: Record<WeatherKind, { rain: number; snow: number; fog: number }> = {
+  clear: { rain: 0, snow: 0, fog: 0 },
+  rain: { rain: 1, snow: 0, fog: 0.12 },
+  snow: { rain: 0, snow: 1, fog: 0.15 },
+  fog: { rain: 0, snow: 0, fog: 1 },
+};
+export function createWeatherState() {
+  const target = { rain: 0, snow: 0, fog: 0 };
+  const mix: WeatherMix = { rain: 0, snow: 0, fog: 0, wet: 0, snowCover: 0 };
+  let kind: WeatherKind = 'clear', k = 0.6;
+  const ease = (a: number, b: number, rate: number, dt: number) => a + (b - a) * (1 - Math.exp(-rate * dt));
+  return {
+    mix, get kind() { return kind; }, get intensity() { return k; },
+    set(next: WeatherKind, intensity: number) { kind = next; k = intensity; const p = WEATHER_PRESETS[next]; target.rain = p.rain * k; target.snow = p.snow * k; target.fog = p.fog * (next === 'fog' ? k : 1); },
+    /** Jump straight to the target (area switch / first frame / headless tests). */
+    snap() { mix.rain = target.rain; mix.snow = target.snow; mix.fog = target.fog; mix.wet = target.rain; mix.snowCover = target.snow; },
+    /** Advance dt seconds; returns true while anything is still changing (callers can skip uniform writes otherwise). */
+    tick(dt: number) {
+      const before = mix.rain + mix.snow + mix.fog + mix.wet + mix.snowCover;
+      mix.rain = ease(mix.rain, target.rain, 1.2, dt); mix.snow = ease(mix.snow, target.snow, 1.0, dt); mix.fog = ease(mix.fog, target.fog, 0.8, dt);
+      mix.wet = mix.wet < mix.rain ? ease(mix.wet, mix.rain, 0.35, dt) : ease(mix.wet, mix.rain, 0.07, dt);
+      mix.snowCover = mix.snowCover < mix.snow ? ease(mix.snowCover, mix.snow, 0.15, dt) : ease(mix.snowCover, mix.snow, 0.05, dt);
+      return Math.abs(mix.rain + mix.snow + mix.fog + mix.wet + mix.snowCover - before) > 1e-4;
+    },
+  };
+}
