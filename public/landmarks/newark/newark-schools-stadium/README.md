@@ -1,28 +1,30 @@
 # Newark Schools Stadium
 
-Exterior only. Area `newark`. Standard triangle budget. Rebuilt 2026-11-01 for the enclosure review.
+Exterior only. Area `newark`. Standard triangle budget. Rebuilt 2026-11-01. Ground level is +0.8 m.
 
-Closed bowl: a continuous ring of seats around the 400 m track, including the end zones, with one grandstand wall on the outside of that ring. An outer facade follows the OSM stadium polygon, with gate openings and the Bloomfield Avenue arch wall. The clock tower sits on that front wall, not behind it. A perimeter fence, site pad, front plaza, concourse, and a parking edge sit inside and just outside the wall. Four floodlight banks, goal posts, and a scoreboard are included. No school name or logo.
+Closed bowl: a continuous ring of seats around the 400 m track, including the end zones, with one grandstand wall on the outside of that ring. An outer facade follows the OSM stadium polygon, with gate openings and the Bloomfield Avenue arch wall. The clock tower sits on that front wall, not behind it. A perimeter fence, site pad, front plaza, concourse, and a parking edge sit inside and just outside the wall. Four floodlight banks, goal posts, a scoreboard, and a press box on the west (home) stand are included. No school name or logo.
+
+Ground level is +0.8 m above the origin. The pad, plaza, concourse, parking edge, track, and pitch all sit at or above that, and the bases of the stands, walls, fence, and tower sit on it. A solid skirt runs from that level down to y = -1.0. Where two ground sheets overlap they are at least 5 cm apart, so the surfaces do not flicker.
 
 ## Numbers
 
 | LOD | Triangles | Materials |
 |---|---|---|
-| LOD0 | 8670 | 4 (`newark-schools-stadium-main`, `emissive-windows`, `emissive-lamp`, `emissive-sign`) |
-| LOD1 | 5034 | 4, same textures, same heights |
-| LOD2 | 2572 | 4, same textures, same heights |
+| LOD0 | 8736 | 4 (`newark-schools-stadium-main`, `emissive-windows`, `emissive-lamp`, `emissive-sign`) |
+| LOD1 | 5116 | 4, same textures, same heights |
+| LOD2 | 2654 | 4, same textures, same heights |
 
-Stand top is 7.68 m on every LOD. Window bands stay at 1.55–3.35 m and 4.15–5.50 m. Arch crowns stay at 9.14 m. Light heads stay at 24 m. There is no second slab on the west stand deck.
+Ground level is +0.8 m. Stand top is 8.48 m on every LOD. Window bands stay at 2.35–4.15 m and 4.95–6.30 m. Arch crowns stay at 9.94 m. Light heads stay near 24.8 m. The press box is the same on every LOD: floor 8.53 m, sill 9.43 m, head 10.58 m, roof 11.38 m, on the west stand, with framed glass on `emissive-windows`. There is no second slab on the west stand deck.
 
-`newark-schools-stadium_COL` sits under LOD0: 36 triangles, no material. Do not draw it.
+`newark-schools-stadium_COL` sits under LOD0: 436 triangles, no material. Do not draw it. The boxes follow the seat ring, the outer wall, the arch wall, the clock tower, the support building, and the press box. Their floors are at y = 0. The pitch and the track are open. The old 176 × 193 × 7.7 m box is gone.
 
 Textures: one 2048 atlas (baseColor, normal, ORM) plus one 1024 window image used as baseColor and emissive. LOD1 and LOD2 reuse them. KTX2 in the glb: ETC1S on baseColor, ORM, and the window image. UASTC on the normal. ORM is occlusion in R, roughness in G, metal in B. No baked daylight or shadows.
 
-Files: `.glb` 0.76 MB (782 KB), `.blend` 0.37 MB (377 KB). Source PNGs are in `art/landmarks/newark/newark-schools-stadium/textures/`.
+Files: `.glb` 0.77 MB (790 KB), `.blend` 0.38 MB (386 KB). Source PNGs are in `art/landmarks/newark/newark-schools-stadium/textures/`.
 
 Nodes: `newark-schools-stadium_LOD0`, `_LOD1`, `_LOD2`. Children `body-lodN`, `windows-lodN`, `lamps-lodN`, `scoreboard-lodN`. Collision is `newark-schools-stadium_COL`.
 
-Window, lamp, and sign emission strength in the glb is 0.45.
+Lamp and sign emission in the glb is 0.90 (twice the previous 0.45), baked into the emissive factor. Window emission stays 0.45.
 
 The glb is `uastc` on the normal slot, `etc1s` on baseColor, ORM, and emissive, then `meshopt`. `join` is not used, so the LOD nodes stay separate.
 
