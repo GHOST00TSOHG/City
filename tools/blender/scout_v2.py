@@ -16,18 +16,49 @@ FAST = '--fast' in argv
 OUT = '/workspace/robot-renders/' + next((a.split('=')[1] for a in argv if a.startswith('--out=')), 'scout-v2b.png')
 TAU = math.tau
 
+def _wear(m, b, col, rough):
+    """Render-side weathering: edge wear (bevel-normal vs normal -> bare metal on edges), panel-line grooves
+    (voronoi distance-to-edge in object space, darkened + bumped in), low-frequency grime."""
+    nt = m.node_tree; N = nt.nodes; Lk = nt.links.new
+    tc = N.new('ShaderNodeTexCoord')
+    bev = N.new('ShaderNodeBevel'); bev.inputs['Radius'].default_value = 0.004
+    geo = N.new('ShaderNodeNewGeometry'); dot = N.new('ShaderNodeVectorMath'); dot.operation = 'DOT_PRODUCT'
+    Lk(bev.outputs['Normal'], dot.inputs[0]); Lk(geo.outputs['Normal'], dot.inputs[1])
+    nz = N.new('ShaderNodeTexNoise'); nz.inputs['Scale'].default_value = 60; nz.inputs['Detail'].default_value = 6; Lk(tc.outputs['Object'], nz.inputs['Vector'])
+    edge = N.new('ShaderNodeMath'); edge.operation = 'SUBTRACT'; edge.inputs[0].default_value = 1; Lk(dot.outputs['Value'], edge.inputs[1])
+    em = N.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; Lk(edge.outputs[0], em.inputs[0]); Lk(nz.outputs['Fac'], em.inputs[1])
+    ew = N.new('ShaderNodeMapRange'); ew.inputs['From Min'].default_value = 0.02; ew.inputs['From Max'].default_value = 0.06; Lk(em.outputs[0], ew.inputs['Value'])
+    sep = N.new('ShaderNodeSeparateXYZ'); Lk(tc.outputs['Object'], sep.inputs[0])
+    def _line(sock, sc):  # 0 on a thin straight groove every 1/sc metres, 1 elsewhere
+        mu = N.new('ShaderNodeMath'); mu.operation = 'MULTIPLY'; mu.inputs[1].default_value = sc; Lk(sock, mu.inputs[0])
+        fr = N.new('ShaderNodeMath'); fr.operation = 'FRACT'; Lk(mu.outputs[0], fr.inputs[0])
+        d = N.new('ShaderNodeMath'); d.operation = 'SUBTRACT'; d.inputs[1].default_value = 0.5; Lk(fr.outputs[0], d.inputs[0])
+        ab = N.new('ShaderNodeMath'); ab.operation = 'ABSOLUTE'; Lk(d.outputs[0], ab.inputs[0])
+        mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.49; mr.inputs['From Max'].default_value = 0.475; Lk(ab.outputs[0], mr.inputs['Value'])
+        return mr.outputs['Result']
+    pl = N.new('ShaderNodeMath'); pl.operation = 'MINIMUM'; Lk(_line(sep.outputs['Z'], 7.0), pl.inputs[0]); Lk(_line(sep.outputs['X'], 5.0), pl.inputs[1])
+    gr = N.new('ShaderNodeTexNoise'); gr.inputs['Scale'].default_value = 3; Lk(tc.outputs['Object'], gr.inputs['Vector'])
+    base = N.new('ShaderNodeMix'); base.data_type = 'RGBA'; base.inputs['A'].default_value = (*col, 1); base.inputs['B'].default_value = (col[0] * 0.7, col[1] * 0.7, col[2] * 0.68, 1)
+    Lk(gr.outputs['Fac'], base.inputs['Factor'])
+    groove = N.new('ShaderNodeMix'); groove.data_type = 'RGBA'; groove.inputs['A'].default_value = (0.02, 0.02, 0.022, 1); Lk(base.outputs['Result'], groove.inputs['B']); Lk(pl.outputs[0], groove.inputs['Factor'])
+    worn = N.new('ShaderNodeMix'); worn.data_type = 'RGBA'; Lk(groove.outputs['Result'], worn.inputs['A']); worn.inputs['B'].default_value = (0.55, 0.55, 0.56, 1); Lk(ew.outputs['Result'], worn.inputs['Factor'])
+    Lk(worn.outputs['Result'], b.inputs['Base Color'])
+    met = N.new('ShaderNodeMath'); met.operation = 'MULTIPLY'; met.inputs[1].default_value = 0.9; Lk(ew.outputs['Result'], met.inputs[0]); Lk(met.outputs[0], b.inputs['Metallic'])
+    bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.6; bump.inputs['Distance'].default_value = 0.002; Lk(pl.outputs[0], bump.inputs['Height']); Lk(bump.outputs['Normal'], b.inputs['Normal'])
+
 # ------------------------------------------------------------------ materials (Gundam tricolour, scout flavour)
-def mat(name, col, rough=0.35, metal=0.0, emit=None, strength=6):
+def mat(name, col, rough=0.35, metal=0.0, emit=None, strength=6, wear=False):
     m = bpy.data.materials.get(name) or bpy.data.materials.new(name); m.use_nodes = True
     b = m.node_tree.nodes['Principled BSDF']
     b.inputs['Base Color'].default_value = (*col, 1); b.inputs['Roughness'].default_value = rough; b.inputs['Metallic'].default_value = metal
-    b.inputs['Coat Weight'].default_value = 0.25 if metal < 0.5 else 0.0
+    b.inputs['Coat Weight'].default_value = 0.06 if metal < 0.5 else 0.0
+    if wear: _wear(m, b, col, rough)
     if emit: b.inputs['Emission Color'].default_value = (*emit, 1); b.inputs['Emission Strength'].default_value = strength
     return m
-WHITE = mat('armor_white', (0.56, 0.58, 0.61), 0.34)
-BLUE = mat('armor_blue', (0.008, 0.03, 0.16), 0.30)
-RED = mat('armor_red', (0.42, 0.01, 0.012), 0.32)
-YEL = mat('armor_yellow', (0.75, 0.42, 0.02), 0.30)
+WHITE = mat('armor_white', (0.43, 0.44, 0.45), 0.52, wear=True)
+BLUE = mat('armor_blue', (0.008, 0.03, 0.14), 0.45, wear=True)
+RED = mat('armor_red', (0.36, 0.01, 0.012), 0.45, wear=True)
+YEL = mat('armor_yellow', (0.62, 0.34, 0.02), 0.45, wear=True)
 FRAME = mat('frame', (0.05, 0.055, 0.065), 0.45, 0.85)
 STEEL = mat('steel', (0.45, 0.46, 0.48), 0.22, 1.0)
 SCREEN = mat('screen', (0.0, 0.02, 0.03), 0.15, 0.0, (0.1, 0.85, 1.0), 9)
@@ -148,35 +179,41 @@ def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digi
     # wrist guard: armoured cuff closing the forearm-to-hand gap, flared plate over the back of the wrist
     out.append(cyl(f'wrist_guard_{side}', wr - fwd * 0.05 * k, wr + fwd * 0.004 * k, 0.036 * k * thick, armor_m, n=20))
     out.append(_box(f'wrist_plate_{side}', wr + fwd * 0.012 * k - pn * 0.03 * k * thick, (ts, pn, fwd), (0.036 * k * thick, 0.006 * k, 0.026 * k), armor_m))
-    W = 0.042 * k * thick; T = 0.016 * k; L = 0.075 * k
+    # solid armoured palm block, back-of-hand plate, knuckle bar (scaled so wrist->fingertip ~ head height)
+    W = 0.046 * k * thick; T = 0.021 * k; L = 0.07 * k
     pc = wr + fwd * (0.02 * k + L / 2)
-    out.append(_box(f'palm_{side}', pc, (ts, pn, fwd), (W, T, L / 2), digit_m))
-    # back-of-hand armor + knuckle plate on the outer face, overlapping the finger bases
-    out.append(_box(f'handguard_{side}', pc - pn * (T + 0.004 * k) - fwd * 0.004 * k, (ts, pn, fwd), (W * 1.08, 0.006 * k, L * 0.46), armor_m))
-    kc = wr + fwd * (0.02 * k + L + 0.004 * k) - pn * (T * 0.4)
-    out.append(_box(f'knuckle_plate_{side}', kc - pn * 0.006 * k, (ts, pn, fwd), (W * 1.04, T * 0.9, 0.016 * k), armor_m))
-    if fingers == 3: offs = [-0.6, 0.6]; seg = [0.042, 0.034, 0.03]; rad = 0.015 * thick
-    else: offs = [-0.78, -0.26, 0.26, 0.78]; seg = [0.032, 0.025, 0.02]; rad = 0.0085 * thick
-    digits = [(wr + fwd * (0.02 * k + L) + ts * (-o_) * W * 0.95, fwd, False) for o_ in offs]   # index nearest thumb
-    # thenar mound on the palm's inner face at the thumb edge, thumb rising from it, opposed toward the palm
-    mc = pc + fwd * L * 0.05 + ts * W * 0.72 + pn * T * 0.8
-    mo = _box(f'thumb_mound_{side}', mc, (ts, pn, fwd), (W * 0.36, T * 0.8, L * 0.34), digit_m, bev=0.45)
-    out.append(mo)
-    # thumb runs down beside the index finger and turns in across the palm (opposition), never out past the hand
-    tdir = (fwd * 0.82 + ts * 0.18 + pn * 0.55).normalized()
-    digits.append((mc + ts * W * 0.22 + fwd * L * 0.22 + pn * T * 0.2, tdir, True))
-    for i, (b, d, thumb) in enumerate(digits):
-        for j, Ls in enumerate(seg):
+    out.append(_box(f'palm_{side}', pc, (ts, pn, fwd), (W, T, L / 2), digit_m, bev=0.18))
+    out.append(_box(f'handguard_{side}', pc - pn * (T + 0.003 * k) - fwd * 0.006 * k, (ts, pn, fwd), (W * 0.96, 0.007 * k, L * 0.42), armor_m, bev=0.5))
+    for g in (-0.35, 0.35):  # panel-line grooves across the back plate
+        out.append(_box(f'handguard_groove_{side}_{g}', pc - pn * (T + 0.0102 * k) + fwd * L * g * 0.6, (ts, pn, fwd), (W * 0.9, 0.0012 * k, 0.0012 * k), FRAME, bev=0.1))
+    kc = wr + fwd * (0.02 * k + L - 0.002 * k) - pn * (T * 0.55)
+    out.append(_box(f'knuckle_plate_{side}', kc, (ts, pn, fwd), (W * 1.02, T * 0.6, 0.011 * k), armor_m, bev=0.4))
+    if fingers == 3: offs = [-0.6, 0.6]; seg = [0.042, 0.034, 0.03]; fw = W * 0.34
+    else: offs = [-0.75, -0.25, 0.25, 0.75]; seg = [0.034, 0.026, 0.021]; fw = W * 0.2
+    fh = T * 0.72
+    digits = [(wr + fwd * (0.02 * k + L) + ts * (-o_) * W * 0.98 + pn * T * 0.1, fwd, False, fw * (1.0 if abs(o_) < 0.5 else 0.92)) for o_ in offs]
+    # thenar mound on the inner face at the thumb edge; thumb opposes across the palm
+    mc = pc - fwd * L * 0.05 + ts * W * 0.78 + pn * T * 0.55
+    out.append(_box(f'thumb_mound_{side}', mc, (ts, pn, fwd), (W * 0.34, T * 0.85, L * 0.36), digit_m, bev=0.4))
+    tdir = (fwd * 0.7 + ts * 0.35 + pn * 0.62).normalized()
+    digits.append((mc + ts * W * 0.28 + fwd * L * 0.2 + pn * T * 0.2, tdir, True, fw * 1.15))
+    for i, (b, d, thumb, w0) in enumerate(digits):
+        side_ax = ts if not thumb else (ts - tdir * ts.dot(tdir)).normalized()
+        for j, Ls in enumerate(seg[1:] if thumb else seg):
             fi = 9 if thumb else i; bone(f'{S_}F{fi}_{j}'); J[f'{S_}F{fi}_{j}'] = b.copy()
-            if j or thumb:
-                ax = d.cross(pn)
-                if ax.length > 1e-4: d = (Quaternion_axis(ax.normalized(), -curl * (0.6 if thumb else 1.0)) @ d).normalized()
-            Lj = Ls * k * (0.85 if thumb else 1.0)
-            e2 = b + d * Lj
-            out.append(cyl(f'hand_{side}_f{i}_{j}', b, e2, rad * k * (1 - 0.12 * j), digit_m if j < 2 else armor_m, n=8))
-            bpy.ops.mesh.primitive_uv_sphere_add(radius=rad * k * 1.12, location=b, segments=10, ring_count=6)
-            kn = bpy.context.active_object; kn.name = f'knuckle_{side}_{i}_{j}'; kn.data.materials.append(STEEL); ALL.append(kn); out.append(kn)
-            b = e2
+            ang = curl * (0.45 if j == 0 else 1.0) * (0.7 if thumb else 1.0)
+            ax = d.cross(pn)
+            if ax.length > 1e-4: d = (Quaternion_axis(ax.normalized(), -ang) @ d).normalized()
+            Lj = Ls * k * (1.25 if thumb else 1.0)
+            tp = 1 - 0.13 * j; c = b + d * Lj / 2
+            up_ = (d.cross(side_ax)).normalized()
+            if up_.dot(pn) < 0: up_ = -up_
+            last = j == (1 if thumb else 2)
+            out.append(_box(f'hand_{side}_f{i}_{j}', c, (side_ax, up_, d), (w0 * tp, fh * tp, Lj / 2 * 0.93), armor_m if last else digit_m, bev=0.55 if last else 0.3))
+            if not last:  # armoured knuckle plate on the back of each lower segment
+                out.append(_box(f'hand_{side}_kp{i}_{j}', c - up_ * fh * tp * 1.05 - d * Lj * 0.08, (side_ax, up_, d), (w0 * tp * 1.06, 0.0035 * k, Lj / 2 * 0.62), armor_m, bev=0.5))
+            out.append(cyl(f'hand_{side}_pin{i}_{j}', b - side_ax * w0 * tp * 1.02, b + side_ax * w0 * tp * 1.02, fh * tp * 0.62, STEEL, n=10))
+            b = b + d * Lj
     bone(_b0)
     return out
 
@@ -210,7 +247,14 @@ def build():
     for s_ in (1, -1):  # front skirt flaps over each thigh
         fl = loft(f'skirt_flap_{s_}', [(0, 0, 0, 0.075, 0.015), (0.10, 0, 0, 0.07, 0.014), (0.16, 0, 0.006, 0.055, 0.01)], WHITE, e=3.6)
         place(fl, V((0.085 * s_, -0.15, 1.03)), V((0.10 * s_, -0.20, 0.86))); 
-        tr = loft(f'skirt_flap_trim_{s_}', [(0, 0, 0, 0.06, 0.006), (0.12, 0, 0, 0.05, 0.005)], YEL, e=4); place(tr, V((0.085 * s_, -0.168, 1.01)), V((0.10 * s_, -0.215, 0.875)))
+        # yellow panel sits in a dark recess frame (not a sticker): frame lip, bevelled inset panel, two panel-line grooves
+        fr = loft(f'skirt_flap_recess_{s_}', [(0, 0, 0, 0.066, 0.006), (0.13, 0, 0, 0.056, 0.005)], FRAME, e=4, armor=False); place(fr, V((0.085 * s_, -0.163, 1.015)), V((0.10 * s_, -0.21, 0.87)))
+        tr = loft(f'skirt_flap_trim_{s_}', [(0, 0, 0, 0.055, 0.007), (0.115, 0, 0, 0.046, 0.006)], YEL, e=2.6); place(tr, V((0.085 * s_, -0.17, 1.008)), V((0.10 * s_, -0.216, 0.879)))
+        bv_ = tr.modifiers.new('bv', 'BEVEL'); bv_.width = 0.003; bv_.segments = 2
+        for gz, gw in ((0.97, 0.05), (0.925, 0.045)):
+            t_ = (1.008 - gz) / 0.129
+            gp = V((0.085 * s_, -0.17, 1.008)).lerp(V((0.10 * s_, -0.216, 0.879)), t_) + V((0, -0.0072, 0))
+            cyl(f'skirt_flap_groove_{s_}_{gz}', gp - V((gw, 0, 0)), gp + V((gw, 0, 0)), 0.0016, FRAME, n=6)
     bone('Spine')
     # --- upper body, leaning forward ~9 deg about the hips
     up = []
@@ -259,7 +303,7 @@ def build():
     arm.append(joint('elbow_L', el, (1, 0, 0), 0.04, 0.07))
     f = loft('forearm_armor_L', [(0, 0, 0, 0.05, 0.05), (0.06, 0, 0.0, 0.068, 0.066), (0.17, 0, 0.0, 0.074, 0.07), (0.25, 0, 0, 0.05, 0.05)], WHITE, n=8, e=2.0); place(f, el, wr); arm.append(f)
     fg = loft('forearm_guard_L', [(0.03, 0, 0, 0.074, 0.072), (0.16, 0, 0, 0.08, 0.078), (0.21, 0, 0, 0.07, 0.068)], BLUE, n=4, e=2.0, arc=(-0.9, 0.9), thick=0.018); place(fg, el, wr); arm.append(fg)
-    arm += build_hand('L', wr, (wr - el).normalized(), fingers=5, size=1.7, curl=0.35)
+    arm += build_hand('L', wr, (wr - el).normalized(), fingers=5, size=1.2, curl=0.42)
     arm = [a for a in arm if a] + [o for o in ALL if o.name.startswith(('shoulder_L', 'elbow_L'))]
     arm = list(dict.fromkeys(arm))
     up += arm + mirror(arm)
@@ -477,7 +521,9 @@ def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); scout_variants(); yield 0.1
     if '--closeup' in argv:
-        render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.12, 0.92), dist=1.6, lens=60); return
+        render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.12, 0.92), dist=1.6, lens=60)
+        if '--with34' in argv: render(OUT.replace('.png', '-34.png'), setup=False)
+        return
     if '--skel' in argv:
         import v2export as X; X.JOV = J; X.write_skeleton('scout', [o for o in bpy.data.objects if o.type == 'MESH']); return
     yield from addon_pass()
