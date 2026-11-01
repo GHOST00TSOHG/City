@@ -310,6 +310,14 @@ def slope(acc, a0, a1, b1, b0, region, tile, hint=(0, 0, 1)):
     nu = max(1, int(round(vlen(vsub(a1, a0)) / tile)))
     nv = max(1, int(round(vlen(vsub(b0, a0)) / tile)))
     add_grid(acc, a0, a1, b1, b0, nu, nv, region, hint)
+    # Underside (soffit). Roof sheets overhang the walls; with back faces culled
+    # their eaves and rakes read as black or see-through slots from below.
+    n = _normal(a0, a1, b1)
+    if n is not None:
+        if vdot(n, hint) < 0:
+            n = vscale(n, -1)
+        d = vscale(n, -0.05)  # sit just under the sheet so the two never z-fight
+        add_quad(acc, vadd(a0, d), vadd(a1, d), vadd(b1, d), vadd(b0, d), ST, vscale(hint, -1))
 
 
 def arch_profile(width, n):
@@ -1612,11 +1620,11 @@ def build_scene():
         if img.name in ("Render Result", "Viewer Node"):
             bpy.data.images.remove(img)
 
-    blend_path = os.path.join(root, f"{SLUG}.blend")
-    bpy.ops.wm.save_as_mainfile(filepath=blend_path, compress=True)
-    bpy.ops.file.make_paths_relative()
-    bpy.ops.wm.save_mainfile(compress=True)
-    print("blend", blend_path)
+    # No .blend in the repo (project rule). Set CATHEDRAL_BLEND=/path.blend to save one elsewhere.
+    blend_path = os.environ.get("CATHEDRAL_BLEND")
+    if blend_path:
+        bpy.ops.wm.save_as_mainfile(filepath=blend_path, compress=True, copy=True)
+        print("blend", blend_path)
     for img in bpy.data.images:
         print(" image", img.name, img.filepath)
 
@@ -1688,7 +1696,7 @@ def make_main_material(tex):
     mat = bpy.data.materials.new(MAIN_MAT)
     mat.use_nodes = True
     try:
-        mat.use_backface_culling = True
+        mat.use_backface_culling = False  # solid from every side, no see-through seams
     except Exception:
         pass
     nt = mat.node_tree
@@ -1775,7 +1783,7 @@ def make_metal_material(tex):
     mat = bpy.data.materials.new(f"{SLUG}-metal")
     mat.use_nodes = True
     try:
-        mat.use_backface_culling = True
+        mat.use_backface_culling = False  # copper caps and fascias solid from below
     except Exception:
         pass
     nt = mat.node_tree
