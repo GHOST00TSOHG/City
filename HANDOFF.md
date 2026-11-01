@@ -201,3 +201,10 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Tris: 26,460 for the cubes plus 3,731 for the kit, 30.2k in total. The test counts 36.7k because it includes the 320-cube cloud and the 256-slot burst capacity.
 - TYPES=glitch: all PASS, all 7 colours ok, 0 console errors, 49 draw calls in the garage and 43 in the world.
 - Fix: v2export now updates the view layer after creating each bone empty. Before this, freshly created empties had an identity matrix_world, so parts got world-space locals and floated off the body.
+
+## Glitch v5b
+- Slim, lean body: torso/pelvis lofts x0.72/y0.82, legs ~0.7, arms ~0.8, machinery shrunk to match.
+- Fade-away: DROP torso 0.46 / leg 0.5 / foot 0.34 plus chest-side/back extra; 10% of non-head cubes peel off (lifted along normal, tumbled).
+- Smaller body cubes (0.021–0.028). Emitters across the whole body; runtime cloud 520 instances (1 draw), drifting away from the body axis (head points from head centre).
+- v2export: parts < 80 tris or `_keep` are never decimated, which fixes the missing in-game face.
+- Budget: 19,644 cube tris + 10,092 kit tris = 29.7k. TYPES=glitch passes 8/8 (49/43 calls). Front garage proof: city-shots/glitch-front-a.png.
