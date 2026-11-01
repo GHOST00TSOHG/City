@@ -240,6 +240,18 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         else touchDown();
       }
       pos.y = Math.min(pos.y, 3000);
+      const hAbove = pos.y - floor.y, voxT = landKind === 'voxel' && ((mode === 'SKYDIVING' && hAbove < 1.7 && vel.y < -3) || (mode === 'LAND' && landActive === 'voxel' && landT < 0.18)) ? 1 : 0;
+      vox += (voxT - vox) * (1 - Math.exp(-dt * (voxT > vox ? 16 : 6)));
+      if (specialT >= 0) {
+        const p0 = specialT; specialT += dt;
+        if (specialKind === 'groundpound') { vel.x *= 0.5; vel.z *= 0.5; if (p0 < 0.47 && specialT >= 0.47) { onSpecial?.(specialKind, 'hit', pos); onImpact?.(pos, 1.2); } }
+        if (specialKind === 'blinkdash' && specialT > 0.12 && p0 < 0.3) { // ~7 m blink along the heading, stopped by walls
+          const step = 40 * Math.min(dt, 0.3 - Math.max(p0, 0.12)), nx = pos.x + Math.sin(heading) * step, nz = pos.z + Math.cos(heading) * step;
+          if (!world.blocked(nx, nz, pos.y + 1)) { pos.x = nx; pos.z = nz; }
+        }
+        if (specialKind === 'blinkdash' && p0 < 0.42 && specialT >= 0.42) onSpecial?.(specialKind, 'hit', pos);
+        if (specialT > specialDur) { specialT = -1; onSpecial?.(specialKind, 'end', pos); }
+      }
   }
   function present(a: number, dt: number) {
       ipos.lerpVectors(pPos, pos, a); const iHead = pHead + angDiff(heading, pHead) * a, iLean = pLean + (lean - pLean) * a, iBank = pBank + (bank - pBank) * a;
@@ -255,19 +267,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if (ballT > 0.02) { // rolling ball: rotate about the body centre, not the feet
         qBall.setFromAxisAngle(X, ballAng); r.quaternion.copy(qYaw).multiply(qBall); const bs = Math.max(0, Math.min(1, (ballT - 0.3) / 0.7)), rc = 0.62 * bs * bs * (3 - 2 * bs); tmpV.set(0, rc, 0).applyQuaternion(r.quaternion); r.position.set(ipos.x, ipos.y + rc, ipos.z).sub(tmpV);
       }
-      const hAbove = pos.y - floor.y, voxT = landKind === 'voxel' && ((mode === 'SKYDIVING' && hAbove < 1.7 && vel.y < -3) || (mode === 'LAND' && landActive === 'voxel' && landT < 0.18)) ? 1 : 0;
-      vox += (voxT - vox) * (1 - Math.exp(-dt * (voxT > vox ? 16 : 6)));
       const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
-      if (specialT >= 0) {
-        const p0 = specialT; specialT += dt;
-        if (specialKind === 'groundpound') { vel.x *= 0.5; vel.z *= 0.5; if (p0 < 0.47 && specialT >= 0.47) { onSpecial?.(specialKind, 'hit', pos); onImpact?.(pos, 1.2); } }
-        if (specialKind === 'blinkdash' && specialT > 0.12 && p0 < 0.3) { // ~7 m blink along the heading, stopped by walls
-          const step = 40 * Math.min(dt, 0.3 - Math.max(p0, 0.12)), nx = pos.x + Math.sin(heading) * step, nz = pos.z + Math.cos(heading) * step;
-          if (!world.blocked(nx, nz, pos.y + 1)) { pos.x = nx; pos.z = nz; r.position.copy(pos); }
-        }
-        if (specialKind === 'blinkdash' && p0 < 0.42 && specialT >= 0.42) onSpecial?.(specialKind, 'hit', pos);
-        if (specialT > specialDur) { specialT = -1; onSpecial?.(specialKind, 'end', pos); }
-      }
       model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn,
         launch: launchT >= 0 ? Math.min(1, launchT / Math.max(0.01, launchDur)) : 0, flyT, thrust: power,
         gs: Math.hypot(vel.x, vel.z), form: ballT, cloud: cloudW, slide: slideW, vox,
