@@ -1,0 +1,42 @@
+[
+ {
+  "id": "run_a",
+  "src": "09_01.bvh",
+  "kind": "bvh",
+  "loop": true,
+  "minP": 0.4,
+  "maxP": 1.0
+ },
+ {
+  "id": "jog_a",
+  "src": "16_35.bvh",
+  "kind": "bvh",
+  "loop": true,
+  "minP": 0.45,
+  "maxP": 1.2
+ },
+ {
+  "id": "walk_a",
+  "src": "Swagger Walk.fbx",
+  "kind": "fbx",
+  "loop": true,
+  "t0": 0,
+  "minP": 0.9,
+  "maxP": 2.7
+ },
+ {
+  "id": "jump_a",
+  "src": "16_05.bvh",
+  "kind": "bvh",
+  "ref": "first"
+ },
+ {
+  "id": "idle_a",
+  "src": "Warrior Idle.fbx",
+  "kind": "fbx",
+  "loop": true,
+  "t0": 0,
+  "minP": 3.0,
+  "maxP": 8.0
+ }
+]

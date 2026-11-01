@@ -36,7 +36,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   const aQ = instancedBufferAttribute(bQ, 'vec4') as any, aSeed = instancedBufferAttribute(bSeed, 'float') as any;
   const boneMats = boneNames.map(() => new THREE.Matrix4()), uBones = uniformArray(boneMats, 'mat4');
   const vis = data.parts.map(() => 1), uVis = uniformArray(vis, 'float');
-  const uFly = uniform(0), uDash = uniform(0), uBurst = uniform(0), uMosh = uniform(0), uCenter = uniform(new THREE.Vector3(0, 1.3, 0));
+  const uFly = uniform(0), uRain = uniform(0), uCloud = uniform(0), uDash = uniform(0), uBurst = uniform(0), uMosh = uniform(0), uCenter = uniform(new THREE.Vector3(0, 1.3, 0));
   const uWhite = uniform(new THREE.Color()), uGrey = uniform(new THREE.Color()), uGlow = uniform(new THREE.Color()), uPart = uniform(new THREE.Color());
   const cat = aDim.w.mod(4), part = floor(aDim.w.div(4)), seed = aSeed;
 
@@ -57,7 +57,11 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
     p.addAssign(normalize(home.sub(uCenter)).mul(loose.mul(sin(time.mul(3).add(seed.mul(30))).mul(0.03).add(0.05))));
     // blink-dash dissolve: cubes blow outward + swirl, reassemble when uDash falls
     const dir = normalize(home.sub(uCenter).add(vec3(hash(seed.add(4)).sub(0.5), hash(seed.add(5)).sub(0.5), hash(seed.add(6)).sub(0.5)).mul(1.2)));
-    p.addAssign(dir.mul(uDash.mul(hash(seed.add(7)).mul(2.2).add(0.4))));
+    p.addAssign(dir.mul(uDash.mul(hash(seed.add(7)).mul(2.2).add(0.4)).mul(float(1).sub(uRain.mul(0.75)))));
+    // running: a calm floating cloud (slow sinusoidal drift around home, a little lift and trail), no glitching
+    { const cs = hash(seed.add(31)), ph = seed.mul(40); p.addAssign(vec3(sin(time.mul(0.9).add(ph)).mul(0.09), sin(time.mul(0.7).add(ph.mul(1.7))).mul(0.1).add(cs.mul(0.14)), sin(time.mul(0.8).add(ph.mul(2.3))).mul(0.09).sub(cs.mul(0.3))).mul(uCloud)); }
+    // landing: the voxels rain down to the ground (never below the floor plane), then reform
+    p.addAssign(vec3(0, uRain.mul(hash(seed.add(21)).mul(1.5).add(0.3)).negate(), 0)); p.assign(vec3(p.x, max(p.y, 0.02), p.z));
     p.addAssign(dir.mul(max(float(0), energy.sub(1.2)).mul(seed.mul(0.08).add(0.01))));
     // rare datamosh: small blocks of cubes step out and snap back
     const tq = floor(time.mul(12)), hm = hash(floor(seed.mul(60)).add(tq.mul(3.1)));
@@ -67,7 +71,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   const grey = cat.greaterThan(0.5), vary = hash(seed.add(9)).mul(0.14).add(0.9), dmg = float(1).sub(damage.mul(0.3));
   mat.colorNode = grey.select(uGrey, uWhite).mul(vary).mul(dmg);
   // night readability: a faint self-lit share of the skin colour keeps the solid body legible against dark streets
-  mat.emissiveNode = (mat.colorNode as any).mul(0.3).add(uGlow.mul(uBurst.mul(2.5).add(uDash.mul(1.2)).add(uFly.mul(0.35))));
+  mat.emissiveNode = (mat.colorNode as any).mul(0.3).add(uGlow.mul(uCloud.mul(0.22))).add(uGlow.mul(uBurst.mul(2.5).add(uDash.mul(1.2)).add(uFly.mul(0.35))));
   Object.assign(mat.userData, { uWhite, uGrey, uGlow });
   const body = new THREE.InstancedMesh(BOX, mat, n); body.name = 'glitch:cubes';
 
@@ -117,10 +121,11 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       pVel.set([S3.x, S3.y, S3.z], i * 3); pLife[i] = pMax[i] = life * (0.6 + Math.random() * 0.6);
     }
   };
-  let visN = n, dashPrev = 0, wasDash = false, moshT = 0, trailAcc = 0;
+  let voxPrev = 0, cloudPrev = 0, uCloudOn = false; let visN = n, dashPrev = 0, wasDash = false, moshT = 0, trailAcc = 0;
   const lastRoot = new THREE.Vector3(), curRoot = new THREE.Vector3();
   return {
-    meshes: [body, cloud, particles], count: n, uniforms: { uDash, uBurst, uMosh, uFly },
+    get cloudOn() { return uCloudOn; },
+    meshes: [body, cloud, particles], count: n, uniforms: { uDash, uBurst, uMosh, uFly, uRain, uCloud },
     setLook(look: RobotLook) {
       data.parts.forEach((p, k) => (vis[k] = p.slot === 'body' || (look as any)[p.slot] === p.opt ? 1 : 0));
       const idx: number[] = []; all.forEach((a, i) => vis[a.pi] && idx.push(i));
@@ -138,8 +143,12 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       uCenter.value.set(0, 0, 0).applyMatrix4(boneMats[Math.max(0, boneNames.indexOf('Spine'))]);
       // blink-dash timeline (seconds since trigger): dissolve 0-0.12, travel, reassemble 0.3-0.5 with a burst at 0.42
       const sp = s.special ?? 0, dash = sp > 0 && sp < 0.6;
-      const want = !dash ? 0 : sp < 0.12 ? sp / 0.12 : sp < 0.3 ? 1 : Math.max(0, 1 - (sp - 0.3) / 0.14);
-      uDash.value = want;
+      const vx = s.vox ?? 0;
+      // vox (landing): dissolve a few feet up, rain, reform on the ground
+      const want = Math.max(!dash ? 0 : sp < 0.12 ? sp / 0.12 : sp < 0.3 ? 1 : Math.max(0, 1 - (sp - 0.3) / 0.14), vx * 0.9);
+      uDash.value = want; uRain.value = vx; const cl = s.cloud ?? 0; uCloud.value = cl; if (cloudPrev > 0.5 && cl <= 0.5) { emit(90, 2.2, 0.5); uBurst.value = Math.max(uBurst.value, 0.6); } cloudPrev = cl; uCloudOn = cl > 0.55;
+      if (voxPrev > 0.5 && vx <= 0.5) { emit(170, 4.5, 0.65); uBurst.value = 1; } // reform on the ground with a violet pulse
+      voxPrev = vx;
       if (dash && !wasDash) emit(140, 2.5, 0.7);
       if (dash && sp >= 0.42 && dashPrev < 0.42) { emit(170, 5, 0.6); uBurst.value = 1; }
       wasDash = dash; dashPrev = sp;
@@ -151,9 +160,9 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       // (the sole exhaust is the voxel-cube plume in thrust.ts)
       uBurst.value *= Math.exp(-dt * 6);
       moshT -= dt; if (moshT < 0) { moshT = 0.3 + Math.random() * 2; uMosh.value = Math.random() < 0.25 ? 0.5 + Math.random() * 0.5 : 0.02; }
-      uMosh.value = Math.max(uMosh.value * Math.exp(-dt * 3), (s.damage ?? 0) * 0.5, want, uFly.value * 0.3);
+      uMosh.value = Math.max(uMosh.value * Math.exp(-dt * 3), (s.damage ?? 0) * 0.5, want, uFly.value * 0.3) * (1 - (s.cloud ?? 0) * 0.9);
       curRoot.setFromMatrixPosition(root.matrixWorld); const moved = curRoot.distanceTo(lastRoot); lastRoot.copy(curRoot);
-      if (moved < 5) { trailAcc += moved * 10 + (dash ? dt * 400 : 0); }
+      if (moved < 5) { trailAcc += (moved * 10 + (dash ? dt * 400 : 0)) * (1 - (s.cloud ?? 0) * 0.85); }
       while (trailAcc > 1) { trailAcc -= 1; emit(1, 0.25, 0.45); }
       const pc = uPart.value as THREE.Color;
       for (let i = 0; i < PN; i++) {

@@ -25,10 +25,12 @@ export interface KitManifest { type: RobotType; nodes: { name: string; slot: str
 export interface KitReport { type: RobotType; expectedNodes: number; expectedMeshes: number; expectedTris: number; loadedMeshes: number; missing: string[]; cut: string[]; zeroTri: string[]; unknownBone: string[]; ignored: string[]; badRegion: string[]; ok: boolean }
 export interface Kit {
   meta: KitMeta;
-  nodes: { slot: string; opt: string; bone: string; meshes: { geo: THREE.BufferGeometry; region: string }[] }[];
+  nodes: { slot: string; opt: string; bone: string; meshes: { geo: THREE.BufferGeometry; region: string; name: string }[] }[];
   mats: Record<string, THREE.MeshStandardNodeMaterial>;
   report: KitReport;
 }
+/** Key of the per-plate bone of mesh `m` in node `n` (typed.ts creates one bone per armour plate so plates can slide / rotate during transformations). */
+export const plateKey = (n: { slot: string; opt: string; bone: string }, m: { name: string }) => `pl:${n.slot}__${n.opt}__${n.bone}/${m.name}`;
 export const PAINT = ['shell', 'joints', 'torso', 'shorts', 'backpack'] as const;
 const GLOW = ['visor', 'decalColor', 'screen'];
 const FIXED: Record<string, [string, number, number]> = { chrome: ['#c9ccd1', 0.18, 1], rubber: ['#111214', 0.85, 0], glass: ['#05070b', 0.06, 0.2] };
@@ -118,7 +120,7 @@ export async function loadKit(type: RobotType, u: U, base = `${import.meta.env.B
       let region = (c.material?.name ?? 'shell').replace(/\.\d+$/, '');
       // Scout's kit has no decalColor material: its thruster intakes (small, glowing) take that slot, like Heavy's shin vents
       if (type === 'scout' && region === 'visor' && /^intake/.test(c.name || o.name)) region = 'decalColor';
-      meshes.push({ geo, region });
+      meshes.push({ geo, region, name: c.name || '' });
     });
     nodes.push({ slot, opt, bone, meshes });
   }
@@ -151,10 +153,11 @@ export function buildSkinned(kit: Kit, build: SlotBuild, boneIndex: (name: strin
   for (const n of kit.nodes) {
     if (n.slot !== 'body' && build[n.slot as Slot] !== n.opt) continue;
     const bi = boneIndex(n.bone); if (bi < 0) { lost.add(`${n.slot}__${n.opt}__${n.bone}`); continue; } // a part bound to a bone the rig lacks would vanish silently
-    for (const { geo, region } of n.meshes) {
+    for (const mesh of n.meshes) {
+      const { geo, region } = mesh, pb = boneIndex(plateKey(n, mesh)), bj = pb >= 0 ? pb : bi; // armour plates ride their own bone (identity until a transformation moves them)
       const g = geo.index ? geo.clone() : geo.clone(); const c = g.attributes.position.count;
       const si = new Uint16Array(c * 4), sw = new Float32Array(c * 4);
-      for (let i = 0; i < c; i++) { si[i * 4] = bi; sw[i * 4] = 1; }
+      for (let i = 0; i < c; i++) { si[i * 4] = bj; sw[i * 4] = 1; }
       g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
       const r = kit.mats[region] ? region : 'shell';
       (per.get(r) ?? per.set(r, []).get(r)!).push(g);

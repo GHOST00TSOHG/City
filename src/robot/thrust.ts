@@ -99,6 +99,10 @@ export function createThrust(scene: THREE.Scene, _count = MAXN) {
       emit(ringP, ringV, 1.1 + Math.random() * 0.5, (water ? 0.16 : 0.26) * Math.sqrt(Math.max(0.5, F.dust)), water ? 1.4 : 3, water ? 0xc8d4e0 : (i % 3 === 0 ? 0x16161a : dustC)); // every 3rd puff is dark scorch
     }
   };
+  const addSpark = (p: THREE.Vector3, v: THREE.Vector3, life: number, col: number | THREE.Color, ember = false) => {
+    const si = sNext, o = S[si]; sNext = (sNext + 1) % SN; o.p.copy(p); o.v.copy(v); o.life = o.max = life; o.ember = ember; sparks.setColorAt(si, typeof col === 'number' ? c.set(col) : c.copy(col));
+  };
+  const sv = new THREE.Vector3(), sp0 = new THREE.Vector3(), hot = new THREE.Color(0xffb050).multiplyScalar(2.4), white = new THREE.Color(0xfff0d0).multiplyScalar(2.6);
   const jit = new THREE.Vector3(), tmp = new THREE.Vector3(), dir = new THREE.Vector3(), rv = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), fp = new THREE.Vector3(), fq = new THREE.Quaternion();
   const fpos: THREE.Vector3[] = [], fdir: THREE.Vector3[] = [], flen: number[] = []; for (let i = 0; i < MAXN; i++) { fpos.push(new THREE.Vector3()); fdir.push(new THREE.Vector3()); flen.push(0); }
   const midC = new THREE.Color(), dustC = new THREE.Color(0x6b6152);
@@ -183,6 +187,21 @@ export function createThrust(scene: THREE.Scene, _count = MAXN) {
       q.identity();
       puffs.instanceMatrix.needsUpdate = true; if (puffs.instanceColor) puffs.instanceColor.needsUpdate = true;
       sparks.instanceMatrix.needsUpdate = true; if (sparks.instanceColor) sparks.instanceColor.needsUpdate = true;
+    },
+    /** Heavy's rolling ball touching the ground, or Scout's slide: orange sparks thrown back and up plus a dust trail at the contact point. */
+    scrape(p: THREE.Vector3, v: THREE.Vector3, k: number) {
+      const sp = Math.hypot(v.x, v.z), bx = sp > 0.1 ? -v.x / sp : 0, bz = sp > 0.1 ? -v.z / sp : 0;
+      for (let i = 0; i < 3 + ((k * 4) | 0); i++) {
+        sp0.set(p.x + (Math.random() - 0.5) * 0.7, p.y + 0.05, p.z + (Math.random() - 0.5) * 0.7);
+        sv.set(bx * (2 + Math.random() * 5) + (Math.random() - 0.5) * 3, 1.5 + Math.random() * 3.5, bz * (2 + Math.random() * 5) + (Math.random() - 0.5) * 3);
+        addSpark(sp0, sv, 0.25 + Math.random() * 0.4, Math.random() < 0.3 ? white : hot, Math.random() < 0.2);
+      }
+      for (let i = 0; i < 2; i++) { sp0.set(p.x + (Math.random() - 0.5) * 0.8, p.y + 0.12, p.z + (Math.random() - 0.5) * 0.8); sv.set(bx * 2 + (Math.random() - 0.5) * 2, 0.6 + Math.random(), bz * 2 + (Math.random() - 0.5) * 2); emit(sp0, sv, 0.8 + Math.random() * 0.4, 0.22 + k * 0.12, 2.6, dustC); }
+    },
+    /** Worker's hydraulic landing: a burst of white steam from the joints (the hiss itself is the audio hook worker-land-hiss). */
+    steam(p: THREE.Vector3, s: number) {
+      const n = 16 + ((s * 26) | 0);
+      for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, r = 0.2 + Math.random() * 0.6; sp0.set(p.x + Math.cos(a) * r, p.y + 0.3 + Math.random() * 0.9, p.z + Math.sin(a) * r); sv.set(Math.cos(a) * (0.8 + Math.random() * 1.6), 0.6 + Math.random() * 1.4, Math.sin(a) * (0.8 + Math.random() * 1.6)); emit(sp0, sv, 0.9 + Math.random() * 0.7, 0.14 + Math.random() * 0.12, 3.4, 0xe8f0ec); }
     },
     attach(nozzles: THREE.Object3D[]) { src = nozzles.slice(0, MAXN); },
     setVisible(v: boolean) { puffs.visible = v; sparks.visible = v; flames.visible = v; plume.visible = v; if (!v) { flames.count = 0; light.intensity = 0; } },

@@ -78,6 +78,21 @@ export function verifyKit(t) {
       if (Math.max(...m.sz) > 3) P.push(`${g.name}/${m.name}: bbox ${m.sz.map((v) => v.toFixed(1))} m is bigger than the robot`);
     }
   }
+  // FEET: both feet exist, are mirror images, touch the ground at the rig's rest pose, and the thruster sole offset matches the real sole
+  { const L = groups.find((g) => g.name === 'body__base__LeftFoot'), R = groups.find((g) => g.name === 'body__base__RightFoot');
+    if (!L || !R) P.push('feet: body__base__LeftFoot / RightFoot group missing');
+    else {
+      const stat = (g) => ({ tris: g.meshes.reduce((a, m) => a + m.tris, 0), lo: Math.min(...g.meshes.map((m) => m.lo[1])), zlo: Math.min(...g.meshes.map((m) => m.lo[2])), zhi: Math.max(...g.meshes.map((m) => m.hi[2])) });
+      const l = stat(L), r = stat(R);
+      if (!(l.tris > 0 && r.tris > 0)) P.push(`feet: zero triangles (L ${l.tris}, R ${r.tris})`);
+      if (Math.abs(l.tris - r.tris) > 0.05 * Math.max(l.tris, r.tris)) P.push(`feet: left/right differ (${l.tris} vs ${r.tris} tris): one foot is damaged or cut`);
+      if (Math.abs(l.lo - r.lo) > 0.005) P.push(`feet: soles at different heights (${l.lo.toFixed(3)} vs ${r.lo.toFixed(3)})`);
+      const b = skel[t].bones, rest = b.Hips[1] + b.LeftUpLeg[1] + b.LeftLeg[1] + b.LeftFoot[1];
+      if (Math.abs(rest + l.lo) > 0.01) P.push(`feet: rest pose ${rest > -l.lo ? 'floats' : 'sinks'} ${Math.abs(rest + l.lo).toFixed(3)} m (foot bone ${rest.toFixed(3)} m high, real sole ${l.lo.toFixed(3)})`);
+      const ts = fs.readFileSync('src/robot/types.ts', 'utf8'), blk = ts.slice(ts.indexOf(`label: '${t[0].toUpperCase() + t.slice(1)}'`)), sole = +/sole: (-?[\d.]+)/.exec(blk)[1], sz = +(/soleZ: (-?[\d.]+)/.exec(blk.slice(0, 400))?.[1] ?? -0.03);
+      if (Math.abs(sole - l.lo) > 0.02) P.push(`feet: types.ts sole ${sole} does not match the real foot bottom ${l.lo.toFixed(3)} (thrusters would not sit on the sole)`);
+      if (t !== 'worker' && (sz < l.zlo - 0.02 || sz > l.zhi + 0.02)) P.push(`feet: thruster soleZ ${sz} is outside the foot (${l.zlo.toFixed(2)}..${l.zhi.toFixed(2)})`);
+    } }
   for (const s of Object.keys(kit.slots)) for (const o of kit.slots[s]) if (!groups.some((g) => g.name.startsWith(`${s}__${o}__`) && g.meshes.some((m) => m.tris > 0))) P.push(`slot option ${s}:${o} has no geometry`);
   if (!groups.some((g) => g.name.startsWith('body__base__') && g.meshes.some((m) => m.tris > 0))) P.push('no body__base__* geometry');
   return P;
