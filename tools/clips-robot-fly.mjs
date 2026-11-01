@@ -1,15 +1,17 @@
 // Flight clips: node tools/clips-robot-fly.mjs [port=5180] [types=scout,heavy,worker,glitch]  (expects `npx vite --port <port>`)
 // Deterministic stepping (?fixeddt + window.__steps), one sim step per frame (CLIP_FPS, default 12). Per type: take-off (F), climb,
 // hover, cruise with a banked turn, hover, descend and land. Out: robot-clips/<type>-fly.mp4 (or /workspace/robot-clips on the box)
-import { chromium } from '@playwright/test';
+import { chromium, webkit } from '@playwright/test';
 import { execSync } from 'child_process';
 import fs from 'fs';
 const port = process.argv[2] || '5180', OUT = process.env.CLIP_OUT || (fs.existsSync('/workspace') ? '/workspace/robot-clips' : `${process.env.HOME}/builds/City-gh/robot-clips`), FPS = +(process.env.CLIP_FPS || 12);
 const SWIFT = process.env.SWIFTSHADER === '1'; // default: real GPU (headed Chrome); SWIFTSHADER=1 for the box
 const TYPES = (process.argv[3] || 'scout,heavy,worker,glitch').split(',');
 fs.mkdirSync(OUT, { recursive: true });
-const b = await chromium.launch(SWIFT ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }
-  : { channel: process.env.CLIP_CHANNEL || 'chrome', headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] });
+const WK = (process.env.BROWSER || '') === 'webkit'; // BROWSER=webkit → headed Playwright WebKit (Safari engine, real GPU)
+const b = await (WK ? webkit.launch({ headless: false }) : chromium.launch(SWIFT ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }
+  : { channel: process.env.CLIP_CHANNEL || 'chrome', headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] }));
+console.log('browser', WK ? 'WebKit' : 'Chromium', b.version());
 const p = await b.newPage({ viewport: { width: 960, height: 540 } });
 const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => m.type() === 'error' && errs.push(m.text())); p.on('response', (r) => r.status() >= 400 && errs.push(r.status() + ' ' + r.url()));
 await p.goto(`http://localhost:${port}/?perf=1&area=keywest&join=0&fixeddt=${1 / FPS}`, { waitUntil: 'load', timeout: 240000 });

@@ -173,7 +173,7 @@ createScene(canvas, areaId).then(async (app) => {
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); hud.update(dt, ctl); stepFx(); }
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); sfx.glitchThrust(save.robot.type === 'glitch' ? ctl.thrust : 0, dt); hud.update(dt, ctl); stepFx(); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;

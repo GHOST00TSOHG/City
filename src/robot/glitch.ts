@@ -117,7 +117,6 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       pVel.set([S3.x, S3.y, S3.z], i * 3); pLife[i] = pMax[i] = life * (0.6 + Math.random() * 0.6);
     }
   };
-  let footAcc = 0; const lFoot = Math.max(0, boneNames.indexOf('LeftFoot')), rFoot = Math.max(0, boneNames.indexOf('RightFoot'));
   let visN = n, dashPrev = 0, wasDash = false, moshT = 0, trailAcc = 0;
   const lastRoot = new THREE.Vector3(), curRoot = new THREE.Vector3();
   return {
@@ -149,14 +148,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
       const fw = air ? Math.min(1, (s.flyT ?? 0) / 0.35) * (0.55 + 0.45 * th) : (s.launch ?? 0) * 0.3;
       if (uFly.value > 0.4 && fw < 0.05 && !air) { emit(120, 3, 0.5); uBurst.value = Math.max(uBurst.value, 0.8); }
       uFly.value += (fw - uFly.value) * (1 - Math.exp(-dt * (fw > uFly.value ? 6 : 9)));
-      // cube-stream thrust: cubes jet out of the soles, down and back
-      footAcc += dt * uFly.value * 150;
-      while (footAcc > 1) { footAcc -= 1;
-        const fb = boneMats[Math.random() < 0.5 ? lFoot : rFoot]; W.set((Math.random() - 0.5) * 0.06, -0.08, (Math.random() - 0.5) * 0.1).applyMatrix4(fb).applyMatrix4(root.matrixWorld);
-        const i = pHead; pHead = (pHead + 1) % PN; pPos.set([W.x, W.y, W.z], i * 3);
-        S3.set((Math.random() - 0.5) * 0.8, -3 - Math.random() * 3 * (0.5 + th), -1 - Math.random() * 1.5).transformDirection(root.matrixWorld).multiplyScalar(3 + th * 3);
-        pVel.set([S3.x, S3.y, S3.z], i * 3); pLife[i] = pMax[i] = 0.25 + Math.random() * 0.3;
-      }
+      // (the sole exhaust is the voxel-cube plume in thrust.ts)
       uBurst.value *= Math.exp(-dt * 6);
       moshT -= dt; if (moshT < 0) { moshT = 0.3 + Math.random() * 2; uMosh.value = Math.random() < 0.25 ? 0.5 + Math.random() * 0.5 : 0.02; }
       uMosh.value = Math.max(uMosh.value * Math.exp(-dt * 3), (s.damage ?? 0) * 0.5, want, uFly.value * 0.3);
