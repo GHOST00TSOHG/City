@@ -1,4 +1,5 @@
-"""GLITCH v2: a predator built from data shards. A sharp proxy silhouette (swept horn crest, V visor, blade
+"""GLITCH v3 (rebuilt): crisper surface-aligned shards over a hard predator silhouette, glow piping.
+GLITCH v2: a predator built from data shards. A sharp proxy silhouette (swept horn crest, V visor, blade
 shoulders, wasp waist, long bladed forearms, 4-claw shard hands, digitigrade legs) is sampled into ~3.4k
 oriented plate shards. The proxy never ships: only shards.json (bone-local, game frame) does; the runtime
 draws them as one instanced mesh with RGB split, datamosh, scanline slip, orbit-and-snap and blink-dash.
@@ -10,7 +11,7 @@ from scout_v2 import *
 import scout_v2 as S, addons as A
 
 V = Vector
-WH = mat('armor_white', (0.86, 0.86, 0.84), 0.25)
+WH = mat('armor_white', (0.6, 0.6, 0.62), 0.3)
 DK = mat('frame', (0.03, 0.032, 0.04), 0.4, 0.6)
 GL = mat('glow', (0, 0, 0), 0.3, 0, (0.69, 0.29, 1.0), 26)
 GLITCH_SLOTS = {'helmet': ['smooth', 'skull', 'halo'], 'arms': ['block', 'blade', 'orbit'], 'bionics': ['wings', 'ring', 'spikes'],
@@ -27,12 +28,16 @@ def build():
     box('pelvis', (0, 0, 1.02), (0.14, 0.1, 0.08), DK)
     for s in (1, -1): box(f'hipblade_{s}', (0.17 * s, 0.0, 0.98), (0.03, 0.12, 0.14), WH, ry=0.35 * s)
     bone('Spine'); J['Spine'] = V((0, 0, 1.12))
-    up.append(loft('waist', [(1.08, 0, 0, 0.09, 0.08), (1.24, 0, 0, 0.11, 0.09)], DK, armor=False))
-    up.append(loft('chest', [(1.22, 0, 0, 0.16, 0.13), (1.40, 0, -0.03, 0.30, 0.19), (1.58, 0, -0.04, 0.36, 0.2), (1.70, 0, 0, 0.26, 0.15)], WH, e=2.4))
+    up.append(loft('waist', [(1.08, 0, 0, 0.075, 0.07), (1.24, 0, 0, 0.095, 0.08)], DK, armor=False))
+    up.append(loft('chest', [(1.22, 0, 0, 0.16, 0.13), (1.40, 0, -0.03, 0.30, 0.19), (1.58, 0, -0.04, 0.4, 0.21), (1.70, 0, 0, 0.28, 0.15)], WH, e=2.4))
     for s in (1, -1):
         up.append(box(f'pec_{s}', (0.13 * s, -0.2, 1.5), (0.13, 0.02, 0.1), WH, rz=-0.5 * s, rx=-0.25))
         up.append(box(f'rib_{s}', (0.17 * s, -0.12, 1.3), (0.05, 0.08, 0.012), DK, ry=0.6 * s))
-    up.append(box('core', (0, -0.2, 1.38), (0.035, 0.02, 0.07), GL, rz=math.pi / 4))
+    up.append(box('core', (0, -0.23, 1.4), (0.055, 0.03, 0.055), GL, ry=math.pi / 4))
+    for s in (1, -1):  # glow piping tracing the V of the chest and the collar: keeps the outline readable through the shards
+        up.append(box(f'pipe_chest_{s}', (0.16 * s, -0.205, 1.5), (0.004, 0.004, 0.14), GL, ry=0.9 * s, rx=-0.2))
+        up.append(box(f'pipe_collar_{s}', (0.15 * s, -0.12, 1.69), (0.12, 0.004, 0.004), GL, rz=0.25 * s))
+        up.append(box(f'pipe_side_{s}', (0.3 * s, -0.08, 1.45), (0.004, 0.004, 0.13), GL, ry=-0.25 * s))
     up.append(box('spine_fin', (0, 0.2, 1.45), (0.01, 0.08, 0.22), WH, rx=-0.2))
     slot('bionics', 'wings')
     for s in (1, -1): up.append(box(f'b_wing_{s}', (0.32 * s, 0.32, 1.62), (0.3, 0.012, 0.07), WH, rz=0.4 * s, ry=-0.5 * s))
@@ -50,8 +55,8 @@ def build():
     up.append(box('skull', (0, -0.01, 1.88), (0.085, 0.11, 0.08), WH, rx=0.15))
     up.append(box('jaw', (0, -0.08, 1.82), (0.06, 0.05, 0.035), DK, rx=-0.3))
     for s in (1, -1):
-        up.append(box(f'visor_{s}', (0.04 * s, -0.115, 1.89), (0.05, 0.01, 0.012), GL, rz=0.0, ry=-0.35 * s))
-        up.append(box(f'horn_{s}', (0.07 * s, 0.1, 2.0), (0.012, 0.16, 0.02), WH, rx=-0.55, rz=0.25 * s))
+        up.append(box(f'visor_{s}', (0.045 * s, -0.135, 1.89), (0.06, 0.016, 0.014), GL, rz=0.0, ry=-0.45 * s))
+        up.append(box(f'horn_{s}', (0.07 * s, 0.1, 2.0), (0.014, 0.22, 0.022), WH, rx=-0.5, rz=0.22 * s))
         up.append(box(f'cheek_{s}', (0.085 * s, -0.04, 1.86), (0.01, 0.07, 0.05), DK))
     slot('helmet', 'smooth'); up.append(box('h_smooth', (0, -0.04, 1.95), (0.07, 0.09, 0.02), WH))
     slot('helmet', 'skull')
@@ -61,8 +66,9 @@ def build():
     # arms (left, mirrored): blade shoulder, long forearm blade, 4 shard claws
     arm = []
     bone('LeftArm'); J['LeftArm'] = V((0.38, 0, 1.62))
-    arm.append(box('pauldron_L', (0.44, 0.02, 1.72), (0.12, 0.13, 0.05), WH, ry=-0.5))
-    arm.append(box('pauldron_spike_L', (0.52, 0.1, 1.82), (0.02, 0.14, 0.015), WH, rx=-0.7, ry=-0.4))
+    arm.append(box('pauldron_L', (0.44, 0.02, 1.72), (0.15, 0.15, 0.05), WH, ry=-0.55))
+    arm.append(box('pauldron_spike_L', (0.52, 0.1, 1.82), (0.02, 0.2, 0.016), WH, rx=-0.7, ry=-0.4))
+    arm.append(box('pauldron_pipe_L', (0.46, -0.13, 1.7), (0.13, 0.004, 0.004), GL, ry=-0.55))
     sh, el, wr = V((0.44, 0, 1.6)), V((0.5, 0.04, 1.3)), V((0.52, -0.06, 1.0))
     arm.append(cyl('upperarm_L', sh, el, 0.04, DK))
     bone('LeftForeArm'); J['LeftForeArm'] = el.copy()
@@ -85,6 +91,7 @@ def build():
     leg.append(box('knee_L', knee + V((0, -0.06, 0.02)), (0.04, 0.04, 0.07), DK, rx=0.3))
     sn = loft('shin_L', [(0, 0, 0, 0.05, 0.06), (0.2, 0, 0, 0.06, 0.07), (0.42, 0, 0, 0.04, 0.045)], WH, e=2.6); place(sn, knee, ank); leg.append(sn)
     leg.append(box('calf_glow_L', knee.lerp(ank, 0.5) + V((0, 0.06, 0)), (0.01, 0.01, 0.12), GL, rx=-0.5))
+    leg.append(box('thigh_pipe_L', hip.lerp(knee, 0.5) + V((0.0, -0.09, 0)), (0.004, 0.004, 0.16), GL, rx=0.35))
     slot('legs', 'slim'); leg.append(box('l_slim_L', hip.lerp(knee, 0.5) + V((0.07, 0, 0)), (0.005, 0.05, 0.12), GL))
     slot('legs', 'block'); leg.append(box('l_block_L', hip.lerp(knee, 0.5) + V((0, -0.06, 0)), (0.08, 0.04, 0.1), DK))
     slot('legs', 'digi'); leg.append(box('l_digi_L', knee + V((0, 0.06, -0.12)), (0.03, 0.03, 0.08), WH))
@@ -133,12 +140,12 @@ def shardify(n_total=3400, seed=7):
             pt = tri_pt(vs); key = (o['slot'], o['opt'], o['bone'])
             mn = o.active_material.name if o.active_material else 'frame'
             c = CAT.get(mn.split('.')[0], 0 if mn.startswith('armor') else 1)
-            s = 0.026 + rnd.random() * 0.03
+            s = 0.018 + rnd.random() * 0.024
             tng = nrm.cross(V((0, 0, 1)) if abs(nrm.z) < 0.9 else V((1, 0, 0))).normalized()
-            tng = Quaternion(nrm, rnd.uniform(-0.6, 0.6)) @ tng
+            tng = Quaternion(nrm, rnd.uniform(-0.25, 0.25)) @ tng
             bit = nrm.cross(tng)
             q = Matrix((tng, bit, nrm)).transposed().to_quaternion()  # local x=tangent, y=bitangent, z=normal
-            hx, hy, hz = s * rnd.uniform(0.7, 1.3), s * rnd.uniform(1.1, 2.0), s * 0.32
+            hx, hy, hz = s * rnd.uniform(0.8, 1.2), s * rnd.uniform(1.2, 1.9), s * 0.26
             pos = pt - nrm * hz * 0.4
             bn = o['bone']; jb = J[bn] if bn in J else (lambda v: V((-v.x, v.y, v.z)))(J[bn.replace('Right', 'Left')])
             rel = pos - jb
@@ -171,9 +178,10 @@ def shard_meshes(geo):
 
 def fx_dressing(shards):
     """Stills-only: orbiting loose shards, chromatic ghost (cyan/magenta offset copies), a datamosh slab."""
+    import bmesh
     rnd = random.Random(3)
     cy = mat('ghost_c', (0, 0, 0), 0.5, 0, (0.0, 0.9, 1.0), 3); mg = mat('ghost_m', (0, 0, 0), 0.5, 0, (1.0, 0.05, 0.6), 3)
-    for o in [s for s in shards if s['slot'] == 'body' and s['bone'] in ('Spine', 'Head', 'LeftArm', 'RightArm')]:
+    for o in []:  # v3: RGB split moved to post (glitch_post.py) / runtime shader
         for m, dx in ((cy, 0.012), (mg, -0.012)):
             g = o.copy(); g.data = o.data.copy(); g.data.materials.clear(); g.data.materials.append(m)
             for p in g.data.polygons: p.material_index = 0
@@ -195,15 +203,48 @@ def fx_dressing(shards):
         for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = 0 if i % 5 else 1
     me = bpy.data.meshes.new('orbit_shards'); bm.to_mesh(me); bm.free(); me.materials.append(WH); me.materials.append(GL)
     o = bpy.data.objects.new('orbit_shards', me); bpy.context.scene.collection.objects.link(o)
+    # trails: each of 26 orbit shards drags a fading arc of tiny glow flecks behind it
+    tr = [mat(f'trail_{k}', (0, 0, 0), 0.5, 0, (0.69, 0.29, 1.0) if k % 2 else (0.0, 0.85, 1.0), 9 - k * 2) for k in range(4)]
+    bm = bmesh.new(); rnd = random.Random(11)
+    for i in range(26):
+        a0 = rnd.uniform(0, 6.28); r = rnd.uniform(0.45, 0.75); z = rnd.uniform(1.0, 1.85); tilt = rnd.uniform(-0.25, 0.25)
+        for j in range(14):
+            a = a0 - j * 0.05; c = V((math.cos(a) * r, math.sin(a) * r, z + tilt * math.sin(a))); s = 0.012 * (1 - j / 16)
+            vv = [bm.verts.new(c + V((x * s, y * s, z_ * s))) for x, y, z_ in SHARD_V]
+            for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = min(3, j // 4)
+        cc = V((math.cos(a0) * r, math.sin(a0) * r, z + tilt * math.sin(a0))); s = 0.035
+        vv = [bm.verts.new(cc + V((x * s, y * s * 1.6, z_ * s * 0.35))) for x, y, z_ in SHARD_V]
+        for f in SHARD_F: fa = bm.faces.new([vv[k] for k in f]); fa.material_index = 0
+    me = bpy.data.meshes.new('orbit_trails'); bm.to_mesh(me); bm.free()
+    for m in tr: me.materials.append(m)
+    ot = bpy.data.objects.new('orbit_trails', me); bpy.context.scene.collection.objects.link(ot); ot.visible_shadow = False
+    # blink-dash afterimage: a sparse magenta copy of the whole body left behind, dissolving into flecks
+    gm = mat('dash_ghost', (0, 0, 0), 0.5, 0, (1.0, 0.1, 0.7), 2.2)
+    for sh in [x for x in shards if x['slot'] == 'body']:
+        g = sh.copy(); g.data = sh.data.copy(); g.data.materials.clear(); g.data.materials.append(gm)
+        bpy.context.scene.collection.objects.link(g); g.location += V((1.25, 0.9, 0)); g.visible_shadow = False
+        bm = bmesh.new(); bm.from_mesh(g.data)
+        for f in bm.faces: f.material_index = 0
+        dead = [f for i, f in enumerate(bm.faces) if (i // 8) % 5]
+        bmesh.ops.delete(bm, geom=dead, context='FACES')
+        for v in bm.verts: v.co += V((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))) * 0.02 * max(0, v.co.z - 0.4)
+        bm.to_mesh(g.data); bm.free()
 
 def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
-    n = 1400 if S.FAST else 3400
+    n = 1400 if S.FAST else 3800
     parts, geo, proxies = shardify(n)
     import v2export as X
     X.write_skeleton('glitch', proxies)
-    for o in proxies: bpy.data.objects.remove(o, do_unlink=True)
+    if '--preview' in S.argv or '--core' in S.argv:  # stills: dark solid core under the shards = clear robot outline
+        for o in proxies:
+            if o.get('opt', 'base') != 'base' or o['slot'] != 'body': o.hide_render = True; o['_hide'] = 1; continue
+            gl = o.active_material and o.active_material.name.startswith('glow')
+            if not gl: o.data.materials.clear(); o.data.materials.append(DK)
+            o['slot'] = 'core'
+    else:
+        for o in proxies: bpy.data.objects.remove(o, do_unlink=True)
     shards = shard_meshes(geo)
     ntri = sum(len(v) for v in geo.values()) * 8
     print('SHARDS', sum(len(v) for v in geo.values()), 'TRIS', ntri, flush=True)
@@ -212,6 +253,9 @@ def main():
     if '--kit' in S.argv:
         json.dump(out, open(f'{X.REPO}/public/robot/glitch/shards.json', 'w'), separators=(',', ':'))
     fx_dressing(shards)
+    if '--preview' in S.argv:
+        S.render(S.OUT.replace('.png', '-34.png'), tgt=(0.15, 0.1, 1.15), dist=6.4)
+        S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-0.45, cam_el=0.08, res=(1500, 1200), tgt=(0.05, -0.05, 1.62), dist=2.7, lens=60, setup=False); return
     bpy.ops.wm.save_as_mainfile(filepath='/workspace/private/glitch_v2.blend')
     X.turnaround('glitch', tgt_z=1.1, dist=5.6, slots=GLITCH_SLOTS)
 
