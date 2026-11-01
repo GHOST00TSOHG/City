@@ -131,11 +131,25 @@ Goal: no frame over 33 ms and a steady 60 fps while flying on the MacBook Air M4
 - **Trees:** far LOD bucket per species holds every tree, uploaded once; near LOD buckets refilled from a 64 m grid every 20 m with a velocity lead (~0.5 s prefetch), only the used range uploaded. A GPU distance band per LOD (instanced `tpos`) does the exact LOD cut, so nothing is re-sorted per frame. All instance buffers are StaticDraw: DynamicDraw made the WebGPU renderer re-upload every whole matrix buffer every frame (the main stutter source).
 - **Shader prewarm (src/perf/prewarm.ts):** `compileAsync` over everything (hidden objects and empty instance sets included) before the first frame and after area switches.
 - **Interiors:** LRU of 4 built interiors; no new builds above 25 m/s; deferred when the frame budget is low.
-- **Allocations:** removed per-frame vectors in scene, controller and thrust.
+- **Fixed-timestep flight (src/robot/controller.ts):** physics steps at a fixed 120 Hz (accumulator, max 8 steps); robot pose and chase camera are interpolated between the last two steps, so motion is even at any refresh rate or frame jitter. `?a6=0` keeps the old variable step.
+- **Allocations:** removed per-frame vectors in scene, controller and thrust; no `new`/`clone` left in our per-frame paths (remaining ~120 KB/frame heap churn is inside the three.js renderer).
 - **Crater fix:** decal raised to +0.22 m with polygon offset and renderOrder so it shows on roads.
 - Headless work counter: `node tools/perf/frame-work.mjs <dist> <area> <label>` (150 frames × 3 m, WebGL2/SwiftShader; counts uploads, compiles, JS time, heap growth, long tasks; headless fps is meaningless).
 
-### Before / after (headless, 150 frames over 450 m)
+### Before / after (main @7cf0033 vs this branch; `node tools/perf/frame-work.mjs`, headless, 150 frames over 450 m)
+Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 avg / 85 max in both. Console: only the two pre-existing 404s.
+| Metric | KW before | KW after | SH before | SH after |
+|---|---|---|---|---|
+| JS ms p50 | 2.7 | 2.8 | 2.8 | 3.3 |
+| JS ms p95 | 12.7 | 10.5 | 19.0 | 9.1 |
+| JS ms p99 | 23.1 | 15.5 | 2021 | 15.5 |
+| JS ms worst | 2619 | 17.2 | 3571 | 22.6 |
+| Frames JS >16.7 ms | 3 | 1 | 12 | 1 |
+| Long tasks | 1 | 0 | 2 | 0 |
+| Upload KB/frame (max) | 1944 (8115) | 147 (587) | 3045 (13946) | 541 (2519) |
+`tools/perf/flight-route.mjs` measures real rAF frame time with key input, but SwiftShader takes about 1.4 s per frame here, so its numbers are meaningless headless; run it (or `?bench=flight`) on the M4.
+
+### Earlier run (WIP, same tool)
 | Metric | Key West before | Key West after | Sandy Hook before | Sandy Hook after |
 |---|---|---|---|---|
 | GPU upload / frame | 2044 KB | 150 KB | 3125 KB | 494 KB |
