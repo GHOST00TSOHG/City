@@ -311,7 +311,7 @@ let scattered = 0;
 for (let iz = 0; iz < NZ; iz++) for (let ix = 0; ix < NX; ix++) {
   const i = iz * NX + ix; if (water[i]) continue;
   const d = density[cover[i]]; if (!d) continue;
-  let n = d * (A.treeDensity ?? 1) * G * G; while (n > 0) { if (rnd() < Math.min(n, 1)) { const x = gx0 + (ix + rnd() - 0.5) * G, z = gz0 + (iz + rnd() - 0.5) * G; if (!masked(x, z) && !wet(x, z) && free(x, z, 0) && !onRoadCore(x, z)) { mkTree(x, z, rnd() < (cover[i] === 4 || cover[i] === 5 ? 0.25 : palmShare)); scattered++; } } n -= 1; }
+  let n = d * (A.treeDensity ?? 1) * G * G; while (n > 0) { if (rnd() < Math.min(n, 1)) { const x = gx0 + (ix + rnd() - 0.5) * G, z = gz0 + (iz + rnd() - 0.5) * G; if (!masked(x, z) && !wet(x, z) && free(x, z, 0) && !onRoadCore(x, z)) { mkTree(x, z, palmShare > 0 && rnd() < (cover[i] === 4 || cover[i] === 5 ? 0.25 : palmShare)); scattered++; } } n -= 1; }
 }
 
 // ---------- fictional ferry dock (areas.json ferryDock): nearest shore point to the origin with >= 70 m of open water ahead

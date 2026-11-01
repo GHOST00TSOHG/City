@@ -28,6 +28,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Weather: eased Clear/Rain/Snow/Fog, wet roads | bot/websmith-weather | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Better water: normal-mapped waves, reflections, foam | bot/websmith-water | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Better roads + walk on road surface | bot/websmith-roads | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| Palms only in Key West | bot/websmith-no-nj-palms | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
@@ -194,3 +195,5 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 ## Roads (bot/websmith-roads)
 - `buildRoads` resamples polylines to the terrain cell (ribbons follow the ground), adds sidewalks (c<=2, w>=5 m; below every road lift so crossings cover them) and centre markings (c0 double yellow, c1 dashed white), all in the same draw. Asphalt grain in the road shader.
 - Height fix: `buildRoads(...).surface.surfaceAt(x,z)` (segment spatial hash) returns the asphalt/sidewalk top; `ground()` and `world.floorAt` use it, so the robot/camera stand on the road instead of the terrain under it. `__ground(x,z)` for tests; `tests/roads.spec.ts`.
+## Palms (bot/websmith-no-nj-palms)
+- Bug: bake scatter gave wood/wetland cells a 25% palm chance even with `palmShare: 0`. Fixed in `tools/bake/bake.mjs`; runtime guard `buildTrees(..., palms = id === 'keywest')` turns any baked palm in NJ into broadleaf (no re-bake needed). `stats.palms` / `__stats()`; `tests/palms.spec.ts`.

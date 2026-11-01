@@ -200,7 +200,8 @@ async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
   return out;
 }
 
-export async function buildTrees(flat: number[], terrain: Terrain) {
+/** `palms` = false (every NJ area): baked palm records become broadleaf. Palms are a Key West-only species. */
+export async function buildTrees(flat: number[], terrain: Terrain, palms = true) {
   const uWind = uniform(1);
   const extra = await gltfSpecies(uWind);
   const species = [...builtinSpecies(uWind), ...extra];
@@ -209,7 +210,7 @@ export async function buildTrees(flat: number[], terrain: Terrain) {
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
   const counts = new Array(species.length).fill(0);
   for (let i = 0; i < N; i++) {
-    const x = flat[i * 5] / 10, z = flat[i * 5 + 1] / 10, k = flat[i * 5 + 2], hh = flat[i * 5 + 3] / 10, sd = flat[i * 5 + 4];
+    const x = flat[i * 5] / 10, z = flat[i * 5 + 1] / 10, k = palms ? flat[i * 5 + 2] : 1, hh = Math.min(flat[i * 5 + 3] / 10, palms ? 99 : 12), sd = flat[i * 5 + 4];
     const pool = byKind[k] ?? byKind[1], sp = species.indexOf(pool[sd % pool.length]);
     const sc = hh / 10, w = sc * (0.85 + (sd / 255) * 0.3) * (k === 1 ? 1.15 : 1);
     q.setFromAxisAngle(Y, (sd / 255) * Math.PI * 2);
@@ -236,7 +237,7 @@ export async function buildTrees(flat: number[], terrain: Terrain) {
       buckets.forEach((lv, s) => lv.forEach((parts, li) => parts.forEach(im => { im.count = c[s][li]; im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; })));
     }
     const triangles = () => buckets.flat(2).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
-    return { group, update, uWind, triangles, species: species.map(s => s.name), refreshes: 0 };
+    return { group, update, uWind, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), refreshes: 0 };
   }
   // A6 path. Far LOD: one bucket per species holding every tree, uploaded once. Near LODs: filled from a 64 m grid
   // around the camera with a distance pad, refreshed only after the camera moves REFRESH m, uploading just the used
@@ -312,5 +313,5 @@ export async function buildTrees(flat: number[], terrain: Terrain) {
     }
   }
   const triangles = () => (group.children as THREE.InstancedMesh[]).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
-  return { group, update, uWind, triangles, species: species.map(s => s.name), get refreshes() { return refreshes; } };
+  return { group, update, uWind, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), get refreshes() { return refreshes; } };
 }
