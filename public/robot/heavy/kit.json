@@ -1,0 +1,137 @@
+{
+ "addons_used": {
+  "HOps bool_difference": 138,
+  "HOps add_mod_bevel": 59,
+  "HOps mod_weighted_normal": 59,
+  "MESHmachine fuse": 38
+ },
+ "type": "heavy",
+ "pistons": [
+  {
+   "slot": "legs",
+   "opt": "piston",
+   "a": "LeftUpLeg",
+   "ap": [
+    0.0,
+    -0.12,
+    -0.16
+   ],
+   "b": "LeftLeg",
+   "bp": [
+    0.0,
+    -0.28,
+    -0.15
+   ],
+   "objA": "P0",
+   "objB": "P1"
+  },
+  {
+   "slot": "legs",
+   "opt": "piston",
+   "a": "RightUpLeg",
+   "ap": [
+    -0.0,
+    -0.12,
+    -0.16
+   ],
+   "b": "RightLeg",
+   "bp": [
+    -0.0,
+    -0.28,
+    -0.15
+   ],
+   "objA": "P2",
+   "objB": "P3"
+  },
+  {
+   "slot": "legs",
+   "opt": "reverse",
+   "a": "LeftUpLeg",
+   "ap": [
+    0.0,
+    -0.1,
+    0.15
+   ],
+   "b": "LeftLeg",
+   "bp": [
+    0.0,
+    -0.3,
+    0.05
+   ],
+   "objA": "P4",
+   "objB": "P5"
+  },
+  {
+   "slot": "legs",
+   "opt": "reverse",
+   "a": "RightUpLeg",
+   "ap": [
+    -0.0,
+    -0.1,
+    0.15
+   ],
+   "b": "RightLeg",
+   "bp": [
+    -0.0,
+    -0.3,
+    0.05
+   ],
+   "objA": "P6",
+   "objB": "P7"
+  }
+ ],
+ "tris": {
+  "body:base": 12270,
+  "helmet:dome": 3880,
+  "helmet:slit": 4855,
+  "helmet:periscope": 952,
+  "arms:piledriver": 8532,
+  "arms:shield": 8309,
+  "arms:gatling": 11575,
+  "bionics:reactor": 6856,
+  "bionics:plate": 298,
+  "bionics:missiles": 4104,
+  "legs:piston": 8457,
+  "legs:reverse": 8231,
+  "legs:armored": 8977,
+  "thrusters:booster": 860,
+  "thrusters:cans": 5648,
+  "thrusters:vectored": 772,
+  "boots:tank": 2216,
+  "boots:claw": 3068,
+  "boots:stomper": 3944
+ },
+ "slots": {
+  "helmet": [
+   "dome",
+   "slit",
+   "periscope"
+  ],
+  "arms": [
+   "piledriver",
+   "shield",
+   "gatling"
+  ],
+  "bionics": [
+   "reactor",
+   "plate",
+   "missiles"
+  ],
+  "legs": [
+   "piston",
+   "reverse",
+   "armored"
+  ],
+  "thrusters": [
+   "booster",
+   "cans",
+   "vectored"
+  ],
+  "boots": [
+   "tank",
+   "claw",
+   "stomper"
+  ]
+ },
+ "screens": {}
+}
