@@ -1,18 +1,22 @@
 // Robot types headless check: node tools/test-robot-types.mjs [port=5180]  (expects `npx vite --port <port>`)
 // v1 save → v2 migration, each type in the garage then in the world (draw calls, robot tris, ground speed), type
 // switch persistence across reload, zero console errors. Screenshots: /workspace/city-shots/types-final-*.png
-import { chromium } from '@playwright/test';
+import { chromium, webkit } from '@playwright/test';
 import fs from 'fs';
 const port = process.argv[2] || '5180', out = process.env.SHOTS || (fs.existsSync('/workspace') ? '/workspace/city-shots' : 'test-results/shots') + '/types-final';
 fs.mkdirSync(out.replace(/\/[^/]*$/, ''), { recursive: true });
-const b = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+// BROWSER=webkit → headed Playwright WebKit (real GPU, Safari engine); BROWSER=chrome → headed Chrome (real GPU); default SwiftShader Chromium
+const B = process.env.BROWSER || 'swiftshader';
+const b = await (B === 'webkit' ? webkit.launch({ headless: false }) : B === 'chrome' ? chromium.launch({ channel: 'chrome', headless: false, args: ['--ignore-gpu-blocklist'] }) : chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }));
+console.log('browser', B, b.version());
 const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
 const errs = []; p.on('pageerror', (e) => errs.push('pageerror: ' + e.message)); p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 const ready = () => p.waitForFunction(() => window.__city?.ready, null, { timeout: 240000 });
 const fail = []; const check = (ok, msg) => { console.log(ok ? 'PASS' : 'FAIL', msg); if (!ok) fail.push(msg); };
 await p.goto(`http://localhost:${port}/?perf=1&area=keywest`, { waitUntil: 'load', timeout: 240000 });
 // seed a v1 save (old part names) and no v2
-await p.evaluate(() => { localStorage.clear(); localStorage.setItem('city.save.v1', JSON.stringify({ v: 1, updatedAt: '2026-10-31T00:00:00Z', robot: { look: { shell: '#d7263d', visor: '#3df2ff', helmet: 'saiyan', arms: 'brawler' }, damage: 0.4 } })); });
+// seeded in an init script (runs before the page's own scripts on the reload) so a live page can't autosave a v2 over it first (real-GPU browsers are fast enough to)
+await p.addInitScript(() => { if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.clear(); localStorage.setItem('city.save.v1', JSON.stringify({ v: 1, updatedAt: '2026-10-31T00:00:00Z', robot: { look: { shell: '#d7263d', visor: '#3df2ff', helmet: 'saiyan', arms: 'brawler' }, damage: 0.4 } })); } });
 await p.reload({ waitUntil: 'load', timeout: 240000 }); await ready();
 const m = await p.evaluate(() => ({ v2: JSON.parse(localStorage.getItem('city.save.v2')), v1: localStorage.getItem('city.save.v1') }));
 check(m.v2?.v === 2 && m.v2.robot.type === 'scout' && m.v2.robot.paint.scout.shell === '#d7263d' && m.v2.robot.slots.scout.helmet === 'crt' && m.v2.robot.damage === 0.4 && !!m.v1, `v1→v2 migration ${JSON.stringify(m.v2?.robot?.paint?.scout)} slots ${JSON.stringify(m.v2?.robot?.slots?.scout)} dmg ${m.v2?.robot?.damage}; v1 kept`);
@@ -29,6 +33,9 @@ for (const t of (process.env.TYPES || 'scout,heavy,worker,glitch').split(',')) {
   const g = await p.evaluate(() => ({ calls: window.__city.calls, pressed: document.querySelector('#hangar .types [aria-pressed="true"]')?.dataset.t, slots: document.querySelectorAll('#hangar .opts button').length }));
   const tris = await robotTris();
   check(g.pressed === t && g.slots === 18, `${t} garage: picker=${g.pressed} slot buttons=${g.slots} calls=${g.calls} robot tris=${tris}`);
+  // loader self-check against public/robot/<type>/manifest.json: no missing / cut / zero-triangle / unbound parts
+  const kr = await p.evaluate(() => window.__robot.kitReport());
+  check(!!kr && kr.ok && kr.expectedMeshes > 0 && !kr.unknownBone.length, `${t} kit parts: expected ${kr?.expectedNodes} nodes / ${kr?.expectedMeshes} meshes / ${kr?.expectedTris} tris, loaded ${kr?.loadedMeshes} meshes; missing=${JSON.stringify(kr?.missing)} cut=${JSON.stringify(kr?.cut)} zeroTri=${JSON.stringify(kr?.zeroTri)} unboundBone=${JSON.stringify(kr?.unknownBone)} ignored=${JSON.stringify(kr?.ignored)}`);
   // every garage colour slot must visibly recolour the robot (material color/emissive or shader colour uniforms)
   const colRes = await p.evaluate(async () => {
     const seen = () => { const h = new Set(); window.__robot.model.root.traverse((o) => { if (!o.isMesh) return; for (const m of [].concat(o.material)) { for (const k of ['color', 'emissive']) if (m[k]?.isColor) h.add('#' + m[k].getHexString()); for (const u of Object.values(m.uniforms || {})) if (u.value?.isColor) h.add('#' + u.value.getHexString()); for (const u of Object.values(m.userData || {})) if (u?.value?.isColor) h.add('#' + u.value.getHexString()); } }); return h; };

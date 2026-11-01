@@ -94,10 +94,13 @@ def build():
     slot('bionics', 'missiles'); up.append(ell('b_pod', (-0.3, 0.2, 2.02), (0.13, 0.15, 0.08), ORG))
     for i in range(3): up.append(cyl(f'b_tube{i}', V((-0.34 + i * 0.04, 0.06, 2.04)), V((-0.34 + i * 0.04, 0.05, 2.04)), 0.018, VIS))
     slot('thrusters', 'booster'); up.append(cyl('t_boost', V((0, 0.42, 1.3)), V((0, 0.6, 1.12)), 0.13, FR, r2=0.16))
+    up.append(box('t_boost_bracket', (0, 0.27, 1.18), (0.05, 0.15, 0.035), FR))   # mount: the can used to hang free behind the waist
     slot('thrusters', 'cans')
     for s in (1, -1): up.append(cyl(f't_can_{s}', V((0.16 * s, 0.42, 1.42)), V((0.16 * s, 0.47, 1.06)), 0.085, DRK))
+    up.append(box('t_can_bracket', (0, 0.36, 1.24), (0.26, 0.05, 0.03), FR))
     slot('thrusters', 'vectored')
     for s in (1, -1): up.append(cyl(f't_vec_{s}', V((0.34 * s, 0.38, 1.7)), V((0.47 * s, 0.55, 1.45)), 0.075, ST, r2=0.105))
+    for s in (1, -1): up.append(box(f't_vec_bracket_{s}', (0.41 * s, 0.36, 1.51), (0.04, 0.10, 0.04), FR))
     slot('body')
     # ---- arms: round shoulder pod (cylinder with disc side, ref) + bulky rounded limb armour, oversized fists
     bone('LeftArm'); J['LeftArm'] = V((0.56, 0, 1.68))

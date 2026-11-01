@@ -7,8 +7,17 @@ import type { RobotType } from './types';
  */
 const EXT = (() => { try { return new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'm4a'; } catch { return 'm4a'; } })();
 const STEPS = ['footstep_01', 'footstep_02', 'footstep_03'];
+/**
+ * Named hooks for Glitch's thruster (low hum loop + soft crackle one-shots). The files are Echo's and are NOT in the repo yet
+ * (public/audio/robots/glitch/glitch_thrust_hum.{ogg,m4a}, glitch_thrust_crackle.{ogg,m4a}). The hooks are wired and silent until
+ * the names are added to HAVE (so a missing file never costs a 404). Nothing is synthesised here.
+ */
+export const GLITCH_THRUST_HOOKS = { hum: 'glitch-thrust-hum', crackle: 'glitch-thrust-crackle' } as const;
+const HOOK_FILE: Record<string, string> = { 'glitch-thrust-hum': 'thrust_hum', 'glitch-thrust-crackle': 'thrust_crackle' };
+const HAVE = new Set<string>([]); // add 'glitch-thrust-hum' / 'glitch-thrust-crackle' when Echo's files land
 
 export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots/`) {
+  let hum: AudioBufferSourceNode | null = null, humGain: GainNode | null = null, humBusy = false, crackT = 0;
   let ctx: AudioContext | null = null, master: GainNode | null = null, type: RobotType | null = null, idle: AudioBufferSourceNode | null = null, rr = 0, volume = 1;
   const bufs = new Map<string, Promise<AudioBuffer | null>>();
   const load = (t: RobotType, n: string) => {
@@ -16,10 +25,10 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
     if (!bufs.has(k)) bufs.set(k, fetch(`${base}${t}/${t}_${n}.${EXT}`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))).then((a) => ctx!.decodeAudioData(a)).catch(() => null));
     return bufs.get(k)!;
   };
-  const play = async (n: string, loop = false) => {
+  const play = async (n: string, loop = false, g?: GainNode) => {
     if (!ctx || !master || !type) return null;
     const t = type, b = await load(t, n); if (!b || t !== type) return null;
-    const s = ctx.createBufferSource(); s.buffer = b; s.loop = loop && n.endsWith('idle_loop'); s.connect(master); s.start(); return s;
+    const s = ctx.createBufferSource(); s.buffer = b; s.loop = loop && (n.endsWith('idle_loop') || n === 'thrust_hum'); s.connect(g ?? master); s.start(); return s;
   };
   const startIdle = async () => { idle?.stop(); idle = null; idle = await play('idle_loop', true); };
   const unlock = () => {
@@ -34,6 +43,16 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
     step() { void play(STEPS[rr++ % 3]); },
     boost() { void play('boost'); },
     hit() { void play('hit'); },
+    /** Glitch thruster level 0..1: hum loop follows it, crackle one-shots while it is on. No-ops until the files exist (HAVE). */
+    glitchThrust(level: number, dt = 0) {
+      if (!ctx || !master || type !== 'glitch') return;
+      if (HAVE.has('glitch-thrust-hum')) {
+        if (level > 0.05 && !hum && !humBusy) { humBusy = true; humGain = ctx.createGain(); humGain.connect(master); void play(HOOK_FILE['glitch-thrust-hum'], true, humGain).then((s) => { hum = s; humBusy = false; }); }
+        if (humGain) humGain.gain.value = level;
+        if (level <= 0.05 && hum) { hum.stop(); hum = null; humGain = null; }
+      }
+      if (HAVE.has('glitch-thrust-crackle') && level > 0.05) { crackT -= dt; if (crackT < 0) { crackT = 0.15 + Math.random() * 0.4; void play(HOOK_FILE['glitch-thrust-crackle']); } }
+    },
     special(kind: string) { if (kind !== 'none') void play(`special_${kind}`); },
     setIdle(on: boolean) { if (!on) { idle?.stop(); idle = null; } else if (!idle) void startIdle(); },
   };
