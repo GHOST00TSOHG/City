@@ -43,7 +43,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   // ---- voxel skin
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0 });
   mat.positionNode = Fn(() => {
-    const q: any = aQ, lp0: any = (positionLocal as any).mul(aDim.xyz).mul(uVis.element(part.toInt()));
+    const q: any = aQ, lp0: any = (positionLocal as any).mul(aDim.xyz).mul(1.14).mul(uVis.element(part.toInt()));
     const fph0 = fract(time.mul(hash(seed.add(12)).mul(0.6).add(0.7)).add(seed.mul(7)));
     const lp: any = lp0.mul(float(1).sub(uFly.mul(step(0.25, hash(seed.add(13)))).mul(smoothstep(uCenter.y.add(0.15), uCenter.y.sub(0.55), (uBones.element(aOff.w.toInt()) as any).mul(vec4(aOff.xyz, 1)).y)).mul(fph0.mul(0.75))));
     const t: any = (cross as any)(q.xyz, lp).add(lp.mul(q.w)), rp: any = lp.add((cross as any)(q.xyz, t).mul(2));
@@ -66,7 +66,8 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   })();
   const grey = cat.greaterThan(0.5), vary = hash(seed.add(9)).mul(0.14).add(0.9), dmg = float(1).sub(damage.mul(0.3));
   mat.colorNode = grey.select(uGrey, uWhite).mul(vary).mul(dmg);
-  mat.emissiveNode = uGlow.mul(uBurst.mul(2.5).add(uDash.mul(1.2)).add(uFly.mul(0.35)));
+  // night readability: a faint self-lit share of the skin colour keeps the solid body legible against dark streets
+  mat.emissiveNode = (mat.colorNode as any).mul(0.3).add(uGlow.mul(uBurst.mul(2.5).add(uDash.mul(1.2)).add(uFly.mul(0.35))));
   Object.assign(mat.userData, { uWhite, uGrey, uGlow });
   const body = new THREE.InstancedMesh(BOX, mat, n); body.name = 'glitch:cubes';
 

@@ -32,7 +32,7 @@ export interface FlightProfile {
 
 export const TYPES: Record<RobotType, TypeDef> = {
   scout: {
-    label: 'Scout', blurb: 'Fast recon. Screen head, top speed, quick turns.', height: 2.1, sole: -0.12, tris: 30_000,
+    label: 'Scout', blurb: 'Fast recon. Screen head, top speed, quick turns.', height: 2.1, sole: -0.25, soleZ: 0.1, tris: 30_000,
     motion: { mass: 0.8, bob: 0.9, sway: 0.7, stride: 1.1, arms: 1.1, limp: 0, hunch: 0.04, curl: 0.35, special: 'none' }, specialDur: 0.8,
     flight: { style: 'scout', flame: 0.9, width: 0.85, core: '#fff6e0', mid: '#ffb347', edge: '#ff5a14', pulse: 1, dust: 0.7, launch: 0.12, bob: 0.03, smoke: 0.6 },
     slots: { helmet: ['crt', 'visor', 'twin'], arms: ['long', 'blade', 'grapple'], bionics: ['scope', 'antenna', 'drone'], legs: ['digi', 'straight', 'sprint'], thrusters: ['twin', 'ducted', 'fins'], boots: ['blade', 'pads', 'skids'] },
@@ -50,7 +50,7 @@ export const TYPES: Record<RobotType, TypeDef> = {
     tune: { walk: 0.8, run: 0.78, cruise: 0.85, burst: 0.85, jump: 0.85, turn: 0.72, accel: 0.65 },
   },
   worker: {
-    label: 'Worker', blurb: 'Combat medic. Regen core, injector arm, heal emitter.', height: 2.4, sole: -0.14, tris: 26_000,
+    label: 'Worker', blurb: 'Combat medic. Regen core, injector arm, heal emitter.', height: 2.4, sole: -0.16, tris: 26_000,
     motion: { mass: 1.3, bob: 1.1, sway: 1.1, stride: 0.95, arms: 0.9, limp: 0.35, hunch: 0.08, curl: 0.4, special: 'none' }, specialDur: 0.8,
     flight: { style: 'medic', flame: 1.15, width: 1.1, core: '#eefff2', mid: '#8dff9e', edge: '#ff8a2a', pulse: 0.2, dust: 1, launch: 0.2, bob: 0.025, smoke: 0.5 },
     slots: { helmet: ['boxcam', 'welder', 'lamp'], arms: ['claw', 'drill', 'welder'], bionics: ['tanks', 'battery', 'reel'], legs: ['cans', 'strut', 'ribbed'], thrusters: ['stacks', 'fans', 'rocket'], boots: ['stabilizer', 'wheels', 'clamp'] },

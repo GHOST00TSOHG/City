@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { uniform, uv, texture, positionLocal, fract, abs, smoothstep, sin, time, mx_noise_float, vec3, mix, float, max, step } from 'three/tsl';
+import { uniform, uv, texture, positionLocal, fract, floor, abs, smoothstep, sin, time, mx_noise_float, vec3, mix, float, max, step } from 'three/tsl';
 import type { RobotType, Slot, SlotBuild } from './types';
 
 /**
@@ -72,12 +72,16 @@ export function makeKitMaterials(u: U, masks: THREE.Texture | null, normal: THRE
       const fixed = FIXED[region];
       const wear = fixed ? float(0) : smoothstep(0.45, 0.8, edge);
       const paint = mix(uCol, vec3(0.42, 0.42, 0.43), wear).mul(mix(vec3(1), vec3(0.25, 0.2, 0.15), vec3(grime))).mul(ao);
-      m.colorNode = mix(paint, vec3(0.05, 0.045, 0.04), scorch.mul(0.85));
+      // panel cuts: thin dark grooves (not glowing); a few cells carry a small emissive accent
+      const gy = smoothstep(0.486, 0.496, abs(fract(p.y.mul(7)).sub(0.5))), gx = smoothstep(0.489, 0.497, abs(fract(p.x.mul(6).add(0.25)).sub(0.5)));
+      const cut = max(gy, gx.mul(0.7)), cell = fract(floor(p.y.mul(7)).mul(0.37).add(floor(p.x.mul(6).add(0.25)).mul(0.61)));
+      const accent = gy.mul(step(0.9, cell)).mul(float(1).sub(scorch));
+      const cutDark = float(1).sub(cut.mul(0.55));
+      m.colorNode = mix(paint.mul(cutDark), vec3(0.05, 0.045, 0.04), scorch.mul(0.85));
       m.metalnessNode = fixed ? float(fixed[2]) : max(float(region === 'joints' ? 0.55 : 0.12), wear);
       m.roughnessNode = mix(fixed ? float(fixed[1]) : mix(float(0.45), float(0.85), grime), float(0.95), scorch);
       if (region !== 'joints' && !fixed) { // faint energy seams on armour, tinted by the visor paint
-        const seam = max(smoothstep(0.475, 0.492, abs(fract(p.y.mul(7)).sub(0.5))), smoothstep(0.482, 0.495, abs(fract(p.x.mul(6).add(0.25)).sub(0.5))).mul(0.6)).mul(float(1).sub(scorch));
-        m.emissiveNode = u.glow.mul(seam.mul(0.35).mul(pulse).mul(hurt)).add(vec3(0.4, 1.0, 0.9).mul(sweep.mul(2)));
+        m.emissiveNode = u.glow.mul(accent.mul(0.22).mul(pulse).mul(hurt)).add(vec3(0.4, 1.0, 0.9).mul(sweep.mul(2)));
       } else m.emissiveNode = vec3(0.4, 1.0, 0.9).mul(sweep.mul(2));
     }
     return m;
