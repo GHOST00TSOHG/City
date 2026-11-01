@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { AreaData, Terrain } from './data';
 import { Soup, ringPts, flatPoly } from './geom';
+import { inLandmarkFlattenBlend, type LandmarkPad } from './landmarks';
 import { type AreaStyle, styleFor } from './textures';
 
 // Landcover class -> ground texture layer weights [grass, sand, soil, concrete] and a tint (texture colour is kept true).
@@ -67,13 +68,22 @@ const WALK = new THREE.Color(0xa8a49c), WALK_LIFT = 0.05, WALK_W = 1.8;
 /** Road surface height query: spatial hash of road segments, so walkers stand ON the asphalt/sidewalk, not in it. */
 export interface RoadSurface { surfaceAt(x: number, z: number): number }
 
+/** Snap every road-mesh vertex onto the height query (after landmark flatten, fixes sparse ribbon gaps / tears). */
+export function redrapeRoadGeometry(mesh: THREE.Mesh, surface: RoadSurface) {
+  const pos = mesh.geometry.attributes.position as THREE.BufferAttribute | undefined;
+  if (!pos) return;
+  for (let i = 0; i < pos.count; i++) pos.setY(i, surface.surfaceAt(pos.getX(i), pos.getZ(i)));
+  pos.needsUpdate = true;
+}
+
 /** Roads (asphalt by class), centre markings and sidewalks in one draw. Polylines are resampled to the terrain cell so
  *  the ribbon follows the ground instead of cutting through bumps between OSM nodes. Sidewalks sit below every road lift so
  *  any crossing road covers them; markings sit just above their own road. Returns the mesh plus a matching height query. */
-export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material): THREE.Mesh & { surface: RoadSurface } {
+export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, landmarkPads: LandmarkPad[] = []): THREE.Mesh & { surface: RoadSurface } {
   const s = new Soup();
   const order = [...a.roads].sort((p, q) => q.c - p.c); // paths first, majors last (on top)
   const step = Math.max(2, t.cell);
+  const stepAt = (x: number, z: number) => (landmarkPads.length && inLandmarkFlattenBlend(landmarkPads, x, z, t.cell) ? Math.min(step, 2) : step);
   const base = (x: number, z: number) => Math.max(t.heightAt(x, z), 0.05);
   const B = 32, hash = new Map<number, number[]>(), segs: number[] = []; // seg: x0 z0 x1 z1 halfWidth lift
   const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number) => {
@@ -82,7 +92,7 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material): T
     for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) { const k = i * 100003 + j; let l = hash.get(k); if (!l) hash.set(k, (l = [])); l.push(id); }
   };
   for (const r of order) {
-    const pts = resample(ringPts(r.p), step); if (pts.length < 2) continue;
+    const pts = resample(ringPts(r.p), stepAt); if (pts.length < 2) continue;
     const w = r.w / 2, col = ROAD[r.c] ?? ROAD[1], lift = LIFT[r.c] ?? 0.1;
     const Y = (x: number, z: number) => base(x, z) + lift;
     if (r.c <= 2 && r.w >= 5) { // sidewalks
@@ -112,11 +122,15 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material): T
   return m;
 }
 
-/** Split long polyline segments so no piece is longer than `step` metres. */
-function resample(pts: [number, number][], step: number) {
+/** Split long polyline segments so no piece is longer than `step` metres (constant or per midpoint). */
+function resample(pts: [number, number][], step: number | ((x: number, z: number) => number)) {
   const out: [number, number][] = [];
+  const segStep = (a: [number, number], b: [number, number]) => (typeof step === 'number' ? step : step((a[0] + b[0]) / 2, (a[1] + b[1]) / 2));
   for (let i = 0; i < pts.length; i++) {
-    if (i > 0) { const a = pts[i - 1], b = pts[i], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / step); for (let k = 1; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]); }
+    if (i > 0) {
+      const a = pts[i - 1], b = pts[i], st = segStep(a, b), n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / st);
+      for (let k = 1; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+    }
     out.push(pts[i]);
   }
   return out;

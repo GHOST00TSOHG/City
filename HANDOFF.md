@@ -200,4 +200,5 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 - Bug: bake scatter gave wood/wetland cells a 25% palm chance even with `palmShare: 0`. Fixed in `tools/bake/bake.mjs`; runtime guard `buildTrees(..., palms = id === 'keywest')` turns any baked palm in NJ into broadleaf (no re-bake needed). `stats.palms` / `__stats()`; `tests/palms.spec.ts`.
 ## Landmarks terrain (bot/websmith-landmarks-terrain)
 - `src/area/landmarks.ts`: each landmark gets a world-space **pad** (rotated model plan box); `flattenUnderLandmarks` levels the heightfield to the pad base with a 14 m smooth blend; `treesOutsideLandmarks` and `blockGrassUnderLandmarks` keep scatter off the pad (+ margin). Placement uses `position.y = baseY - box.min.y` so the mesh sits on the flattened ground, not buried or floating.
+- **Roads / paving:** flatten skips ground-mask road cells and baked paved landcover; `buildRoads` resamples every 2 m inside the pad blend zone; `redrapeRoadGeometry` snaps the road mesh to the height query after flatten.
 - `tools/shots-landmarks.mjs`: WebKit before/after stills (stadium origin, cathedral, street).

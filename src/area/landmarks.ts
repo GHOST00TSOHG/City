@@ -170,27 +170,52 @@ function polysTouch(a: P[], b: P[], margin: number) {
 }
 
 /** Signed-ish distance (m) from (x, z) to a pad outline: <= 0 inside, else the distance to the nearest edge. */
-function padDist(pd: LandmarkPad, x: number, z: number) {
+export function padPlanDist(pd: LandmarkPad, x: number, z: number) {
   if (inPoly(pd.pts, x, z)) return 0;
   let d = Infinity; for (let i = 0, j = pd.pts.length - 1; i < pd.pts.length; j = i++) d = Math.min(d, segDist2([x, z], pd.pts[j], pd.pts[i]));
   return Math.sqrt(d);
 }
+function padDist(pd: LandmarkPad, x: number, z: number) { return padPlanDist(pd, x, z); }
+
+/** True when (x, z) lies inside a pad's flatten blend zone (used to resample roads more densely there). */
+export function inLandmarkFlattenBlend(pads: LandmarkPad[], x: number, z: number, cell: number, blend = 14) {
+  const pad = cell * 0.75;
+  for (const pd of pads) {
+    if (x < pd.minX - blend - pad - 2 || x > pd.maxX + blend + pad + 2 || z < pd.minZ - blend - pad - 2 || z > pd.maxZ + blend + pad + 2) continue;
+    if (padPlanDist(pd, x, z) - pad < blend) return true;
+  }
+  return false;
+}
 
 /** Flattens the terrain heightfield under every landmark pad to the landmark's base height (so it is neither buried in a slope nor
  *  floating over a dip), blending back to the original ground over `blend` m around it. Run once per area load, BEFORE the terrain
- *  mesh, roads, trees and grass are built (they all sample the same heights). Idempotent: running it twice gives the same heights. */
-export function flattenUnderLandmarks(t: { nx: number; nz: number; cell: number; x0: number; z0: number; h: Float32Array }, pads: LandmarkPad[], blend = 14) {
+ *  mesh, roads, trees and grass are built (they all sample the same heights). Idempotent: running it twice gives the same heights.
+ *  `keepFlat` skips cells (e.g. baked road mask) so pavement is re-draped on the original bed instead of tearing away from lowered ground. */
+export function flattenUnderLandmarks(
+  t: { nx: number; nz: number; cell: number; x0: number; z0: number; h: Float32Array },
+  pads: LandmarkPad[],
+  blend = 14,
+  keepFlat?: (x: number, z: number) => boolean,
+) {
+  if (!pads.length) return 0;
+  const orig = t.h.slice(), pad = t.cell * 0.75;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const pd of pads) { minX = Math.min(minX, pd.minX); maxX = Math.max(maxX, pd.maxX); minZ = Math.min(minZ, pd.minZ); maxZ = Math.max(maxZ, pd.maxZ); }
+  const ix0 = Math.max(0, Math.floor((minX - blend - pad - t.x0) / t.cell)), ix1 = Math.min(t.nx - 1, Math.ceil((maxX + blend + pad - t.x0) / t.cell));
+  const iz0 = Math.max(0, Math.floor((minZ - blend - pad - t.z0) / t.cell)), iz1 = Math.min(t.nz - 1, Math.ceil((maxZ + blend + pad - t.z0) / t.cell));
   let n = 0;
-  for (const pd of pads) {
-    const pad = t.cell * 0.75; // grid cells are coarse (8 m): every vertex within ~3/4 cell of the outline is held flat so the rendered triangles under the walls are level
-    const ix0 = Math.max(0, Math.floor((pd.minX - blend - pad - t.x0) / t.cell)), ix1 = Math.min(t.nx - 1, Math.ceil((pd.maxX + blend + pad - t.x0) / t.cell));
-    const iz0 = Math.max(0, Math.floor((pd.minZ - blend - pad - t.z0) / t.cell)), iz1 = Math.min(t.nz - 1, Math.ceil((pd.maxZ + blend + pad - t.z0) / t.cell));
-    for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
-      const d = padDist(pd, t.x0 + ix * t.cell, t.z0 + iz * t.cell) - pad, i = iz * t.nx + ix;
+  for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+    const x = t.x0 + ix * t.cell, z = t.z0 + iz * t.cell, i = iz * t.nx + ix;
+    if (keepFlat?.(x, z)) continue;
+    let wMax = 0, yFlat = orig[i];
+    for (const pd of pads) {
+      if (x < pd.minX - blend - pad || x > pd.maxX + blend + pad || z < pd.minZ - blend - pad || z > pd.maxZ + blend + pad) continue;
+      const d = padPlanDist(pd, x, z) - pad;
       if (d >= blend) continue;
       const w = d <= 0 ? 1 : 1 - (d / blend) * (d / blend) * (3 - 2 * (d / blend));
-      t.h[i] = t.h[i] + (pd.y - t.h[i]) * w; n++;
+      if (w > wMax) { wMax = w; yFlat = pd.y; }
     }
+    if (wMax > 0) { t.h[i] = orig[i] + (yFlat - orig[i]) * wMax; n++; }
   }
   return n;
 }
