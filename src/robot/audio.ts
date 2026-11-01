@@ -14,7 +14,9 @@ const STEPS = ['footstep_01', 'footstep_02', 'footstep_03'];
  */
 export const GLITCH_THRUST_HOOKS = { hum: 'glitch-thrust-hum', crackle: 'glitch-thrust-crackle' } as const;
 const HOOK_FILE: Record<string, string> = { 'glitch-thrust-hum': 'thrust_hum', 'glitch-thrust-crackle': 'thrust_crackle' };
-const HAVE = new Set<string>([]); // add 'glitch-thrust-hum' / 'glitch-thrust-crackle' when Echo's files land
+const HAVE = new Set<string>([]);
+/** Other named hooks (silent until the file is added): worker-land-hiss = public/audio/robots/worker/worker_land_hiss.{ogg,m4a}. */
+HOOK_FILE['worker-land-hiss'] = 'land_hiss'; // add 'glitch-thrust-hum' / 'glitch-thrust-crackle' when Echo's files land
 
 export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots/`) {
   let hum: AudioBufferSourceNode | null = null, humGain: GainNode | null = null, humBusy = false, crackT = 0;
@@ -53,6 +55,8 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
       }
       if (HAVE.has('glitch-thrust-crackle') && level > 0.05) { crackT -= dt; if (crackT < 0) { crackT = 0.15 + Math.random() * 0.4; void play(HOOK_FILE['glitch-thrust-crackle']); } }
     },
+    /** Play a named hook if Echo's file exists (see HAVE); otherwise no-op (no 404). */
+    hook(name: string) { if (HAVE.has(name) && HOOK_FILE[name]) void play(HOOK_FILE[name]); },
     special(kind: string) { if (kind !== 'none') void play(`special_${kind}`); },
     setIdle(on: boolean) { if (!on) { idle?.stop(); idle = null; } else if (!idle) void startIdle(); },
   };

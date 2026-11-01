@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { clips, sampleQ, sampleBob, POSE_BONES } from './clips';
 import { TYPES, defaultSlots, sanitizeSlots, type RobotType, type Slot as TSlot } from './types';
 
 /** Colour regions a player can customise later (join screen). Keys are stable: saved looks depend on them. */
@@ -36,7 +37,15 @@ export interface RobotModel {
 }
 export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number; fist?: number; special?: number; damage?: number;
   /** flight: launch = take-off wind-up 0..1 (crouch), flyT = s since the rockets lit, thrust = throttle 0..1 */
-  launch?: number; flyT?: number; thrust?: number }
+  launch?: number; flyT?: number; thrust?: number;
+  /** ground speed m/s (stride-matches the mocap), gallop / ball / slide = style blends 0..1 from the controller, hop = Glitch hop phase 0..1 (0 = not hopping) */
+  gs?: number; gallop?: number; ball?: number; slide?: number; hop?: number; vox?: number;
+  /** landing by fall speed: kind from types.ts, seconds since touch-down, strength 0..1, planned duration */
+  landKind?: LandKind; landT?: number; landS?: number; landDur?: number }
+export type LandKind = 'none' | 'slam' | 'knee' | 'quad' | 'voxel';
+/** Which baked mocap drives walking / running for this type and how hard it is pushed (types.ts TYPES[t].gait). amp scales the swing around rest. */
+export interface GaitProfile { wMoc: number; idleW: number; landW: number; maxRate: number; amp: { arms: number; legs: number; spine: number }; bob: number }
+export const DEFAULT_GAIT: GaitProfile = { wMoc: 0.9, idleW: 0.3, landW: 0.4, maxRate: 2.2, amp: { arms: 1, legs: 1, spine: 1 }, bob: 1 };
 /** Per-type body mechanics (types.ts TYPES[t].motion). mass slows blends and deepens the plant; sway = hip roll; limp = right-leg hitch. */
 export interface MotionProfile { mass: number; bob: number; sway: number; stride: number; arms: number; limp: number; hunch: number; curl: number; special: 'none' | 'groundpound' | 'blinkdash' }
 export const DEFAULT_MOTION: MotionProfile = { mass: 1, bob: 1, sway: 1, stride: 1, arms: 1, limp: 0, hunch: 0, curl: 0.35, special: 'none' };
@@ -47,7 +56,7 @@ export type Bones = Partial<Record<(typeof BONES)[number], THREE.Object3D>> & Re
 
 /** Procedural pose: Euler targets (x pitch, z roll) per bone; damped so state changes blend. */
 export type FlightStyle = 'scout' | 'heavy' | 'medic' | 'cubes' | 'generic';
-export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: FlightStyle = 'generic') {
+export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: FlightStyle = 'generic', G: GaitProfile = DEFAULT_GAIT) {
   const fingers = Object.keys(b).filter((n) => /^(Left|Right)F\d_\d$/.test(n)) as (keyof Bones)[];
   let fistC = 0, openC = 0;
   const rest = new Map<THREE.Object3D, THREE.Quaternion>();
@@ -60,6 +69,43 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     o.quaternion.copy(rest.get(o)!).multiply(q.setFromEuler(e.set(v.x, v.y, v.z)));
   };
   let hipY = 0;
+  // ---- mocap layer (clips.ts): walking / running / idle / landing are sampled from baked CMU + Mixamo data and blended over the procedural pose
+  const legL = Math.abs((b.LeftUpLeg?.position.y ?? -0.4) + (b.LeftLeg?.position.y ?? -0.4) + (b.LeftFoot?.position.y ?? -0.3)) || 0.75;
+  let mc = 0, u = 0, uIdle = 0; const qm = new THREE.Quaternion(), qt = new THREE.Quaternion(), qs = new THREE.Quaternion(), qi = new THREE.Quaternion(), eo = new THREE.Euler();
+  const sstep = (x: number, a: number, c: number) => { const t = Math.max(0, Math.min(1, (x - a) / (c - a))); return t * t * (3 - 2 * t); };
+  const grp = (n: string) => (n.includes('Arm') ? G.amp.arms : /Leg|Foot/.test(n) ? G.amp.legs : G.amp.spine);
+  const ovr = (name: string, x: number, y: number, z: number, w: number) => { const o = b[name]; if (!o || w <= 0.001) return; qt.copy(rest.get(o)!).multiply(qs.setFromEuler(eo.set(x, y, z))); o.quaternion.slerp(qt, Math.min(1, w)); };
+  function mocap(p: PoseInput, dt: number) {
+    const C = clips(); if (!C) return 0;
+    const loc = (p.anim === 'walk' || p.anim === 'run') && !p.landKind, gs = p.gs ?? 0;
+    const landing = p.anim === 'land' && p.landKind && p.landKind !== 'none' && p.landKind !== 'voxel' && !!C.jump_a;
+    mc += ((loc ? G.wMoc : landing ? G.landW : p.anim === 'idle' ? G.idleW : 0) - mc) * (1 - Math.exp(-dt * 9));
+    if (mc < 0.01) return 0;
+    let bobM = 0;
+    if (loc) {
+      const S = C.walk_a, Jg = C.jog_a, R = C.run_a; if (!S || !Jg || !R) return 0;
+      const wS = 1 - sstep(gs, 1.2, 2.6), wR = sstep(gs, 4.2, 6.4), wJ = Math.max(0, 1 - wS - wR);
+      const rate = (c: typeof S, lo: number, hi: number) => Math.max(lo, Math.min(hi, gs / (Math.max(0.2, c.speed) * legL)));
+      const rS = rate(S, 0.5, 2.0), rJ = rate(Jg, 0.6, 1.9), rR = rate(R, 0.7, G.maxRate);
+      u = (u + dt * (rS * S.fps / S.n * wS + rJ * Jg.fps / Jg.n * wJ + rR * R.fps / R.n * wR)) % 1;
+      const ex = 1 + 0.22 * Math.max(0, rR - 1) * wR; // faster than the capture: swing a little wider so the strides keep up
+      for (const n of POSE_BONES) {
+        const o = b[n]; if (!o) continue;
+        sampleQ(S, n, u * S.n, qm); sampleQ(Jg, n, u * Jg.n, qi); qm.slerp(qi, wJ / Math.max(1e-4, wS + wJ)); sampleQ(R, n, u * R.n, qi); qm.slerp(qi, wR);
+        const a = grp(n) * (/Leg|Foot/.test(n) ? ex : 1); if (a !== 1) { qi.identity(); qm.copy(qi.slerp(qm, a)); }
+        o.quaternion.slerp(qm, mc);
+      }
+      bobM = (sampleBob(S, u * S.n) * wS + sampleBob(Jg, u * Jg.n) * wJ + sampleBob(R, u * R.n) * wR) * legL * G.bob;
+    } else if (landing) {
+      const c = C.jump_a, f = 44 + Math.min(1, Math.max(0, (p.landT ?? 0) / Math.max(0.2, p.landDur ?? 0.8))) * 22; // the capture's own landing: frames 44..66
+      for (const n of POSE_BONES) { const o = b[n]; if (!o || n === 'Hips') continue; sampleQ(c, n, f, qm); o.quaternion.slerp(qm, mc); }
+      bobM = sampleBob(c, f) * legL * (p.landS ?? 0.5);
+    } else { // idle: Mixamo "Warrior Idle" breathing / weight shift on the upper body only (feet stay planted)
+      const c = C.idle_a; if (!c) return 0; uIdle = (uIdle + dt * c.fps / c.n) % 1;
+      for (const n of ['Spine', 'Head', 'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm'] as const) { const o = b[n]; if (!o) continue; sampleQ(c, n, uIdle * c.n, qm); o.quaternion.slerp(qm, mc); }
+    }
+    return bobM * mc;
+  }
   return (p: PoseInput, dt: number) => {
     const k = 1 - Math.exp(-dt * (p.anim === 'roll' ? 30 : 12) / Math.sqrt(M.mass)), s = Math.sin(p.phase), c = Math.cos(p.phase);
     let hips = [0, 0, 0], spine = [0, 0, 0], head = [0, 0, 0], la = [0, 0, 0.12], ra = [0, 0, -0.12], lf = [0, 0, 0], rf = [0, 0, 0];
@@ -82,6 +128,21 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
         if (p.anim === 'fall') { la = [-2.6, 0, 0.5]; ra = [-2.6, 0, -0.5]; lf = [-0.3, 0, 0]; rf = [-0.3, 0, 0]; }
         lu = [0.05, 0, 0.03]; ru = [0.05, 0, -0.03]; ll = [0.25, 0, 0]; rl = [0.12, 0, 0]; head = [-0.9 * p.lean, 0, 0]; break; }
       case 'land': { // knee bend (reference 0:42)
+        if (p.landKind && p.landKind !== 'none' && p.landKind !== 'voxel') { // per-type landing, scaled by fall speed (landS) and shaped by landT / landDur
+          const uL = Math.min(1, (p.landT ?? 0) / Math.max(0.2, p.landDur ?? 0.8)), S = Math.max(0.35, p.landS ?? 0.5), e = sstep(uL, 0, 0.16) * (1 - sstep(uL, 0.6, 1)) * S, sp2 = sstep(uL, 0.62, 0.8) * (1 - sstep(uL, 0.8, 1));
+          if (p.landKind === 'slam') { // Heavy: deep squat, both fists driven into the ground, a hard bounce of the mass
+            lu = [-1.2 * e, 0, 0.32 * e]; ru = [-1.2 * e, 0, -0.32 * e]; ll = [1.9 * e, 0, 0]; rl = [1.9 * e, 0, 0]; lft = [-0.5 * e, 0, 0]; rft = lft.slice();
+            spine = [0.5 * e, 0, 0]; head = [-0.35 * e, 0, 0]; la = [-0.35 * e, 0, 0.55 * e]; ra = [-0.35 * e, 0, -0.55 * e]; lf = [-0.2 * e, 0, 0]; rf = lf.slice(); bob = -0.5 * e + Math.sin(uL * 26) * 0.03 * Math.max(0, 0.5 - uL) * S;
+          } else if (p.landKind === 'knee') { // Scout: one-knee superhero landing, fist braced on the ground, then springs up
+            lu = [-1.45 * e, 0, 0.12 * e]; ll = [1.55 * e, 0, 0]; ru = [-0.45 * e, 0, -0.18 * e]; rl = [2.35 * e, 0, 0]; lft = [-0.5 * e, 0, 0]; rft = [0.6 * e, 0, 0];
+            spine = [0.62 * e, 0, 0]; head = [-0.55 * e, 0, 0]; la = [-0.15 * e, 0, 0.4 * e]; ra = [0.8 * e, 0, -1.0 * e]; lf = [-0.3 * e, 0, 0]; rf = [-0.4 * e, 0, 0]; bob = -0.52 * e + sp2 * 0.22 * S;
+          } else { // quad (Worker): four-limb landing, hydraulic compression rings out
+            lu = [-1.35 * e, 0, 0.3 * e]; ru = [-1.35 * e, 0, -0.3 * e]; ll = [2.0 * e, 0, 0]; rl = [2.0 * e, 0, 0]; lft = [-0.6 * e, 0, 0]; rft = lft.slice();
+            spine = [1.0 * e, 0, 0]; head = [-0.85 * e, 0, 0]; la = [-1.0 * e, 0, 0.18 * e]; ra = [-1.0 * e, 0, -0.18 * e]; lf = [-0.25 * e, 0, 0]; rf = lf.slice();
+            bob = -0.46 * e + Math.sin(uL * 34) * 0.05 * Math.exp(-uL * 4.5) * S;
+          }
+          break;
+        }
         const cr = p.crouch; lu = [-1.0 * cr, 0, 0.08]; ru = [-1.0 * cr, 0, -0.08]; ll = [1.7 * cr, 0, 0]; rl = [1.7 * cr, 0, 0];
         lft = [-0.7 * cr, 0, 0]; rft = [-0.7 * cr, 0, 0]; spine = [0.45 * cr, 0, 0]; la = [-0.4 * cr, 0, 0.5 * cr]; ra = [-0.4 * cr, 0, -0.5 * cr]; bob = -0.32 * cr; break; }
       case 'roll': case 'stumble': // tucked ball; the root does the tumbling
@@ -151,6 +212,16 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     set('LeftArm', la[0], la[1], la[2], k); set('RightArm', ra[0], ra[1], ra[2], k); set('LeftForeArm', lf[0], lf[1], lf[2], k); set('RightForeArm', rf[0], rf[1], rf[2], k);
     set('LeftUpLeg', lu[0], lu[1], lu[2], k); set('RightUpLeg', ru[0], ru[1], ru[2], k); set('LeftLeg', ll[0], ll[1], ll[2], k); set('RightLeg', rl[0], rl[1], rl[2], k);
     set('LeftFoot', lft[0], lft[1], lft[2], k); set('RightFoot', rft[0], rft[1], rft[2], k);
+    const bobM = mocap(p, dt); if (b.Hips) b.Hips.position.y += bobM;
+    // ---- per-type run / slide / landing overlays (blend weights come from the controller)
+    const gl = p.gallop ?? 0, bl = p.ball ?? 0, sl = p.slide ?? 0, ph2 = Math.sin(p.phase);
+    if (bl > 0) { const w = bl; ovr('LeftUpLeg', -2.0, 0, 0, w); ovr('RightUpLeg', -2.0, 0, 0, w); ovr('LeftLeg', 2.3, 0, 0, w); ovr('RightLeg', 2.3, 0, 0, w); ovr('Spine', 0.75, 0, 0, w); ovr('Head', 0.5, 0, 0, w);
+      ovr('LeftArm', -1.2, 0, 0.3, w); ovr('RightArm', -1.2, 0, -0.3, w); ovr('LeftForeArm', -1.7, 0, 0, w); ovr('RightForeArm', -1.7, 0, 0, w); ovr('LeftFoot', -1.6, 0, 0, w); ovr('RightFoot', -1.6, 0, 0, w); if (b.Hips) b.Hips.position.y -= 0.18 * w; } // Heavy: armour folds into a ball
+    if (gl > 0) { ovr('Spine', 1.0, 0, 0, gl); ovr('Head', -0.7, 0, 0, gl); ovr('Hips', 0.22, 0, 0, gl); ovr('LeftArm', -1.0 + 0.7 * ph2, 0, 0.16, gl); ovr('RightArm', -1.0 + 0.7 * ph2, 0, -0.16, gl); ovr('LeftForeArm', -0.35 - 0.3 * ph2, 0, 0, gl); ovr('RightForeArm', -0.35 - 0.3 * ph2, 0, 0, gl); if (b.Hips) b.Hips.position.y -= 0.16 * gl; } // Worker: four-limbed gallop
+    if (sl > 0) { ovr('Hips', 0, 0, 0, 0); ovr('Spine', -0.32, 0, 0, sl); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl); ovr('LeftLeg', 2.0, 0, 0, sl); ovr('RightUpLeg', -0.5, 0, -0.14, sl); ovr('RightLeg', 0.25, 0, 0, sl);
+      ovr('LeftFoot', -0.4, 0, 0, sl); ovr('RightFoot', 0.2, 0, 0, sl); ovr('LeftArm', 0.3, 0, 0.95, sl); ovr('RightArm', 0.3, 0, -0.95, sl); if (b.Hips) b.Hips.position.y -= 0.34 * sl; } // Scout: thruster-assisted slide
+    if (style === 'medic') { const rat = gl * 0.9 + (p.anim === 'run' ? 0.35 : 0); if (rat > 0.02) for (const n of ['LeftForeArm', 'RightForeArm', 'Spine'] as const) { const o = b[n]; if (o) { o.rotateX(Math.sin(p.t * 53 + n.length) * 0.05 * rat); o.rotateZ(Math.sin(p.t * 67 + n.length * 3) * 0.035 * rat); } } } // tools rattle
+    if ((p.hop ?? 0) > 0 && b.Hips) b.Hips.position.y -= 0.16 * Math.sin(Math.min(1, p.hop! * 1.6) * Math.PI) * (1 - Math.min(1, p.hop!)); // Glitch: crouch into the hop
     // fingers: relaxed curl in idle/walk, fist on boost / special; thumb curls less
     // medic: open flat hands while the palm jets fire, back to fists (palms to the thighs) on landing
     openC += (open - openC) * (1 - Math.exp(-dt * 10));

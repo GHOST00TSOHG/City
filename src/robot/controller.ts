@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import type { RobotModel, RobotAnim } from './model';
+import type { RobotModel, RobotAnim, LandKind } from './model';
 
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
 export interface World { floorAt(x: number, z: number, y: number): { y: number; water: boolean; roof: boolean }; blocked(x: number, z: number, y: number): boolean }
@@ -53,15 +53,27 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
 
   const fwd = new THREE.Vector3(), right = new THREE.Vector3(), want = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const qYaw = new THREE.Quaternion(), qLean = new THREE.Quaternion(), qBank = new THREE.Quaternion(), qRoll = new THREE.Quaternion();
+  // ---- per-type run style + landing (types.ts TYPES[t].run / .land)
+  let gaitKind: 'none' | 'ball' | 'sprint' | 'gallop' | 'hop' = 'none', landKind: LandKind = 'none';
+  let ballT = 0, ballAng = 0, gallopW = 0, slideT = -1, slideW = 0, prevVh = 0, hopT = -1, hopCd = 0, vox = 0, landPuff = 0, landDur = 0.5, landS = 0, landActive: LandKind = 'none', scrapeAcc = 0;
+  let onLandFx: ((kind: LandKind, p: THREE.Vector3, s: number) => void) | null = null;
+  let onScrape: ((p: THREE.Vector3, v: THREE.Vector3, k: number) => void) | null = null;
+  let onHop: ((a: THREE.Vector3, b: THREE.Vector3, phase: 'depart' | 'arrive') => void) | null = null;
+  const hopA = new THREE.Vector3(), qBall = new THREE.Quaternion(), tmpV = new THREE.Vector3();
   const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
   const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
   function touchDown() {
-    if (hero) { hero = false; mode = 'LAND'; landT = -0.45; anim = 'land'; const s = Math.min(1.4, 0.6 + -vel.y / 60); vel.set(0, 0, 0); pos.y = floor.y; onImpact?.(pos, s); return; } // superhero landing
+    const impact = -vel.y, vh = Math.hypot(vel.x, vel.z), s = Math.max(0, Math.min(1, (impact - 6) / 34)); // fall speed -> 0..1
+    const typed = landKind !== 'none' && (hero || (impact > 6 && vh <= 16));
+    if (typed) { // per-type landing (Heavy slam, Scout one-knee, Worker quad, Glitch voxel reform): length and depth scale with the fall
+      const S = hero ? 1 : Math.max(0.25, s); mode = 'LAND'; landT = 0; landActive = landKind; landS = S; landDur = (landKind === 'slam' ? 0.75 : landKind === 'knee' ? 0.85 : landKind === 'quad' ? 0.8 : 0.7) + 0.55 * S; anim = 'land';
+      hero = false; vel.set(0, 0, 0); pos.y = floor.y; onLandFx?.(landKind, pos, S); if (landKind === 'knee') landPuff = 1; return;
+    }
+    if (hero) { hero = false; mode = 'LAND'; landT = -0.45; landActive = 'none'; anim = 'land'; const s2 = Math.min(1.4, 0.6 + -vel.y / 60); vel.set(0, 0, 0); pos.y = floor.y; onImpact?.(pos, s2); return; } // superhero landing
     if (-vel.y > 18) onImpact?.(pos, Math.min(0.8, -vel.y / 60));
-    const vh = Math.hypot(vel.x, vel.z), impact = -vel.y;
     if (vh > 16 || impact > 24) { mode = 'ROLL'; rollT = 0; anim = 'roll'; } // tumbling forward roll at speed (reference 0:32)
-    else { mode = 'LAND'; landT = 0; anim = 'land'; vel.x *= 0.3; vel.z *= 0.3; } // knee bend (0:42)
+    else { mode = 'LAND'; landT = 0; landActive = 'none'; anim = 'land'; vel.x *= 0.3; vel.z *= 0.3; } // knee bend (0:42)
     vel.y = 0; pos.y = floor.y;
   }
 
@@ -70,7 +82,10 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     setTuning(m: Partial<typeof BASE>) { WALK = BASE.walk * (m.walk ?? 1); RUN = BASE.run * (m.run ?? 1); CRUISE = BASE.cruise * (m.cruise ?? 1); BURST = BASE.burst * (m.burst ?? 1); JUMP = BASE.jump * (m.jump ?? 1); TURN = m.turn ?? 1; ACCEL = m.accel ?? 1; },
     get tuning() { return { walk: WALK, run: RUN, cruise: CRUISE, burst: BURST, jump: JUMP, turn: TURN, accel: ACCEL }; },
     get pos() { return pos; }, get vel() { return vel; }, get mode() { return mode; }, get burst() { return burst; }, get heading() { return heading; },
-    get thrust() { return power; }, get burstOn() { return burstOn; }, get floor() { return floor; }, get anim() { return anim; },
+    get thrust() { return Math.max(power, landPuff * 0.7, slideW * 0.55); },
+    setGait(k: typeof gaitKind) { gaitKind = k; }, setLand(k: LandKind) { landKind = k; },
+    set onLandFx(f: typeof onLandFx) { onLandFx = f; }, set onScrape(f: typeof onScrape) { onScrape = f; }, set onHop(f: typeof onHop) { onHop = f; },
+    get ball() { return ballT; }, get slide() { return slideW; }, get gallop() { return gallopW; }, get vox() { return vox; }, get landing() { return mode === 'LAND' ? { kind: landActive, t: landT, dur: landDur, s: landS } : null; }, get burstOn() { return burstOn; }, get floor() { return floor; }, get anim() { return anim; },
     get enabled() { return enabled; },
     setEnabled(v: boolean) { enabled = v; keys.clear(); model.root.visible = v; },
     /** Drop-in spawn: start high above (x, z) facing `h`, skydiving into the superman pose. */
@@ -113,12 +128,44 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         const moving = want.lengthSq() > 0 && mode === 'GROUND';
         const sp = iBurst ? RUN : WALK;
         if (moving) { want.normalize(); heading += angDiff(Math.atan2(want.x, want.z), heading) * (1 - Math.exp(-dt * 12 * TURN)); want.multiplyScalar(sp); } else want.set(0, 0, 0);
-        vel.x += (want.x - vel.x) * (1 - Math.exp(-dt * 10 * ACCEL)); vel.z += (want.z - vel.z) * (1 - Math.exp(-dt * 10 * ACCEL)); vel.y = 0;
-        const vh = Math.hypot(vel.x, vel.z); phase += dt * vh * (vh > 5 ? 1.5 : 2.6);
-        anim = mode === 'LAND' ? 'land' : vh > 5 ? 'run' : vh > 0.4 ? 'walk' : 'idle';
-        if (mode === 'LAND') { landT += dt; if (landT > 0.38) mode = 'GROUND'; }
+        const runFrac = Math.hypot(vel.x, vel.z) / Math.max(1, RUN);
+        // Scout: after a sprint, letting go of the keys starts a thruster-assisted slide (friction instead of the usual quick stop)
+        if (gaitKind === 'sprint' && mode === 'GROUND') {
+          if (slideT < 0 && !moving && prevVh > 0.62 * RUN) slideT = 0;
+          if (slideT >= 0) { slideT += dt; if (moving && slideT > 0.2) slideT = -1; else if (slideT > 0.85 || Math.hypot(vel.x, vel.z) < 1.2) slideT = -1; }
+        }
+        if (slideT >= 0) { vel.x *= Math.exp(-dt * 2.8); vel.z *= Math.exp(-dt * 2.8); }
+        else { vel.x += (want.x - vel.x) * (1 - Math.exp(-dt * 10 * ACCEL)); vel.z += (want.z - vel.z) * (1 - Math.exp(-dt * 10 * ACCEL)); }
+        vel.y = 0;
+        // Glitch: running is a chain of short teleport hops (dissolve, reform ~4 m ahead, cube trail), stopped short by walls and ledges
+        hopCd -= dt;
+        if (gaitKind === 'hop' && mode === 'GROUND') {
+          if (hopT < 0 && moving && iBurst && hopCd <= 0) { hopT = 0; }
+          if (hopT >= 0) {
+            const h0 = hopT; hopT += dt; if (hopT > 0.2 && hopT < 0.45) { vel.x *= 0.3; vel.z *= 0.3; } // (the body is dissolved; it travels by teleport)
+            if (h0 < 0.3 && hopT >= 0.3) { // teleport
+              hopA.copy(pos); let d = 0; const fx2 = Math.sin(heading), fz2 = Math.cos(heading);
+              for (let st = 1; st <= 9; st++) { const px = pos.x + fx2 * st * 0.5, pz = pos.z + fz2 * st * 0.5, fl = world.floorAt(px, pz, pos.y + 1); if (world.blocked(px, pz, pos.y + 0.6) || Math.abs(fl.y - pos.y) > 1.1 || fl.water) break; d = st * 0.5; }
+              onHop?.(hopA, tmpV.set(pos.x + fx2 * d, pos.y, pos.z + fz2 * d), 'depart'); pos.x += fx2 * d; pos.z += fz2 * d;
+              onHop?.(hopA, pos, 'arrive');
+            }
+            if (hopT > 0.62) { hopT = -1; hopCd = 0.03; }
+          }
+        } else hopT = -1;
+        // Heavy: at run speed the armour folds into a ball and rolls; unfolds when he slows
+        const ballWant = gaitKind === 'ball' && mode === 'GROUND' && moving && iBurst && Math.hypot(vel.x, vel.z) > 0.8 * RUN ? 1 : 0;
+        ballT += (ballWant - ballT) * (1 - Math.exp(-dt * (ballWant ? 7 : 4.5)));
+        if (ballT > 0.02) { const v2 = Math.hypot(vel.x, vel.z); ballAng += (v2 * dt / 0.95) * Math.min(1, ballT * 1.5); if (ballWant === 0) ballAng += (Math.round(ballAng / (Math.PI * 2)) * Math.PI * 2 - ballAng) * (1 - Math.exp(-dt * 8)); } else ballAng = 0;
+        if (ballT > 0.6 && Math.hypot(vel.x, vel.z) > 3) { scrapeAcc += dt; if (scrapeAcc > 0.045) { scrapeAcc = 0; onScrape?.(pos, vel, ballT); } }
+        gallopW += ((gaitKind === 'gallop' && mode === 'GROUND' && runFrac > 0.82 ? 1 : 0) - gallopW) * (1 - Math.exp(-dt * 5));
+        slideW += ((slideT >= 0 ? Math.sin(Math.min(1, slideT / 0.85) * Math.PI) * 1.4 : 0) - slideW) * (1 - Math.exp(-dt * 9)); slideW = Math.min(1, slideW);
+        if (slideT >= 0 && slideW > 0.3) { scrapeAcc += dt; if (scrapeAcc > 0.06) { scrapeAcc = 0; onScrape?.(pos, vel, 0.5); } }
+        landPuff *= Math.exp(-dt * 3.2);
+        const vh = Math.hypot(vel.x, vel.z); prevVh = Math.max(vh, prevVh - dt * 30 * (slideT >= 0 ? 0 : 1)); if (vh < 0.5) prevVh = 0; phase += dt * vh * (vh > 5 ? 1.5 : 2.6);
+        anim = mode === 'LAND' ? 'land' : vh > 5 || (hopT >= 0 && vh > 0.4) ? 'run' : vh > 0.4 ? 'walk' : 'idle';
+        if (mode === 'LAND') { landT += dt; if (landT > (landActive !== 'none' ? landDur : 0.38)) { mode = 'GROUND'; landActive = 'none'; } }
         if (charging && mode === 'GROUND') anim = 'land';
-        lean += (0 - lean) * (1 - Math.exp(-dt * 10)); bank += (0 - bank) * (1 - Math.exp(-dt * 10));
+        lean += ((gaitKind === 'sprint' && anim === 'run' ? 0.2 * Math.min(1, vh / RUN) : 0) - lean) * (1 - Math.exp(-dt * 10)); bank += (0 - bank) * (1 - Math.exp(-dt * 10));
       } else if (mode === 'ROLL') {
         rollT += dt; vel.multiplyScalar(Math.exp(-dt * 2.6)); vel.y = 0; anim = 'roll';
         if (rollT > 0.95) { mode = 'GROUND'; anim = 'idle'; }
@@ -158,8 +205,13 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if ((mode === 'ROCKETS' || mode === 'SKYDIVING') && world.blocked(nx, nz, ny + 0.3) && !world.blocked(pos.x, pos.z, pos.y + 0.3)) {
         const sp = Math.hypot(vel.x, vel.z); vel.x *= -0.2; vel.z *= -0.2; // bonk off the wall
         if (sp > 30) { mode = 'SKYDIVING'; airT = 0; anim = 'stumble'; }
+      } else if (mode === 'GROUND' && (anim === 'run' || ballT > 0.2 || slideT >= 0) && world.blocked(nx, nz, pos.y + 0.6) && !world.blocked(pos.x, pos.z, pos.y + 0.6)) {
+        // running into a wall: slide along it instead of passing through (walking still enters buildings, phase 6)
+        if (!world.blocked(nx, pos.z, pos.y + 0.6)) { pos.x = nx; vel.z *= 0.2; } else if (!world.blocked(pos.x, nz, pos.y + 0.6)) { pos.z = nz; vel.x *= 0.2; } else { vel.x *= 0.1; vel.z *= 0.1; }
+        if (ballT > 0.5 && Math.hypot(vel.x, vel.z) < 0.5 * RUN) onImpact?.(pos, 0.25);
       } else { pos.x = nx; pos.z = nz; }
       pos.y = ny;
+      if (mode !== 'GROUND' && mode !== 'LAND') { ballT *= Math.exp(-dt * 6); gallopW *= Math.exp(-dt * 6); slideW *= Math.exp(-dt * 6); slideT = -1; hopT = -1; }
       floor = world.floorAt(pos.x, pos.z, pos.y + 0.6);
       if (mode === 'GROUND' || mode === 'LAND' || mode === 'ROLL') {
         if (pos.y - floor.y > 0.5) { mode = 'SKYDIVING'; airT = 0; anim = 'jump'; } // walked off a ledge
@@ -179,6 +231,11 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       }
       // lean pivots around the hips so the flying body stays centred
       if (lean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(lean) * 0.55;
+      if (ballT > 0.02) { // rolling ball: rotate about the body centre, not the feet
+        qBall.setFromAxisAngle(X, ballAng); r.quaternion.copy(qYaw).multiply(qBall); const rc = 0.9 * ballT; tmpV.set(0, rc, 0).applyQuaternion(r.quaternion); r.position.set(pos.x, pos.y + rc, pos.z).sub(tmpV);
+      }
+      const hAbove = pos.y - floor.y, voxT = landKind === 'voxel' && ((mode === 'SKYDIVING' && hAbove < 1.7 && vel.y < -3) || (mode === 'LAND' && landActive === 'voxel' && landT < 0.18)) ? 1 : 0;
+      vox += (voxT - vox) * (1 - Math.exp(-dt * (voxT > vox ? 16 : 6)));
       const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
       if (specialT >= 0) {
         const p0 = specialT; specialT += dt;
@@ -191,7 +248,9 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         if (specialT > specialDur) { specialT = -1; onSpecial?.(specialKind, 'end', pos); }
       }
       model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn,
-        launch: launchT >= 0 ? Math.min(1, launchT / Math.max(0.01, launchDur)) : 0, flyT, thrust: power }, dt);
+        launch: launchT >= 0 ? Math.min(1, launchT / Math.max(0.01, launchDur)) : 0, flyT, thrust: power,
+        gs: Math.hypot(vel.x, vel.z), gallop: gallopW, ball: Math.min(1, ballT * 1.3), slide: slideW, hop: hopT >= 0 ? hopT / 0.62 : 0, vox,
+        landKind: mode === 'LAND' && landActive !== 'none' ? landActive : undefined, landT: Math.max(0, landT), landS, landDur }, dt);
 
       // chase camera: behind and above; pulls back with a wider FOV at speed, closer and narrower on foot
       const spd = vel.length(), sf = Math.min(1, spd / CRUISE);

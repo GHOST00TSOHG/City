@@ -10,3 +10,8 @@ config.private.json
 .DS_Store
 __pycache__/
 robot-clips/
+
+# raw mocap / Mixamo sources are read in place, never committed (docs/ANIM-SOURCES.md)
+*.fbx
+*.bvh
+*.blend

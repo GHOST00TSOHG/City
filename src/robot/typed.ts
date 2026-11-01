@@ -6,7 +6,7 @@ import { createGlitchBody, type ShardData } from './glitch';
 import { loadKit, buildSkinned, createKitUniforms, type Kit } from './kit';
 
 export type KitU = ReturnType<typeof createKitUniforms>;
-export interface TypedRobot extends RobotModel { type: RobotType; uniforms: KitU; joints: THREE.Object3D[] }
+export interface TypedRobot extends RobotModel { type: RobotType; uniforms: KitU; joints: THREE.Object3D[]; trail?: (a: THREE.Vector3, b: THREE.Vector3) => void }
 const buildOf = (l: RobotLook) => Object.fromEntries(SLOT_KEYS.map((k) => [k, l[k]])) as SlotBuild;
 const sameBuild = (a: SlotBuild, b: SlotBuild) => SLOT_KEYS.every((k) => a[k] === b[k]);
 
@@ -53,14 +53,15 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
     }
   };
   rebuild();
-  const pose = makePoser(R.bones, TYPES[type].motion, TYPES[type].flight.style);
+  const pose = makePoser(R.bones, TYPES[type].motion, TYPES[type].flight.style, TYPES[type].gait);
   // Foot ground clamp: the lowest sole vertices of each foot (from the kit's own foot geometry) must never go below the floor plane (the
   // robot root). Heel-to-toe roll and knee bend used to push a big foot (Heavy) 3-4 cm into the ground, so it looked like the foot was missing.
   const soleAnchors = (side: 'Left' | 'Right') => {
-    const pts: THREE.Vector3[] = []; let lo = 1e9;
+    // lowest vertex per 6 cm xz cell over the whole foot (not only the flat sole): a pitched foot rolls on its heel / toe / dome, not on the sole plane
+    const cell = new Map<string, THREE.Vector3>(); let lo = 1e9;
     for (const n of kit.nodes) if (n.slot === 'body' && n.bone === `${side}Foot`) for (const m of n.meshes) { const a = m.geo.attributes.position; for (let i = 0; i < a.count; i++) lo = Math.min(lo, a.getY(i)); }
-    for (const n of kit.nodes) if (n.slot === 'body' && n.bone === `${side}Foot`) for (const m of n.meshes) { const a = m.geo.attributes.position; for (let i = 0; i < a.count; i++) if (a.getY(i) < lo + 0.02) pts.push(new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i))); }
-    const step = Math.max(1, Math.floor(pts.length / 24)); return { pts: pts.filter((_, i) => i % step === 0), bone: R.by.get(`${side}Foot`)! };
+    for (const n of kit.nodes) if (n.slot === 'body' && n.bone === `${side}Foot`) for (const m of n.meshes) { const a = m.geo.attributes.position; for (let i = 0; i < a.count; i++) { const y = a.getY(i); if (y > lo + 0.1) continue; const k = `${Math.round(a.getX(i) / 0.06)}:${Math.round(a.getZ(i) / 0.06)}`, c = cell.get(k); if (!c || y < c.y) cell.set(k, new THREE.Vector3(a.getX(i), y, a.getZ(i))); } }
+    const pts = [...cell.values()], step = Math.max(1, Math.floor(pts.length / 64)); return { pts: pts.filter((_, i) => i % step === 0), bone: R.by.get(`${side}Foot`)! };
   };
   const feet = [soleAnchors('Left'), soleAnchors('Right')], fv = new THREE.Vector3(), GROUND = new Set(['idle', 'walk', 'run', 'land']);
   const clampFeet = (anim: string) => {
@@ -108,6 +109,7 @@ export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u:
   const model: TypedRobot = {
     ...base,
     setLook(l) { base.setLook(l); G.setLook(look); },
+    trail: (a: THREE.Vector3, b: THREE.Vector3) => G.trail(a, b),
     animate(s, dt) {
       base.animate(s, dt); G.update(s, dt, list);
       const hide = G.uniforms.uDash.value > 0.5; for (const m of bodyMeshes) m.visible = !hide; // blink-dash: the body dissolves into shards
@@ -135,7 +137,7 @@ export async function createRobotSwitch(type: RobotType, look: RobotLook) {
   cur = await make(type, look); root.add(cur.root);
   const sw = {
     root, uniforms: u, onSwap: (_m: TypedRobot) => {},
-    get type() { return cur.type; }, get nozzles() { return cur.nozzles; }, get height() { return cur.height; }, get joints() { return cur.joints; }, get inner() { return cur; },
+    get type() { return cur.type; }, get nozzles() { return cur.nozzles; }, get height() { return cur.height; }, get joints() { return cur.joints; }, get inner() { return cur; }, trail(a: THREE.Vector3, b: THREE.Vector3) { cur.trail?.(a, b); },
     setLook(l: Partial<RobotLook>) { cur.setLook(l); },
     animate(s: PoseInput, dt: number) { cur.animate(s, dt); },
     async setType(t: RobotType, l: RobotLook) {

@@ -11,6 +11,7 @@ import { createRobotFx } from './robot/fx';
 import { loadSave, writeSave, lookOf, storeLook } from './save';
 import { createRobotController } from './robot/controller';
 import { createThrust } from './robot/thrust';
+import { loadClips } from './robot/clips';
 import { createRobotHud } from './robot/hud';
 import { createRobotAudio } from './robot/audio';
 import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
@@ -74,7 +75,7 @@ createScene(canvas, areaId).then(async (app) => {
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
   const sfx = createRobotAudio();
-  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setSpecial(d.motion.special, d.specialDur); ctl.setFlight(d.flight.launch); thrust.configure(d.flight); sfx.setType(t); };
+  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setGait(d.run.kind); ctl.setLand(d.land.kind); ctl.setSpecial(d.motion.special, d.specialDur); ctl.setFlight(d.flight.launch); thrust.configure(d.flight); sfx.setType(t); };
   applyType(save.robot.type);
   robot.onSwap = () => { thrust.attach(robot.nozzles); joints = robot.joints; };
   idle(() => TYPE_KEYS.forEach((t) => robot.preload(t)));
@@ -85,7 +86,17 @@ createScene(canvas, areaId).then(async (app) => {
   const hud = createRobotHud();
   const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
   const heroDrop = () => { const s = app.spawnPoint(); ctl.heroDrop(s.x, s.ground + 160, s.z, s.heading); };
+  void loadClips();
   ctl.onImpact = (p, k) => { fx.impact(p, k); sfx.hit(); };
+  // landings scaled by fall speed (s 0..1): Heavy slam = crack decal + dust ring + shockwave + shake, Scout = thruster puff (controller), Worker = steam + hiss hook, Glitch = violet reform pulse
+  ctl.onLandFx = (kind, p, s) => {
+    if (kind === 'slam') { fx.impact(p, 0.4 + 1.0 * s); fx.kick(0.35 + 0.9 * s); sfx.hit(); }
+    else if (kind === 'knee') { fx.impact(p, 0.18 + 0.3 * s); sfx.hit(); }
+    else if (kind === 'quad') { thrust.steam(p, s); fx.kick(0.15 + 0.3 * s); sfx.hook('worker-land-hiss'); }
+    else if (kind === 'voxel') { fx.impact(p, 0.25 + 0.3 * s); }
+  };
+  ctl.onScrape = (p, v, k) => thrust.scrape(p, v, k);
+  ctl.onHop = (a, b, phase) => { if (phase === 'depart') robot.trail(a, b); };
   ctl.onSpecial = (kind, phase) => { if (phase === 'start') sfx.special(kind); if (phase === 'hit') fx.kick(kind === 'groundpound' ? 1 : 0.35); };
   let lastStep = 0, lastBurst = 0;
   const stepFx = () => { // footfalls every half gait cycle; heavier types shake the camera

@@ -28,3 +28,6 @@ No Google data, keys, tiles or models are used. No personal photos.
 ## Vegetation (phase 3)
 - **ez-tree** by Daniel Greenheck — https://github.com/dgreenheck/ez-tree — MIT licence. npm `@dgreenheck/ez-tree@1.1.0`, bundled locally (no CDN). Procedural oak/ash geometry plus the package's bundled bark/leaf textures (MIT, shipped inside the package). Its materials and wind are replaced with our own TSL shaders.
 - Grass, palms and card impostors are procedural (our code). No third-party licensed (non-open) assets are committed; SpeedTree models, if bought, are loaded at runtime from `public/trees/` and must not be committed.
+
+## Motion capture
+The data used in this project was obtained from mocap.cs.cmu.edu. The database was created with funding from NSF EIA-0196217. (BVH conversion by B. Hahne, cgspeed.) Idle and walk base motion retargeted from Adobe Mixamo animations. See docs/ANIM-SOURCES.md.
