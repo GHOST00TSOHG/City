@@ -98,6 +98,7 @@ def build():
     slot('body')
     bone('LeftFoot')
     leg.append(box('foot_L', ank + V((0, -0.09, -0.15)), (0.05, 0.14, 0.035), WH, rx=0.1))
+    leg.append(cyl('ankle_strut_L', ank + V((0, 0.01, 0.03)), ank + V((0, -0.06, -0.13)), 0.034, DK))  # v3b: closes the shin-to-foot gap
     leg.append(box('heel_spur_L', ank + V((0, 0.08, -0.12)), (0.012, 0.07, 0.02), DK, rx=-0.5))
     slot('boots', 'block'); leg.append(box('bt_block_L', ank + V((0, -0.08, -0.17)), (0.06, 0.15, 0.025), DK))
     slot('boots', 'hover'); leg.append(cyl('bt_hover_L', ank + V((0, -0.05, -0.2)), ank + V((0, -0.05, -0.215)), 0.08, GL))
@@ -116,14 +117,15 @@ def shardify(n_total=3400, seed=7):
     import bmesh
     rnd = random.Random(seed); X = sys.modules.get('v2export')
     objs = [o for o in bpy.data.objects if o.type == 'MESH' and 'bone' in o]
-    faces = []
+    faces = []  # v3b: inverse-transpose normals so plates lie flat under non-uniform scale
     for o in objs:
         A.apply_all(o) if hasattr(A, 'apply_all') else None
         mw = o.matrix_world; m = o.data
         for p in m.polygons:
             vs = [mw @ m.vertices[i].co for i in p.vertices]
-            nrm = ((mw.to_3x3() @ p.normal)).normalized(); area = p.area * mw.to_scale().x * mw.to_scale().y
-            if area > 1e-7: faces.append((o, vs, nrm, area))
+            nrm = (mw.inverted_safe().transposed().to_3x3() @ p.normal).normalized(); area = p.area * mw.to_scale().x * mw.to_scale().y
+            if area > 1e-7: faces.append((o, vs, nrm, area, min(o.dimensions)))
+    glows = [o.matrix_world.translation.copy() for o in objs if o.active_material and o.active_material.name.startswith('glow') and o['slot'] == 'body']
     tot = sum(f[3] for f in faces); parts = {}
     acc = 0.0; step = tot / n_total; nxt = rnd.random() * step
     def tri_pt(vs):
@@ -133,20 +135,26 @@ def shardify(n_total=3400, seed=7):
         if u + v > 1: u, v = 1 - u, 1 - v
         return a + (b - a) * u + (c - a) * v
     geo = {}
-    for o, vs, nrm, area in faces:
+    for o, vs, nrm, area, mind in faces:
         acc += area
         while acc > nxt:
             nxt += step
             pt = tri_pt(vs); key = (o['slot'], o['opt'], o['bone'])
             mn = o.active_material.name if o.active_material else 'frame'
             c = CAT.get(mn.split('.')[0], 0 if mn.startswith('armor') else 1)
-            s = 0.018 + rnd.random() * 0.024
-            tng = nrm.cross(V((0, 0, 1)) if abs(nrm.z) < 0.9 else V((1, 0, 0))).normalized()
-            tng = Quaternion(nrm, rnd.uniform(-0.25, 0.25)) @ tng
+            # v3b: fewer, larger plates lying flat on the armour (aligned to the part's long axis); glow parts get
+            # small flush tiles so the visor, core and piping stay readable; thin parts cap the plate size
+            gl = c == 2
+            if not gl and any((pt - g).length < 0.075 for g in glows): continue  # v3b: keep visor/core/piping clear
+            s = (0.012 + rnd.random() * 0.006) if gl else (0.038 + rnd.random() * 0.03)
+            s = min(s, max(0.008, mind * 0.55))
+            ax_ = (o.matrix_world.to_3x3() @ V((0, 0, 1))).normalized()
+            tng = (ax_ - nrm * ax_.dot(nrm)); tng = tng.normalized() if tng.length > 1e-3 else nrm.cross(V((0, 0, 1)) if abs(nrm.z) < 0.9 else V((1, 0, 0))).normalized()
+            tng = Quaternion(nrm, rnd.uniform(-0.08, 0.08)) @ tng
             bit = nrm.cross(tng)
             q = Matrix((tng, bit, nrm)).transposed().to_quaternion()  # local x=tangent, y=bitangent, z=normal
-            hx, hy, hz = s * rnd.uniform(0.8, 1.2), s * rnd.uniform(1.2, 1.9), s * 0.26
-            pos = pt - nrm * hz * 0.4
+            hx, hy, hz = s * rnd.uniform(0.9, 1.15), s * rnd.uniform(1.1, 1.5), s * (0.2 if gl else 0.09)
+            pos = pt + nrm * hz * 0.15
             bn = o['bone']; jb = J[bn] if bn in J else (lambda v: V((-v.x, v.y, v.z)))(J[bn.replace('Right', 'Left')])
             rel = pos - jb
             # game frame: (x, z, -y); quaternion basis change likewise
@@ -225,7 +233,7 @@ def fx_dressing(shards):
         bpy.context.scene.collection.objects.link(g); g.location += V((1.25, 0.9, 0)); g.visible_shadow = False
         bm = bmesh.new(); bm.from_mesh(g.data)
         for f in bm.faces: f.material_index = 0
-        dead = [f for i, f in enumerate(bm.faces) if (i // 8) % 5]
+        dead = [f for i, f in enumerate(bm.faces) if (i // 8) % 9]  # v3b: sparser afterimage
         bmesh.ops.delete(bm, geom=dead, context='FACES')
         for v in bm.verts: v.co += V((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))) * 0.02 * max(0, v.co.z - 0.4)
         bm.to_mesh(g.data); bm.free()
@@ -233,7 +241,7 @@ def fx_dressing(shards):
 def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
-    n = 1400 if S.FAST else 3800
+    n = 450 if S.FAST else 900
     parts, geo, proxies = shardify(n)
     import v2export as X
     X.write_skeleton('glitch', proxies)
@@ -254,6 +262,12 @@ def main():
         json.dump(out, open(f'{X.REPO}/public/robot/glitch/shards.json', 'w'), separators=(',', ':'))
     fx_dressing(shards)
     if '--preview' in S.argv:
+        def rim(name, loc, e, col):
+            l = bpy.data.lights.new(name, 'AREA'); l.energy = e; l.size = 0.8; l.color = col
+            ob = bpy.data.objects.new(name, l); bpy.context.scene.collection.objects.link(ob); ob.location = loc
+            ob.rotation_euler = (V((0, 0, 1.5)) - V(loc)).to_track_quat('-Z', 'Y').to_euler()
+        rim('rim_glitch_c', (-1.6, 1.9, 2.3), 1300, (0.1, 0.85, 1.0))  # hard cyan rim, back left
+        rim('rim_glitch_m', (1.8, 1.6, 1.9), 900, (1.0, 0.15, 0.75))  # magenta kicker, back right
         S.render(S.OUT.replace('.png', '-34.png'), tgt=(0.15, 0.1, 1.15), dist=6.4)
         S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-0.45, cam_el=0.08, res=(1500, 1200), tgt=(0.05, -0.05, 1.62), dist=2.7, lens=60, setup=False); return
     bpy.ops.wm.save_as_mainfile(filepath='/workspace/private/glitch_v2.blend')
