@@ -113,7 +113,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     const blds = buildBuildings(buildings, terrain, lambert);
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
-    const trees = await buildTrees(area.trees as number[], terrain);
+    const trees = await buildTrees(area.trees as number[], terrain, id === 'keywest'); // palms only in Key West
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     group.add(buildTerrain(terrain, groundMat), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
@@ -191,7 +191,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     /** Drop-in point: the street start view (on a road) if the area has one, else the first view's look target. */
     spawnPoint() { const vs = viewsOf(cur.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
     get areaId() { return cur.id; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
-    get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, lamps: a.lamps.length, chunks: cur.blds.group.children.length, landmarkCull: cur.landmarkCull, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
+    get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, palms: cur.trees.palms, lamps: a.lamps.length, chunks: cur.blds.group.children.length, landmarkCull: cur.landmarkCull, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
     /** Warm the fetch cache for an area (data only; cheap, run when idle). */
     interiorEntry(x: number, z: number) { return cur.interiors.entry(x, z); },
     preload(id: string) { return loadArea(id).then(() => undefined, () => undefined); },

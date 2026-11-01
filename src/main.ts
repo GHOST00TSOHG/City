@@ -146,6 +146,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__setWeather = (k: WeatherKind, i = 0.6) => weatherUI.set(k, i);
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
+  w.__stats = () => app.stats;
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__robot = { ctl, model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
