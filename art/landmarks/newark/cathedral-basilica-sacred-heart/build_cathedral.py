@@ -1808,8 +1808,8 @@ def make_metal_material(tex):
     nmap.inputs["Strength"].default_value = 0.45
     links.new(nnode.outputs["Color"], nmap.inputs["Color"])
     links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
-    bsdf.inputs["Metallic"].default_value = 1.0
-    bsdf.inputs["Roughness"].default_value = 0.34
+    bsdf.inputs["Metallic"].default_value = 0.4  # full metal reads black without env light
+    bsdf.inputs["Roughness"].default_value = 0.5
     return mat
 
 

@@ -8,7 +8,7 @@ French Gothic Revival church by Branch Brook Park. Twin west towers with pyramid
 
 | LOD | Triangles | Materials |
 |---|---|---|
-| LOD0 | 27633 | 4 |
+| LOD0 | 27653 | 4 |
 | LOD1 | 8062 | 4 |
 | LOD2 | 1606 | 4 |
 
@@ -18,7 +18,6 @@ Materials, shared by every LOD: `cathedral-basilica-sacred-heart-main` (sandston
 
 Textures: one 2048 atlas (baseColor ETC1S, normal UASTC, ORM ETC1S) plus one 1024 stained-glass image (ETC1S, baseColor and emissive). LOD1 and LOD2 reuse them. The sandstone albedo carries weathering and colour variation. Metal uses the copper and bronze parts of the same atlas with metallic 1 and roughness 0.34. Glass transmission is 0.72, roughness 0.08, emission strength 1.15 so the colour reads as light from inside the reveal.
 
-Files: `.glb` 1.3 MB, `.blend` 0.97 MB. Source PNGs are in `art/landmarks/newark/cathedral-basilica-sacred-heart/textures/`.
 
 Nodes: `cathedral-basilica-sacred-heart_LOD0`, `_LOD1`, `_LOD2`. Children `masonry-lodN`, `metal-lodN`, `windows-lodN`, `uplights-lodN`. Collision is `cathedral-basilica-sacred-heart_COL`.
 
