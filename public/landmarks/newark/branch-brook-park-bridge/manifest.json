@@ -1,0 +1,40 @@
+{
+  "id": "branch-brook-park-bridge",
+  "name": "Laurel Wood Boulder Bridge",
+  "area": "newark",
+  "file": "branch-brook-park-bridge.glb",
+  "lat": 40.766943,
+  "lon": -74.176953,
+  "headingDeg": 194.2,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [1392, 484, 314], "switchM": [150, 600] },
+  "footprint": [
+    [40.76695088, -74.17689115],
+    [40.76697222, -74.17700246],
+    [40.76693538, -74.17701476],
+    [40.76691405, -74.17690346]
+  ],
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "placement on the brook just north of Clark's Pond",
+      "source": "https://www.openstreetmap.org/way/166526695",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "footway crossing used as the bridge centre",
+      "source": "https://www.openstreetmap.org/way/1257648717",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "width, length, boulder and fieldstone sizes, concrete culvert",
+      "source": "https://branchbrookpark.org/uploads/1/3/1/7/131747681/bbp_clr_vol4_1_-_structures_in_the_park.pdf",
+      "author": "Branch Brook Park Cultural Landscape Report, Volume 4 (2005), section 19",
+      "license": "published report"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}
