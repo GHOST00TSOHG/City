@@ -59,15 +59,14 @@ export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaSt
   return m;
 }
 
+import { createSurface, type RoadSurface, LIFT, WALK_LIFT, WALK_W } from './cleanup';
+export type { RoadSurface };
 const ROAD = [0x4c4c4e, 0x575758, 0x626262, 0x9a9184].map((h) => new THREE.Color(h));
-const LIFT = [0.16, 0.13, 0.1, 0.07];
 
 /** Road ribbons with mitred joins and round end caps, draped on the terrain. One mesh. */
 const MARK = [new THREE.Color(0xc9a43a), new THREE.Color(0xd8d8d2)]; // c0 centre line yellow, c1 white
-const WALK = new THREE.Color(0xa8a49c), WALK_LIFT = 0.05, WALK_W = 1.8;
+const WALK = new THREE.Color(0xa8a49c);
 
-/** Road surface height query: spatial hash of road segments, so walkers stand ON the asphalt/sidewalk, not in it. */
-export interface RoadSurface { surfaceAt(x: number, z: number): number }
 
 /** Roads (asphalt by class), centre markings and sidewalks in one draw. Polylines are resampled to the terrain cell so
  *  the ribbon follows the ground instead of cutting through bumps between OSM nodes. Sidewalks sit below every road lift so
@@ -77,12 +76,7 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, pl
   const order = a.roads.map((r, i) => ({ r, i })).sort((p, q) => q.r.c - p.r.c); // paths first, majors last (on top)
   const step = Math.max(2, t.cell);
   const base = (x: number, z: number) => Math.max(t.heightAt(x, z), 0.05);
-  const B = 32, hash = new Map<number, number[]>(), segs: number[] = []; // seg: x0 z0 x1 z1 halfWidth lift y0 y1 (y: absolute deck height on bridges / ramps, else NaN)
-  const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number, y0 = NaN, y1 = NaN) => {
-    const id = segs.length / 8; segs.push(x0, z0, x1, z1, hw, lift, y0, y1);
-    const ax = Math.floor((Math.min(x0, x1) - hw) / B), bx = Math.floor((Math.max(x0, x1) + hw) / B), az = Math.floor((Math.min(z0, z1) - hw) / B), bz = Math.floor((Math.max(z0, z1) + hw) / B);
-    for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) { const k = i * 100003 + j; let l = hash.get(k); if (!l) hash.set(k, (l = [])); l.push(id); }
-  };
+  const surface = createSurface(a.roads, t, plans);
   for (const { r, i: ri } of order) {
     const plan = plans?.[ri], pts = plan?.pts ?? resample(ringPts(r.p), step); if (pts.length < 2) continue;
     const yc = plan?.y ?? undefined; // bridge / ramp centre-line heights (NaN elsewhere)
@@ -92,29 +86,13 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, pl
     if (r.c <= 2 && r.w >= 5) { // sidewalks
       const Yw = (x: number, z: number) => base(x, z) + WALK_LIFT;
       ribbon(s, pts, w + WALK_W, WALK, Yw, yc?.map((v) => v - lift + WALK_LIFT));
-      for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w + WALK_W, WALK_LIFT, ycAt(i, lift - WALK_LIFT), ycAt(i + 1, lift - WALK_LIFT));
     }
     ribbon(s, pts, w, col, Y, yc);
     for (const [e, k] of [[pts[0], 0], [pts[pts.length - 1], pts.length - 1]] as [[number, number], number][]) disc(s, e[0], e[1], w, col, Number.isFinite(yc?.[k] ?? NaN) ? () => yc![k] : Y);
-    for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w, lift, ycAt(i, 0), ycAt(i + 1, 0));
     if (r.c <= 1 && r.w >= 6) dashes(s, pts, MARK[r.c], (x, z) => Y(x, z) + 0.012, r.c === 0 ? 0 : 1, yc);
   }
   const m = new THREE.Mesh(s.geometry(), material) as THREE.Mesh & { surface: RoadSurface }; m.name = 'roads';
-  m.surface = {
-    surfaceAt(x, z) {
-      const l = hash.get(Math.floor(x / B) * 100003 + Math.floor(z / B)); let best = -Infinity;
-      const h = Math.max(t.heightAt(x, z), 0.05);
-      if (l) for (const id of l) {
-        const o = id * 8, x0 = segs[o], z0 = segs[o + 1], dx = segs[o + 2] - x0, dz = segs[o + 3] - z0, hw = segs[o + 4];
-        const L2 = dx * dx + dz * dz || 1, u = Math.min(1, Math.max(0, ((x - x0) * dx + (z - z0) * dz) / L2));
-        const ex = x0 + dx * u - x, ez = z0 + dz * u - z;
-        if (ex * ex + ez * ez > hw * hw) continue;
-        const ya = segs[o + 6], yb = segs[o + 7], v = Number.isFinite(ya) && Number.isFinite(yb) ? ya + (yb - ya) * u : h + segs[o + 5];
-        if (v > best) best = v;
-      }
-      return best === -Infinity ? t.heightAt(x, z) : best;
-    },
-  };
+  m.surface = surface;
   return m;
 }
 

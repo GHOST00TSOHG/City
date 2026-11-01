@@ -2,7 +2,7 @@
 import { A6 } from '../perf/frame';
 import { diag } from '../perf/diag';
 export interface Building { r: number[][]; h: number; m: number; s: string; rh: number; o: [number, number, number, number, number]; wc: number; rc: number; src?: string; /** clean-up: floor level and wall-bottom (foundation) y */ pad?: number; fy?: number }
-export interface Road { c: number; w: number; p: number[] }
+export interface Road { c: number; w: number; p: number[]; /** OSM bridge=yes */ b?: number; /** OSM layer > 0 */ l?: number }
 export interface Pier { poly?: number[]; line?: number[]; w?: number }
 export interface AreaData { id: string; name: string; buildings: Building[]; roads: Road[]; pools: number[][]; piers: Pier[]; /** flat [x dm, z dm, kind 0 palm|1 broadleaf, height dm, seed]… */ trees: number[]; /** [x dm, z dm, inferred, arm heading mrad] */ lamps: number[][]; /** fictional ferry dock: dm, heading mrad */ dock?: { x: number; z: number; a: number; name: string } }
 export interface Terrain { nx: number; nz: number; cell: number; x0: number; z0: number; h: Float32Array; cover: Uint8Array; heightAt(x: number, z: number): number }

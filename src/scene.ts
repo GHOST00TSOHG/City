@@ -151,7 +151,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   let cur = await buildContent(areaId);
   scene.add(cur.group);
 
-  const ground = (x: number, z: number) => cur.interiors.floorAt(x, z) ?? Math.max(cur.roads.surfaceAt(x, z), 0); // road/sidewalk top, not the terrain under it
+  const ground = (x: number, z: number, y?: number) => cur.interiors.floorAt(x, z) ?? Math.max(cur.roads.surfaceAt(x, z, y), 0); // road/sidewalk top, not the terrain under it
   const controls = createFlyControls(camera, canvas, ground);
   const setView = (v0: View) => {
     let v = v0.snap ? snapToStreet(v0) : v0;
@@ -206,7 +206,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   /** Robot world queries: walkable floor (interior slab, roof when above it, ground, sea level) and wall blocking. */
   const world = {
     floorAt(x: number, z: number, y: number) {
-      const fl = cur.interiors.floorAt(x, z), th = cur.roads.surfaceAt(x, z), roof = cur.collision.roofAt(x, z);
+      const fl = cur.interiors.floorAt(x, z), th = cur.roads.surfaceAt(x, z, y - 0.3), roof = cur.collision.roofAt(x, z);
       if (roof !== null && y >= roof) return { y: roof, water: false, roof: true };
       if (fl !== null) return { y: fl, water: false, roof: false };
       return { y: Math.max(th, 0), water: th < 0, roof: false };

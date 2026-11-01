@@ -2,6 +2,7 @@
  *  cleanArea() fixes a baked area at load time (nothing per object): drops/levels buildings, builds ground under roads, plans bridges,
  *  seawalls and beaches, culls props in water. auditWorld() measures any world state (before = raw bake, after = cleaned). */
 import type { AreaData, Building, Terrain } from './data';
+import type { DockPlan } from './dockPlan';
 
 export type P = [number, number];
 export const ringOf = (r: number[]) => { const o: P[] = []; for (let i = 0; i + 1 < r.length; i += 2) o.push([r[i] / 10, r[i + 1] / 10]); return o; };
@@ -26,6 +27,10 @@ export const T = {
   ROAD_FRAC: 0.2,        // share of footprint inside a road ribbon
   WET: -0.2,             // terrain below this is open water for road purposes
   PIER_SPACING: 14,      // max distance from any bridge point to a pier bent (m)
+  OVER_SPACING: 22,      // same for overpasses (a bent cannot stand on the road underneath)
+  OVER_CLEAR: 5.2,       // deck soffit clearance over a crossing road (m, deck top minus crossing surface)
+  OVER_FREE: 3.0,        // deck height over open ground when nothing crossing is modelled (rail, creek)
+  UNDER_MIN: 1.8,        // open height under a bridge/overpass at its highest point (soffit above ground/water, m)
   BANK: 1.0,             // shore edge whose land side is at least this high needs a seawall (m)
   POOL_SPREAD: 0.4,      // pools: ground spread under the rim (m)
   PAD_TOL: 2.0,
@@ -84,9 +89,9 @@ function vertsNear(t: Terrain, pts: P[], margin: number, fn: (i: number, d: numb
 }
 
 // ---- roads ----
-export interface Span { i0: number; i1: number; kind: 'bridge' | 'causeway'; deckY: number }
+export interface Span { i0: number; i1: number; kind: 'bridge' | 'causeway' | 'overpass'; deckY: number }
 export interface RoadPlan { pts: P[]; /** absolute centre-line y where a bridge/ramp overrides the terrain, else NaN */ y: number[] | null; spans: Span[]; wet: number }
-export interface Bridge { road: number; i0: number; i1: number; deckY: number; hw: number; len: number; bents: [number, number, number][] }
+export interface Bridge { kind: 'water' | 'overpass'; road: number; i0: number; i1: number; deckY: number; hw: number; len: number; bents: [number, number, number][] }
 export function resample(pts: P[], step: number) {
   const out: P[] = [];
   for (let i = 0; i < pts.length; i++) {
@@ -116,10 +121,10 @@ export function clipRoads(roads: AreaData['roads'], t: Terrain) {
   return out;
 }
 const groundY = (t: Terrain, x: number, z: number) => Math.max(t.heightAt(x, z), 0.05);
-const LIFT = [0.16, 0.13, 0.1, 0.07];
-export function planRoads(roads: AreaData['roads'], t: Terrain, fix: boolean) {
+export const LIFT = [0.16, 0.13, 0.1, 0.07];
+export function planRoads(roads: AreaData['roads'], t: Terrain, fix: boolean, legacy = false) {
   const step = Math.max(2, t.cell), plans: RoadPlan[] = [], bridges: Bridge[] = [];
-  const stats = { causeways: 0, bridges: 0, filledVerts: 0, bridgeLen: 0, pierBents: 0 };
+  const stats: { causeways: number; bridges: number; filledVerts: number; bridgeLen: number; pierBents: number; overpasses: number } = { causeways: 0, bridges: 0, filledVerts: 0, bridgeLen: 0, pierBents: 0, overpasses: 0 };
   roads.forEach((r, ri) => {
     const pts = resample(ringOf(r.p), step), plan: RoadPlan = { pts, y: null, spans: [], wet: 0 };
     plans.push(plan); if (pts.length < 2) return;
@@ -143,7 +148,7 @@ export function planRoads(roads: AreaData['roads'], t: Terrain, fix: boolean) {
       // bridge: deck above the water, ramps on the land sides, pier bents down to the seabed
       const road = r.c <= 1;
       const aY = groundY(t, pts[i0][0], pts[i0][1]) + lift, bY = groundY(t, pts[i1][0], pts[i1][1]) + lift;
-      const deckY = Math.max(road ? 1.7 : 1.15, aY + 0.15, bY + 0.15), RAMP = road ? 22 : 10;
+      const deckY = Math.max(legacy ? (road ? 1.7 : 1.15) : road ? 3.0 : 2.6, aY + 0.15, bY + 0.15), RAMP = road ? 22 : 10;
       if (!plan.y) plan.y = new Array(pts.length).fill(NaN);
       for (let i = 0; i < pts.length; i++) {
         let y = NaN;
@@ -159,10 +164,67 @@ export function planRoads(roads: AreaData['roads'], t: Terrain, fix: boolean) {
         bents.push([x, z, Math.min(t.heightAt(x, z), 0)]);
       }
       plan.spans.push({ i0, i1, kind: 'bridge', deckY });
-      bridges.push({ road: ri, i0, i1, deckY, hw, len, bents }); stats.bridges++; stats.bridgeLen += len; stats.pierBents += nb;
+      bridges.push({ kind: 'water', road: ri, i0, i1, deckY, hw, len, bents }); stats.bridges++; stats.bridgeLen += len; stats.pierBents += nb;
     }
   });
+  if (fix && !legacy) planOverpasses(roads, t, plans, bridges, stats);
   return { plans, bridges, stats };
+}
+
+/** Roads that cross other roads: segment index of every road that stays at ground level. */
+function groundRoadGrid(roads: AreaData['roads']) {
+  const g = new Grid(32), segs: number[] = [];
+  roads.forEach((r, ri) => {
+    if (r.b || (r.l ?? 0) > 0 || r.w < 1.5) return; const p = ringOf(r.p), hw = r.w / 2;
+    for (let i = 0; i + 1 < p.length; i++) { const id = segs.length / 6; segs.push(p[i][0], p[i][1], p[i + 1][0], p[i + 1][1], hw, ri); g.add(id, Math.min(p[i][0], p[i + 1][0]) - hw - 2, Math.min(p[i][1], p[i + 1][1]) - hw - 2, Math.max(p[i][0], p[i + 1][0]) + hw + 2, Math.max(p[i][1], p[i + 1][1]) + hw + 2); }
+  });
+  /** distance from (x,z) to the nearest ground road edge (<=0 means on it), ignoring road `skip` */
+  const clear = (x: number, z: number, skip: number) => { let best = Infinity; const l = g.at(x, z); if (l) for (const id of l) { const o = id * 6; if (segs[o + 5] === skip) continue; best = Math.min(best, distToSeg(x, z, segs[o], segs[o + 1], segs[o + 2], segs[o + 3]) - segs[o + 4]); } return best; };
+  return { clear };
+}
+/** True when a road tag marks an elevated way (OSM bridge=yes or layer>0). */
+export const elevated = (r: AreaData['roads'][number]) => !!r.b || (r.l ?? 0) > 0;
+
+/** Overpasses: bridge=yes / layer>0 roads that are not over water. The deck rises from the ground at both ends to a clearance over the
+ *  road it crosses (or a lower one when nothing modelled crosses), with pier bents to the ground that never stand on the road beneath. */
+function planOverpasses(roads: AreaData['roads'], t: Terrain, plans: RoadPlan[], bridges: Bridge[], stats: { bridges: number; bridgeLen: number; pierBents: number } & Record<string, number>) {
+  const gr = groundRoadGrid(roads); stats.overpasses = 0;
+  roads.forEach((r, ri) => {
+    const plan = plans[ri]; if (!elevated(r) || plan.spans.length || plan.pts.length < 2) return;
+    const pts = plan.pts, hw = r.w / 2;
+    const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    const L = cum[cum.length - 1]; if (L < 8) return;
+    // crossing points (ignore the first / last 12 m, where the way joins its own ramp road)
+    let c0 = -1, c1 = -1;
+    for (let i = 0; i < pts.length; i++) if (cum[i] > 12 && L - cum[i] > 12 && gr.clear(pts[i][0], pts[i][1], ri) < hw + 0.5) { if (c0 < 0) c0 = i; c1 = i; }
+    if (c0 < 0 && r.c > 2) return; // a footpath over nothing: leave it on the ground
+    const clearance = c0 >= 0 ? (r.c > 2 ? 4.4 : T.OVER_CLEAR) : T.OVER_FREE;
+    const ground = pts.map((p) => groundY(t, p[0], p[1]));
+    // running max of the ground over +-18 m, smoothed over +-9 m: the deck always clears the ground beside it
+    const win = (f: (i: number) => number, rad: number, fn: 'max' | 'avg') => pts.map((_, i) => { let v = fn === 'max' ? -Infinity : 0, n = 0; for (let j = 0; j < pts.length; j++) if (Math.abs(cum[j] - cum[i]) <= rad) { v = fn === 'max' ? Math.max(v, f(j)) : v + f(j); n++; } return fn === 'max' ? v : v / n; });
+    const rm = win((i) => ground[i], 18, 'max'), top = win((i) => rm[i], 9, 'avg').map((v) => v + clearance);
+    // full height between the crossing (+-8 m) or the middle fifth, ramp (smoothstep) from each end of the way
+    const full0 = c0 >= 0 ? Math.max(cum[c0] - 8, 0) : L * 0.3, full1 = c0 >= 0 ? Math.min(cum[c1] + 8, L) : L * 0.7;
+    const y = pts.map((_, i) => {
+      const s = cum[i], d = s < full0 ? full0 - s : s > full1 ? s - full1 : 0; if (d === 0) return top[i];
+      const run = s < full0 ? Math.max(full0, 1) : Math.max(L - full1, 1), base = ground[i] + (r.c > 2 ? 0.07 : LIFT[r.c] ?? 0.1);
+      return base + (top[i] - base) * smooth(1 - d / run);
+    });
+    const hi = y.map((v, i) => v - ground[i] > 1.2); const i0 = hi.indexOf(true), i1 = hi.lastIndexOf(true); if (i0 < 0 || cum[i1] - cum[i0] < 6) return;
+    if (plan.y) return;
+    plan.y = y.slice(); plan.spans.push({ i0, i1, kind: 'overpass', deckY: Math.max(...y) });
+    // bents every ~10 m along the open span, nudged off the road underneath
+    const s0 = cum[i0], s1 = cum[i1], len = s1 - s0, nb = Math.max(2, Math.ceil(len / 10) + 1), bents: [number, number, number][] = [];
+    const at = (s: number) => { let i = 0; while (i < pts.length - 2 && cum[i + 1] < s) i++; const u = (s - cum[i]) / Math.max(cum[i + 1] - cum[i], 1e-6); return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u]; };
+    for (let k = 0; k < nb; k++) {
+      const s = s0 + (len * k) / (nb - 1); let best: number[] | null = null;
+      for (const d of [0, 2, -2, 4, -4, 6, -6, 8, -8, 11, -11]) { const ss = Math.min(Math.max(s + d, s0), s1), [x, z] = at(ss); if (gr.clear(x, z, ri) > 1.5 + hw * 0.2) { best = [x, z]; break; } }
+      if (!best) best = at(s); // nothing free nearby: stand on the road verge rather than leave the deck unsupported
+      if (best) bents.push([best[0], best[1], Math.max(t.heightAt(best[0], best[1]), 0)]);
+    }
+    bridges.push({ kind: 'overpass', road: ri, i0, i1, deckY: Math.max(...y), hw, len, bents });
+    stats.bridges++; stats.overpasses++; stats.bridgeLen += len; stats.pierBents += bents.length;
+  });
 }
 
 // ---- shoreline ----
@@ -195,7 +257,7 @@ export interface CleanResult {
 }
 const done = new WeakMap<object, CleanResult>();
 /** Idempotent per area object. Mutates terrain (levels pads, builds ground under roads, beaches) and returns a cleaned shallow copy of the area. */
-export function cleanArea(area: AreaData, t: Terrain): CleanResult {
+export function cleanArea(area: AreaData, t: Terrain, legacy = false): CleanResult {
   const hit = done.get(area); if (hit) return hit;
   const st: Record<string, number> = {};
   const bump = (k: string, n = 1) => { st[k] = (st[k] ?? 0) + n; };
@@ -204,8 +266,8 @@ export function cleanArea(area: AreaData, t: Terrain): CleanResult {
   // 0) the bake can carry roads from outside the terrain grid (they would hang in the void): keep only the parts inside
   const roads = clipRoads(area.roads, t); st.roadsClipped = area.roads.length - roads.length;
   // 1) ground under roads, bridges (before buildings are judged against the final shore)
-  const rp = planRoads(roads, t, true);
-  Object.assign(st, { causewaysBuilt: rp.stats.causeways, bridgesBuilt: rp.stats.bridges, bridgeMetres: Math.round(rp.stats.bridgeLen), pierBents: rp.stats.pierBents, causewayVerts: rp.stats.filledVerts });
+  const rp = planRoads(roads, t, true, legacy);
+  Object.assign(st, { causewaysBuilt: rp.stats.causeways, bridgesBuilt: rp.stats.bridges, bridgeMetres: Math.round(rp.stats.bridgeLen), pierBents: rp.stats.pierBents, overpassesBuilt: rp.stats.overpasses, causewayVerts: rp.stats.filledVerts });
 
   // pools first: they level terrain, which buildings must then be fitted to
   // 1b) pools sit on a level pad
@@ -291,9 +353,13 @@ export interface WorldView {
   plans?: RoadPlan[]; bridges?: Bridge[]; walls?: ShoreSeg[];
   /** dock plan (see dockPlan.ts): per pier supports; null = raw bake (decks only) */
   poolsRaised?: boolean;
-  docks?: { piers: { over: number; pilings: number }[] } | null;
+  docks?: DockPlan | null;
+  /** road/bridge height query built from the same plans (surface.ts) */
+  surface?: RoadSurface;
+  /** dock deck height fn (dockPlan.deckAt) */
+  deckAt?: (t: Terrain, x: number, z: number) => number;
 }
-export const ISSUES = ['buildingInWater', 'buildingFloating', 'buildingSunk', 'buildingOverlap', 'buildingOnRoad', 'roadFloating', 'bridgeUnsupported', 'treeBadlyPlaced', 'propBadlyPlaced', 'shorelineGap', 'nonFlatWater', 'pierUnsupported'] as const;
+export const ISSUES = ['buildingInWater', 'buildingFloating', 'buildingSunk', 'buildingOverlap', 'buildingOnRoad', 'roadFloating', 'bridgeUnsupported', 'treeBadlyPlaced', 'propBadlyPlaced', 'shorelineGap', 'nonFlatWater', 'pierUnsupported', 'bridgeSolidBelow', 'bridgeNoClearance', 'overpassMissing', 'pilingThroughDeck', 'pilingMisplaced'] as const;
 export type Issue = (typeof ISSUES)[number];
 export function auditWorld(w: WorldView): { counts: Record<Issue, number>; totals: Record<string, number>; examples: Record<string, unknown[]> } {
   const { area, terrain: t } = w, counts = Object.fromEntries(ISSUES.map((k) => [k, 0])) as Record<Issue, number>, ex: Record<string, unknown[]> = {};
@@ -333,10 +399,27 @@ export function auditWorld(w: WorldView): { counts: Record<Issue, number>; total
   const bridged = new Set((w.bridges ?? []).map((b) => b.road));
   for (const b of w.bridges ?? []) {
     const p = plans[b.road]; let bad = false;
-    for (let i = b.i0; i <= b.i1 && !bad; i++) { let near = false; for (const e of b.bents) if (Math.hypot(e[0] - p.pts[i][0], e[1] - p.pts[i][1]) <= T.PIER_SPACING) { near = true; break; } if (!near) bad = true; }
-    if (bad || b.bents.length < 2) note('bridgeUnsupported', { road: b.road, len: Math.round(b.len) });
+    for (let i = b.i0; i <= b.i1 && !bad; i++) { let near = false; for (const e of b.bents) if (Math.hypot(e[0] - p.pts[i][0], e[1] - p.pts[i][1]) <= (b.kind === 'overpass' ? T.OVER_SPACING : T.PIER_SPACING)) { near = true; break; } if (!near) bad = true; }
+    if (bad || b.bents.length < 2) note('bridgeUnsupported', { road: b.road, kind: b.kind, len: Math.round(b.len) });
   }
   void bridged;
+  // open underneath: the deck must not be ground beneath it, and there must be headroom to walk / fly / boat under it
+  for (const b of w.bridges ?? []) {
+    const p = plans[b.road], y = p.y; if (!y) continue; let head = -Infinity, solid = 0, n = 0;
+    for (let i = b.i0; i <= b.i1; i++) {
+      const [x, z] = p.pts[i], g = Math.max(t.heightAt(x, z), 0); head = Math.max(head, y[i] - 0.65 - g);
+      if (y[i] - g > 2.2 && w.surface) { n++; if (w.surface.surfaceAt(x, z, g + 0.3) > y[i] - 1) solid++; }
+    }
+    if (head < T.UNDER_MIN) note('bridgeNoClearance', { road: b.road, kind: b.kind, headroom: +head.toFixed(2) });
+    if (solid) note('bridgeSolidBelow', { road: b.road, kind: b.kind, samples: n, solid });
+  }
+  // overpasses: elevated roads (OSM bridge=yes / layer>0) that cross a ground road but were left on the ground
+  { const gr = groundRoadGrid(area.roads);
+    area.roads.forEach((r, k) => {
+      const pl = plans[k]; if (!elevated(r) || !pl || pl.spans.length || wetRuns(pl.pts, t).length || pl.pts.length < 2) return;
+      let len = 0; for (let i = 1; i < pl.pts.length; i++) len += Math.hypot(pl.pts[i][0] - pl.pts[i - 1][0], pl.pts[i][1] - pl.pts[i - 1][1]); if (len < 8) return;
+      let s = 0; for (let i = 0; i < pl.pts.length; i++) { if (i) s += Math.hypot(pl.pts[i][0] - pl.pts[i - 1][0], pl.pts[i][1] - pl.pts[i - 1][1]); if (s > 12 && len - s > 12 && gr.clear(pl.pts[i][0], pl.pts[i][1], k) < r.w / 2 + 0.5) { note('overpassMissing', { road: k, x: Math.round(pl.pts[i][0]), z: Math.round(pl.pts[i][1]) }); break; } }
+    }); }
   // trees / props
   const bl = new Grid(32), polys = real.map((q) => q.outer); real.forEach((q, k) => bl.add(k, q.bb[0], q.bb[1], q.bb[2], q.bb[3]));
   const onB = (x: number, z: number) => { const l = bl.at(x, z); if (l) for (const k of l) if (inPoly(x, z, polys[k])) return true; return false; };
@@ -358,8 +441,64 @@ export function auditWorld(w: WorldView): { counts: Record<Issue, number>; total
   // piers over water need pilings
   area.piers.forEach((p, k) => {
     const d = w.docks?.piers[k]; if (!d) { if (!w.docks) { const pts = ringOf(p.poly ?? p.line ?? []); if (pts.some(([x, z]) => t.heightAt(x, z) < 0)) note('pierUnsupported', { pier: k }); } return; }
-    if (d.over > 0 && d.pilings < Math.max(2, d.over * 0.2)) note('pierUnsupported', { pier: k });
+    if (d.over > 0 && d.pilings < Math.max(Math.min(2, d.over), d.over * 0.2)) note('pierUnsupported', { pier: k });
   });
+  // dock pilings: only under a deck, never through its surface, inside the deck outline and standing on the seabed
+  if (w.docks && w.deckAt) {
+    const deckAt = w.deckAt, pl = w.docks.pilings, decks = w.docks.decks;
+    for (let i = 0; i + 3 < pl.length; i += 4) {
+      const x = pl[i], z = pl[i + 1], bot = pl[i + 2], top = pl[i + 3], id = { x: Math.round(x), z: Math.round(z) };
+      if (top > deckAt(t, x, z) - 0.02) note('pilingThroughDeck', { ...id, above: +(top - deckAt(t, x, z)).toFixed(2) });
+      if (!decks.some((d) => inPoly(x, z, d.pts)) || bot > Math.max(t.heightAt(x, z), -9) + 0.05) note('pilingMisplaced', id);
+    }
+  }
   const totals = { buildings: area.buildings.length, roads: area.roads.length, trees: area.trees.length / 5, lamps: area.lamps.length, pools: area.pools.length, piers: area.piers.length, bridges: (w.bridges ?? []).length, seawallSegments: walls.length, shoreSegments: segs.length };
   return { counts, totals, examples: ex };
+}
+
+// ---- road surface query ----
+/** Road/bridge surface height query. surfaceAt(x, z, y) returns the highest surface that is not above y + STEP, so a bridge or overpass deck is only
+ *  "ground" for someone standing on it and the space under it is open (walk, fly or boat beneath). Without y it returns the highest surface (legacy). */
+export const WALK_LIFT = 0.05, WALK_W = 1.8;
+export const STEP = 0.9; // a surface this far above the query height still counts as a step up
+export interface RoadSurface { surfaceAt(x: number, z: number, y?: number): number; /** highest deck over this spot that is above y (or -Infinity) */ deckAbove(x: number, z: number, y: number): number }
+
+export function createSurface(roads: AreaData['roads'], t: Terrain, plans?: RoadPlan[], legacy = false): RoadSurface & { addSeg: (...a: number[]) => void } {
+  const B = 32, hash = new Map<number, number[]>(), segs: number[] = []; // seg: x0 z0 x1 z1 halfWidth lift y0 y1
+  const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number, y0 = NaN, y1 = NaN) => {
+    const id = segs.length / 8; segs.push(x0, z0, x1, z1, hw, lift, y0, y1);
+    const ax = Math.floor((Math.min(x0, x1) - hw) / B), bx = Math.floor((Math.max(x0, x1) + hw) / B), az = Math.floor((Math.min(z0, z1) - hw) / B), bz = Math.floor((Math.max(z0, z1) + hw) / B);
+    for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) { const k = i * 100003 + j; let l = hash.get(k); if (!l) hash.set(k, (l = [])); l.push(id); }
+  };
+  const step = Math.max(2, t.cell);
+  roads.forEach((r, ri) => {
+    const plan = plans?.[ri], pts = plan?.pts ?? resample(ringOf(r.p), step); if (pts.length < 2) return;
+    const yc = plan?.y ?? undefined, w = r.w / 2, lift = LIFT[r.c] ?? 0.1;
+    const ycAt = (i: number, d: number) => (yc && Number.isFinite(yc[i]) ? yc[i] - d : NaN);
+    for (let i = 0; i < pts.length - 1; i++) {
+      if (r.c <= 2 && r.w >= 5) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w + WALK_W, WALK_LIFT, ycAt(i, lift - WALK_LIFT), ycAt(i + 1, lift - WALK_LIFT));
+      addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w, lift, ycAt(i, 0), ycAt(i + 1, 0));
+    }
+  });
+  const each = (x: number, z: number, fn: (v: number) => void) => {
+    const l = hash.get(Math.floor(x / B) * 100003 + Math.floor(z / B)); if (!l) return;
+    const h = Math.max(t.heightAt(x, z), 0.05);
+    for (const id of l) {
+      const o = id * 8, x0 = segs[o], z0 = segs[o + 1], dx = segs[o + 2] - x0, dz = segs[o + 3] - z0, hw = segs[o + 4];
+      const L2 = dx * dx + dz * dz || 1, u = Math.min(1, Math.max(0, ((x - x0) * dx + (z - z0) * dz) / L2));
+      const ex = x0 + dx * u - x, ez = z0 + dz * u - z;
+      if (ex * ex + ez * ez > hw * hw) continue;
+      const ya = segs[o + 6], yb = segs[o + 7];
+      fn(Number.isFinite(ya) && Number.isFinite(yb) ? ya + (yb - ya) * u : h + segs[o + 5]);
+    }
+  };
+  return {
+    addSeg,
+    surfaceAt(x, z, y = Infinity) {
+      const lim = legacy ? Infinity : y + STEP; let best = -Infinity;
+      each(x, z, (v) => { if (v <= lim && v > best) best = v; });
+      return best === -Infinity ? t.heightAt(x, z) : best;
+    },
+    deckAbove(x, z, y) { let best = -Infinity; each(x, z, (v) => { if (v > y + STEP && v > best) best = v; }); return best; },
+  };
 }
