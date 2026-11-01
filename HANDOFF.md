@@ -231,3 +231,12 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 ## Mac / Claude Code run (2026-11-01)
 - From now on, build work runs through Claude Code on the Mac in ~/builds/City-gh, which gets the branch by git bundle from the box (the Mac has no GitHub login). The box pushes to GitHub.
 - Task for this run: render the four flight clips (heavy, worker, scout, glitch) in a real GPU browser into robot-clips/<type>-fly.mp4 (do NOT commit the mp4s); check Heavy's foot thrusters sit on the new round feet (typed.ts noz FootNozzle uses TYPES[type].sole; heavy sole -0.16 may need adjusting for v5 feet); fix Scout's missing decalColor surface so `TYPES=scout node tools/test-robot-types.mjs <port>` colour check passes.
+
+## Mac run results (2026-11-01, Claude Code on the Mac, real GPU)
+- **Heavy thrusters:** nozzles were 0.06 m above the ground and 0.11 m off the foot centre on the v5 round feet. Measured with skinned vertices; now `sole -0.32`, new optional per-type `soleZ` (heavy 0.08; local +z is world -z), so each flame starts at the sole, centred under the foot. Scout/Worker/Glitch unchanged.
+- **Scout decalColor:** thruster `intake_*` meshes (material `visor`) are mapped to `decalColor` at load time in `kit.ts` (no Blender re-export). Scout colour check 7/7.
+- **Clips:** `tools/clips-robot-fly.mjs` now runs headed Chrome (real GPU) by default, 24 fps via `CLIP_FPS=24` (about 35 s per type). `SWIFTSHADER=1` keeps the old box mode. `CLIP_OUT`, `FFMPEG` env. Output `robot-clips/<type>-fly.mp4` (gitignored). The Mac has no ffmpeg; use `FFMPEG=/tmp/ffm/node_modules/ffmpeg-static/ffmpeg` (npm `ffmpeg-static`).
+- **Clips reviewed:** Worker shows backpack jet + palm boosters; Heavy crouch-launch with big flames at the feet; Scout quick bursts and banking; Glitch cube stream, no fire. The flight path drifts out over the sea in all clips (Heavy ends on a roof).
+- **Full test** (`node tools/test-robot-types.mjs 5180`, all PASS, 0 console errors): scout garage 48 / world 43 calls, 26,166 tris; heavy 48 / 43, 25,711; worker 50 / 45, 23,663; glitch 49 / 44, 38,080 (includes cloud and burst capacity). Real-GPU HUD in the world: 60 fps, 45 calls.
+- Test shots now fall back to `test-results/shots` when `/workspace` is absent.
+- Clips: ~/builds/City-gh/robot-clips/{heavy,worker,scout,glitch}-fly.mp4
