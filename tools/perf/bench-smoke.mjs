@@ -1,0 +1,22 @@
+import { chromium, webkit } from 'playwright';
+const PORT = Number(process.env.PORT || 5179);
+import http from 'http'; import fs from 'fs'; import path from 'path';
+const D='/tmp/city-dist-a6';
+const srv=http.createServer((q,r)=>{let p=decodeURIComponent(q.url.split('?')[0]); if(p.endsWith('/'))p+='index.html'; const f=path.join(D,p); if(!fs.existsSync(f)){r.writeHead(404);return r.end();} const ext=path.extname(f); r.writeHead(200,{'content-type':{'.js':'text/javascript','.html':'text/html','.css':'text/css','.json':'application/json','.png':'image/png','.jpg':'image/jpeg','.glb':'model/gltf-binary'}[ext]||'application/octet-stream'}); fs.createReadStream(f).pipe(r);}).listen(PORT);
+const [bn, q] = [process.argv[2], process.argv[3]];
+const B = bn==='webkit'?webkit:chromium;
+const br = await B.launch({ args: bn==='webkit'?[]:['--enable-unsafe-swiftshader','--use-angle=swiftshader'] });
+const ctx = await br.newContext({ viewport:{width:1280,height:800} });
+if (bn!=='webkit') await ctx.grantPermissions(['clipboard-read','clipboard-write']);
+const pg = await ctx.newPage(); const errs=[];
+pg.on('console', m => { if (m.type()==='error') errs.push(m.text()); if (/City\]/.test(m.text()) && !/bench\]/.test(m.text())) console.log('LOG', m.text().slice(0,200)); });
+pg.on('pageerror', e => errs.push('PAGEERR '+e.message));
+await pg.goto(`http://localhost:${PORT}/?`+q);
+await pg.waitForSelector('#bench', { timeout: 600000 });
+await pg.click('#bench button.copy'); await pg.waitForTimeout(500);
+console.log('btn:', await pg.textContent('#bench button.copy'));
+if (bn!=='webkit') { const c = await pg.evaluate(()=>navigator.clipboard.readText()); console.log('clip len', c.length, c.slice(0,300)); }
+const b = await pg.evaluate(()=>window.__bench); console.log(JSON.stringify(b).slice(0,1500));
+console.log('ERRORS', errs);
+await pg.locator('#bench').screenshot({ path: `/tmp/x/${bn}-${q.replace(/[^a-z0-9]/g,'_')}.png`, timeout: 300000 }).catch(e=>console.log('shot fail', e.message.slice(0,80)));
+await br.close(); srv.close();

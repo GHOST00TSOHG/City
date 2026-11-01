@@ -1,5 +1,8 @@
+import { quality } from '../perf/quality';
+import { diag } from '../perf/diag';
 import * as THREE from 'three/webgpu';
-import { attribute, positionLocal, vec3, sin, float, time, uniform, texture, uv, instanceColor } from 'three/tsl';
+import { attribute, positionLocal, vec3, sin, float, time, uniform, texture, uv, instanceColor, cameraPosition, step } from 'three/tsl';
+import { A6, budget } from '../perf/frame';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Tree as EzTree } from '@eztree/tree.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -108,8 +111,16 @@ function normalise(gs: THREE.BufferGeometry[]) {
   const s = 10 / (box.max.y - box.min.y), c = box.getCenter(new THREE.Vector3());
   gs.forEach(g => { g.translate(-c.x, -box.min.y, -c.z); g.scale(s, s, s); g.computeBoundingSphere(); });
 }
+// A6/Safari: decode images with createImageBitmap (off the main thread) instead of <img> + decode-on-upload.
+const bmpLoader = typeof createImageBitmap !== 'undefined' ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none' }) : null;
 const texLoader = new THREE.TextureLoader();
-function tex(url: string, repeat = false) { const t = texLoader.load(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
+function loadTex(url: string) {
+  if (!bmpLoader) return texLoader.load(url);
+  const t = new THREE.Texture(); t.flipY = false; const t0 = performance.now();
+  bmpLoader.load(url, (img) => { t.image = img; t.needsUpdate = true; diag.event('image decode (bitmap)', 0); diag.section('decode wait', performance.now() - t0); });
+  return t;
+}
+function tex(url: string, repeat = false) { const t = loadTex(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
 
 function ezGeometry(preset: any, lod: number) {
   const tr = new EzTree(); tr.loadFromJson(structuredClone(preset));
@@ -135,7 +146,15 @@ function windMaterial(mat: THREE.MeshLambertNodeMaterial, uWind: any, map: THREE
   const ph = p.x.mul(0.045).add(p.z.mul(0.03));
   const sway = sin(time.mul(1.1).add(ph)).mul(0.22).add(sin(time.mul(2.3).add(ph.mul(1.7))).mul(0.07)).mul(h.mul(h)).mul(uWind);
   const flutter = sin(time.mul(5.5).add(p.x.mul(1.3)).add(p.z.mul(1.1))).mul(alpha ? 0.05 : 0.0).mul(h.mul(h).mul(h)).mul(uWind);
-  mat.positionNode = p.add((vec3 as any)(sway.add(flutter), flutter.mul(0.6), sway.mul(0.6).sub(flutter)));
+  const moved = p.add((vec3 as any)(sway.add(flutter), flutter.mul(0.6), sway.mul(0.6).sub(flutter)));
+  if (!A6) { mat.positionNode = moved; return mat; }
+  // A6 LOD range test on the GPU: each bucket mesh carries its own [lo, hi) distance band (per-object uniforms) and
+  // every instance its world xz (`tpos`). Instances outside the band collapse to a point, so LOD bands stay exact
+  // every frame while the CPU only refreshes near buckets now and then, and the far bucket never re-uploads.
+  const lo = uniform(0).onObjectUpdate(({ object }: any) => object.userData.lo ?? 0), hi = uniform(1e9).onObjectUpdate(({ object }: any) => object.userData.hi ?? 1e9);
+  const tp: any = attribute('tpos', 'vec2'), cp: any = cameraPosition;
+  const d = (vec3 as any)(tp.x.sub(cp.x), cp.y, tp.y.sub(cp.z)).length();
+  mat.positionNode = moved.mul(step(lo, d).mul(step(d, hi)));
   return mat;
 }
 
@@ -146,14 +165,14 @@ function builtinSpecies(uWind: any): TreeSpecies[] {
   const leafMats = [oakLeafUrl, ashLeafUrl].map(u => windMaterial(new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.5 }), uWind, tex(u), true));
   const far: TreePart = { geometry: broad(false), material: cards };
   const palmSp: TreeSpecies = { name: 'palm', kind: 0, lods: [
-    { maxDist: 120, parts: [{ geometry: palm(true), material: cards }] },
-    { maxDist: 420, parts: [{ geometry: palm(false), material: cards }] },
+    { maxDist: 120 * quality.treeDist, parts: [{ geometry: palm(true), material: cards }] },
+    { maxDist: 420 * quality.treeDist, parts: [{ geometry: palm(false), material: cards }] },
     { maxDist: 3200, parts: [{ geometry: palm(false, true), material: cards }] }] };
   const ez = [oakPreset, ashPreset].map((pr, i) => {
     const hi = ezGeometry(pr, 0), mid = ezGeometry(pr, 1);
     return { name: i ? 'ez-ash' : 'ez-oak', kind: 1 as const, lods: [
-      { maxDist: 85, parts: [{ geometry: hi.b, material: bark }, { geometry: hi.l, material: leafMats[i] }] },
-      { maxDist: 200, parts: [{ geometry: mid.b, material: bark }, { geometry: mid.l, material: leafMats[i] }] },
+      { maxDist: 85 * quality.treeDist, parts: [{ geometry: hi.b, material: bark }, { geometry: hi.l, material: leafMats[i] }] },
+      { maxDist: 200 * quality.treeDist, parts: [{ geometry: mid.b, material: bark }, { geometry: mid.l, material: leafMats[i] }] },
       { maxDist: 3200, parts: [far] }] };
   });
   return [palmSp, ...ez];
@@ -162,7 +181,8 @@ function builtinSpecies(uWind: any): TreeSpecies[] {
 /** Optional drop-in models (e.g. SpeedTree glTF exports). Missing manifest = none; never fatal. */
 async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
   let list: any[] = [];
-  try { const r = await fetch('/trees/species.json'); if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return []; list = await r.json(); } catch { return []; }
+  if (!import.meta.env.DEV && !__HAS_TREE_SPECIES__) return [];
+  try { const r = await fetch(`${import.meta.env.BASE_URL}trees/species.json`); if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return []; list = await r.json(); } catch { return []; }
   const loader = new GLTFLoader(), out: TreeSpecies[] = [];
   for (const sp of list) {
     try {
@@ -172,7 +192,7 @@ async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
         node.traverse((m: any) => { if (!m.isMesh) return; const geo = m.geometry.clone().applyMatrix4(m.matrixWorld); const src = m.material;
           const mat = windMaterial(new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide, alphaTest: src.alphaTest || (src.transparent ? 0.5 : 0) }), uWind, src.map ?? new THREE.Texture(), !!src.map);
           parts.push({ geometry: geo, material: mat }); });
-        normalise(parts.map(p => p.geometry)); lods.push({ maxDist: sp.lods?.[i] ?? [120, 400, 3200][i] ?? 3200, parts });
+        normalise(parts.map(p => p.geometry)); lods.push({ maxDist: (sp.lods?.[i] ?? [120, 400, 3200][i] ?? 3200) * (i < 2 ? quality.treeDist : 1), parts });
       });
       if (lods.length) out.push({ name: sp.name, kind: sp.kind, lods });
     } catch (e) { console.warn('tree model skipped', sp.url, e); }
@@ -180,7 +200,8 @@ async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
   return out;
 }
 
-export async function buildTrees(flat: number[], terrain: Terrain) {
+/** `palms` = false (every NJ area): baked palm records become broadleaf. Palms are a Key West-only species. */
+export async function buildTrees(flat: number[], terrain: Terrain, palms = true) {
   const uWind = uniform(1);
   const extra = await gltfSpecies(uWind);
   const species = [...builtinSpecies(uWind), ...extra];
@@ -189,7 +210,7 @@ export async function buildTrees(flat: number[], terrain: Terrain) {
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
   const counts = new Array(species.length).fill(0);
   for (let i = 0; i < N; i++) {
-    const x = flat[i * 5] / 10, z = flat[i * 5 + 1] / 10, k = flat[i * 5 + 2], hh = flat[i * 5 + 3] / 10, sd = flat[i * 5 + 4];
+    const x = flat[i * 5] / 10, z = flat[i * 5 + 1] / 10, k = palms ? flat[i * 5 + 2] : 1, hh = Math.min(flat[i * 5 + 3] / 10, palms ? 99 : 12), sd = flat[i * 5 + 4];
     const pool = byKind[k] ?? byKind[1], sp = species.indexOf(pool[sd % pool.length]);
     const sc = hh / 10, w = sc * (0.85 + (sd / 255) * 0.3) * (k === 1 ? 1.15 : 1);
     q.setFromAxisAngle(Y, (sd / 255) * Math.PI * 2);
@@ -198,22 +219,99 @@ export async function buildTrees(flat: number[], terrain: Terrain) {
     cols.set([col.r, col.g, col.b], i * 3); spIdx[i] = sp; xz[i * 2] = x; xz[i * 2 + 1] = z; counts[sp]++;
   }
   const group = new THREE.Group();
-  const buckets = species.map((sp, s) => sp.lods.map((lod, li) => lod.parts.map((pt) => {
-    const im = new THREE.InstancedMesh(pt.geometry, pt.material, Math.max(1, counts[s])); im.count = 0; im.frustumCulled = false;
-    im.name = `trees ${sp.name} lod${li}`; im.setColorAt(0, col); group.add(im); return im;
-  })));
-  const last = new THREE.Vector3(1e9, 0, 0), c: number[][] = species.map(sp => sp.lods.map(() => 0));
-  function update(cam: THREE.Vector3) {
-    if (cam.distanceTo(last) < 12) return; last.copy(cam);
-    c.forEach(a => a.fill(0));
-    for (let i = 0; i < N; i++) {
-      const s = spIdx[i], d = Math.hypot(xz[i * 2] - cam.x, xz[i * 2 + 1] - cam.z, cam.y), lods = species[s].lods;
-      let li = 0; while (li < lods.length && d > lods[li].maxDist) li++; if (li >= lods.length) continue;
-      const j = c[s][li]++;
-      for (const im of buckets[s][li]) { (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
+  if (!A6) { // legacy path (?a6=0): re-bucket every tree and re-upload whole buffers each 12 m of camera movement
+    const buckets = species.map((sp, s) => sp.lods.map((lod, li) => lod.parts.map((pt) => {
+      const im = new THREE.InstancedMesh(pt.geometry, pt.material, Math.max(1, counts[s])); im.count = 0; im.frustumCulled = false;
+      im.name = `trees ${sp.name} lod${li}`; im.setColorAt(0, col); group.add(im); return im;
+    })));
+    const last = new THREE.Vector3(1e9, 0, 0), c: number[][] = species.map(sp => sp.lods.map(() => 0));
+    function update(cam: THREE.Vector3) {
+      if (cam.distanceTo(last) < 12) return; last.copy(cam);
+      c.forEach(a => a.fill(0));
+      for (let i = 0; i < N; i++) {
+        const s = spIdx[i], d = Math.hypot(xz[i * 2] - cam.x, xz[i * 2 + 1] - cam.z, cam.y), lods = species[s].lods;
+        let li = 0; while (li < lods.length && d > lods[li].maxDist) li++; if (li >= lods.length) continue;
+        const j = c[s][li]++;
+        for (const im of buckets[s][li]) { (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
+      }
+      buckets.forEach((lv, s) => lv.forEach((parts, li) => parts.forEach(im => { im.count = c[s][li]; im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; })));
     }
-    buckets.forEach((lv, s) => lv.forEach((parts, li) => parts.forEach(im => { im.count = c[s][li]; im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; })));
+    const triangles = () => buckets.flat(2).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
+    return { group, update, uWind, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), refreshes: 0 };
   }
-  const triangles = () => buckets.flat(2).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
-  return { group, update, uWind, triangles, species: species.map(s => s.name) };
+  // A6 path. Far LOD: one bucket per species holding every tree, uploaded once. Near LODs: filled from a 64 m grid
+  // around the camera with a distance pad, refreshed only after the camera moves REFRESH m, uploading just the used
+  // range (and only when the frame's upload budget allows). The GPU range test above trims each band exactly.
+  const CELL = 64, PAD = 40, REFRESH = 20;
+  let gx0 = Infinity, gz0 = Infinity, gx1 = -Infinity, gz1 = -Infinity;
+  for (let i = 0; i < N; i++) { gx0 = Math.min(gx0, xz[i * 2]); gz0 = Math.min(gz0, xz[i * 2 + 1]); gx1 = Math.max(gx1, xz[i * 2]); gz1 = Math.max(gz1, xz[i * 2 + 1]); }
+  if (!N) { gx0 = gz0 = 0; gx1 = gz1 = 1; }
+  const gw = Math.max(1, Math.ceil((gx1 - gx0) / CELL) + 1), gh = Math.max(1, Math.ceil((gz1 - gz0) / CELL) + 1);
+  const cellStart = new Uint32Array(gw * gh + 1), order = new Uint32Array(N);
+  const cellOf = (i: number) => Math.floor((xz[i * 2] - gx0) / CELL) + Math.floor((xz[i * 2 + 1] - gz0) / CELL) * gw;
+  for (let i = 0; i < N; i++) cellStart[cellOf(i) + 1]++;
+  for (let k = 0; k < gw * gh; k++) cellStart[k + 1] += cellStart[k];
+  { const fill = cellStart.slice(0, gw * gh); for (let i = 0; i < N; i++) order[fill[cellOf(i)]++] = i; }
+  type Bucket = { meshes: THREE.InstancedMesh[]; tpos: THREE.InstancedBufferAttribute; lo: number; hi: number; n: number };
+  const share = (g: THREE.BufferGeometry) => { const o = new THREE.BufferGeometry(); for (const k in g.attributes) o.setAttribute(k, g.attributes[k]); if (g.index) o.setIndex(g.index); o.boundingSphere = g.boundingSphere; return o; };
+  const near: Bucket[][] = species.map(() => []);
+  species.forEach((sp, s) => sp.lods.forEach((lod, li) => {
+    const isFar = li === sp.lods.length - 1, cap = Math.max(1, counts[s]);
+    const tpos = new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2);
+    const lo = li ? sp.lods[li - 1].maxDist : 0, hi = lod.maxDist;
+    const meshes = lod.parts.map((pt) => {
+      const g = share(pt.geometry); g.setAttribute('tpos', tpos);
+      const im = new THREE.InstancedMesh(g, pt.material, cap); im.count = 0; im.frustumCulled = false; im.setColorAt(0, col);
+      im.name = `trees ${sp.name} lod${li}`; im.userData.lo = lo; im.userData.hi = hi; group.add(im);
+      im.instanceMatrix.setUsage(THREE.StaticDrawUsage); return im; // DynamicDraw makes the WebGPU renderer re-upload the whole matrix buffer every frame
+    });
+    if (isFar) { // every tree of this species, written once
+      let j = 0;
+      for (let i = 0; i < N; i++) if (spIdx[i] === s) {
+        for (const im of meshes) { (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
+        tpos.array[j * 2] = xz[i * 2]; tpos.array[j * 2 + 1] = xz[i * 2 + 1]; j++;
+      }
+      meshes.forEach(im => (im.count = j));
+    } else near[s].push({ meshes, tpos, lo, hi, n: 0 });
+  }));
+  const last = new THREE.Vector3(1e9, 0, 0), prev = new THREE.Vector3(1e9, 0, 0), vel = new THREE.Vector3();
+  let refreshes = 0;
+  function update(cam: THREE.Vector3) {
+    if (prev.x < 1e8) vel.lerp(prev.sub(cam).negate(), 0.2); prev.copy(cam); // m/frame, smoothed
+    if (cam.distanceTo(last) < REFRESH) return;
+    // Prefetch: also cover where the camera will be in ~30 frames (0.5 s), so a fast flight never outruns the pad.
+    const lead = Math.min(150, vel.length() * 30), pad = PAD + lead;
+    const cx = cam.x + vel.x * 30 * 0.5, cz = cam.z + vel.z * 30 * 0.5;
+    let maxHi = 0; for (const b of near.flat()) maxHi = Math.max(maxHi, b.hi);
+    const r = Math.sqrt(Math.max(0, (maxHi + pad) ** 2 - cam.y * cam.y));
+    // bytes this refresh would upload (estimate from last time) — wait for a frame with room if over budget
+    let est = 0; for (const b of near.flat()) est += b.n * (16 + 3 + 2) * 4 * b.meshes.length;
+    if (!budget.upload(est)) return;
+    last.copy(cam); refreshes++; diag.event('tree refresh');
+    for (const bs of near) for (const b of bs) b.n = 0;
+    const c0 = Math.max(0, Math.floor((cx - r - gx0) / CELL)), c1 = Math.min(gw - 1, Math.floor((cx + r - gx0) / CELL));
+    const r0 = Math.max(0, Math.floor((cz - r - gz0) / CELL)), r1 = Math.min(gh - 1, Math.floor((cz + r - gz0) / CELL));
+    for (let rz = r0; rz <= r1; rz++) for (let k = cellStart[rz * gw + c0]; k < cellStart[rz * gw + c1 + 1]; k++) {
+      const i = order[k], s = spIdx[i], bs = near[s];
+      const d = Math.hypot(xz[i * 2] - cam.x, xz[i * 2 + 1] - cam.z, cam.y), dp = Math.hypot(xz[i * 2] - cx, xz[i * 2 + 1] - cz, cam.y);
+      const dm = Math.min(d, dp), dM = Math.max(d, dp);
+      for (const b of bs) {
+        if (dM < b.lo - PAD || dm > b.hi + PAD) continue;
+        const j = b.n++;
+        for (const im of b.meshes) { (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
+        b.tpos.array[j * 2] = xz[i * 2]; b.tpos.array[j * 2 + 1] = xz[i * 2 + 1];
+      }
+    }
+    for (const bs of near) for (const b of bs) {
+      if (!b.n && !b.meshes[0].count) continue;
+      for (const im of b.meshes) {
+        im.count = b.n; if (!b.n) continue;
+        im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, b.n * 16); im.instanceMatrix.needsUpdate = true;
+        im.instanceColor!.clearUpdateRanges(); im.instanceColor!.addUpdateRange(0, b.n * 3); im.instanceColor!.needsUpdate = true;
+      }
+      if (b.n) { b.tpos.clearUpdateRanges(); b.tpos.addUpdateRange(0, b.n * 2); b.tpos.needsUpdate = true; }
+    }
+  }
+  const triangles = () => (group.children as THREE.InstancedMesh[]).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
+  return { group, update, uWind, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), get refreshes() { return refreshes; } };
 }

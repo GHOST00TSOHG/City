@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { A6 } from '../perf/frame';
 import type { RobotModel, RobotAnim } from './model';
 
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
@@ -45,7 +46,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
 
   const fwd = new THREE.Vector3(), right = new THREE.Vector3(), want = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const qYaw = new THREE.Quaternion(), qLean = new THREE.Quaternion(), qBank = new THREE.Quaternion(), qRoll = new THREE.Quaternion();
-  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
+  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1), camF = new THREE.Vector3();
   const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
   function touchDown() {
@@ -57,7 +58,9 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     vel.y = 0; pos.y = floor.y;
   }
 
-  return {
+  const STEP = 1 / 120, pPos = new THREE.Vector3(), ipos = new THREE.Vector3();
+  let acc = 0, pHead = 0, pLean = 0, pBank = 0;
+  const api = {
     get pos() { return pos; }, get vel() { return vel; }, get mode() { return mode; }, get burst() { return burst; }, get heading() { return heading; },
     get thrust() { return power; }, get burstOn() { return burstOn; }, get floor() { return floor; }, get anim() { return anim; },
     get enabled() { return enabled; },
@@ -68,13 +71,22 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     set onImpact(f: ((p: THREE.Vector3, s: number) => void) | null) { onImpact = f; },
     /** Power-up stance: hold to charge (ground: crouch in place; air: hover). Refills BURST faster. */
     set charging(v: boolean) { charging = v; }, get charging() { return charging && enabled; },
-    spawn(x: number, y: number, z: number, h = 0) { hero = false; pos.set(x, y, z); vel.set(Math.sin(h) * 6, 0, Math.cos(h) * 6); heading = h; camYaw = h; mode = 'SKYDIVING'; airT = 1; anim = 'fall'; camOff.set(-Math.sin(h) * 8, 3, -Math.cos(h) * 8); },
+    spawn(x: number, y: number, z: number, h = 0) { hero = false; pos.set(x, y, z); vel.set(Math.sin(h) * 6, 0, Math.cos(h) * 6); heading = h; camYaw = h; mode = 'SKYDIVING'; airT = 1; anim = 'fall'; camOff.set(-Math.sin(h) * 8, 3, -Math.cos(h) * 8); pPos.copy(pos); pHead = h; acc = 0; },
     /** Test hook: set the held keys directly. */
     press(code: string, down: boolean) { if (down) { keys.add(code); dispatchEvent(new KeyboardEvent('keydown', { code })); } else keys.delete(code); },
+    /** A6: physics runs at a fixed 120 Hz; the pose and camera are drawn interpolated between the last two steps. */
     update(dt0: number) {
-      const dt = Math.min(dt0, 1 / 20); t += dt;
+      const fdt = Math.min(dt0, 1 / 20);
+      if (!A6) { step(fdt); present(1, fdt); return; }
+      acc = Math.min(acc + fdt, STEP * 8);
+      while (acc >= STEP) { pPos.copy(pos); pHead = heading; pLean = lean; pBank = bank; step(STEP); acc -= STEP; }
+      present(acc / STEP, fdt);
+    },
+  };
+  function step(dt: number) {
+      t += dt;
       // camera-relative input basis (ground) / heading basis (air)
-      const camF = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+      camF.set(Math.sin(camYaw), 0, Math.cos(camYaw)); // reused: no per-frame allocation (A6)
       right.crossVectors(camF, up).normalize();
       const iF = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0), iR = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
       const iUp = k('Space') || k('KeyE') ? 1 : 0, iDown = k('KeyC') || k('KeyQ') || k('ControlLeft') ? 1 : 0, iBurst = k('ShiftLeft') || k('ShiftRight');
@@ -99,7 +111,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       } else if (mode === 'ROCKETS') {
         // A/D turn (bank), W/S speed along heading, Space/C climb/descend, no input = hover holds altitude.
         // Releasing a camera drag lets the heading follow the camera, so you can steer with the mouse too.
-        if (t - lastDrag < 0.05 && Math.hypot(vel.x, vel.z) > 8) yawRate += (angDiff(camYaw, heading) * 4 - yawRate) * 0.5;
+        if (t - lastDrag < 0.05 && Math.hypot(vel.x, vel.z) > 8) yawRate += (angDiff(camYaw, heading) * 4 - yawRate) * (1 - Math.exp(-dt * 40));
         else yawRate += (-iR * (1.9 - Math.min(1, Math.hypot(vel.x, vel.z) / BURST) * 0.9) - yawRate) * (1 - Math.exp(-dt * 6));
         heading += yawRate * dt; fwd.set(Math.sin(heading), 0, Math.cos(heading));
         const top = burstOn > 0.5 ? BURST : CRUISE, cur = vel.x * fwd.x + vel.z * fwd.z;
@@ -143,16 +155,18 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         else touchDown();
       }
       pos.y = Math.min(pos.y, 3000);
-
+  }
+  function present(a: number, dt: number) {
+      ipos.lerpVectors(pPos, pos, a); const iHead = pHead + angDiff(heading, pHead) * a, iLean = pLean + (lean - pLean) * a, iBank = pBank + (bank - pBank) * a;
       // pose the model
-      const r = model.root; r.position.copy(pos);
-      qYaw.setFromAxisAngle(up, heading); qLean.setFromAxisAngle(X, lean); qBank.setFromAxisAngle(Z, bank);
+      const r = model.root; r.position.copy(ipos);
+      qYaw.setFromAxisAngle(up, iHead); qLean.setFromAxisAngle(X, iLean); qBank.setFromAxisAngle(Z, iBank);
       r.quaternion.copy(qYaw).multiply(qBank).multiply(qLean);
       if (mode === 'LAND' || mode === 'ROLL') {
         if (mode === 'ROLL') { const a = Math.min(1, rollT / 0.8) * Math.PI * 2; qRoll.setFromAxisAngle(X, a); r.quaternion.copy(qYaw).multiply(qRoll); r.position.y += Math.sin(Math.min(1, rollT / 0.8) * Math.PI) * 0.35 + 0.3 * (rollT < 0.8 ? 1 : 0); }
       }
       // lean pivots around the hips so the flying body stays centred
-      if (lean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(lean) * 0.55;
+      if (iLean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(iLean) * 0.55;
       const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
       model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t }, dt);
 
@@ -162,14 +176,14 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if (air && t - lastDrag > 1.2 && spd > 4) { camYaw += angDiff(heading, camYaw) * (1 - Math.exp(-dt * 2.5)); camPitch += (0.18 - camPitch) * (1 - Math.exp(-dt * 1.5)); }
       const dist = camDist * (1 + sf * 0.9) + (air ? 1 : 0);
       fov += ((air ? 62 : 52) + sf * 26 + burstOn * 8 - fov) * (1 - Math.exp(-dt * 3));
-      look.set(pos.x, pos.y + 1.0 + (air ? Math.sin(lean) * 0.4 : 0), pos.z);
+      look.set(ipos.x, ipos.y + 1.0 + (air ? Math.sin(iLean) * 0.4 : 0), ipos.z);
       const cw = camWant.set(look.x - Math.sin(camYaw) * Math.cos(camPitch) * dist, look.y + Math.sin(camPitch) * dist, look.z - Math.cos(camYaw) * Math.cos(camPitch) * dist);
       // smooth the offset from the robot, not the absolute position, so the camera never lags behind at 300 mph
       cw.sub(look); camOff.lerp(cw, 1 - Math.exp(-dt * (air ? 5 : 10))); camPos.copy(look).add(camOff);
       const cf = world.floorAt(camPos.x, camPos.z, camPos.y).y; if (camPos.y < cf + 0.6) camPos.y = cf + 0.6;
       camera.position.copy(camPos); camera.lookAt(look);
       if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
-    },
-  };
+  }
+  return api;
 }
 export type RobotController = ReturnType<typeof createRobotController>;
