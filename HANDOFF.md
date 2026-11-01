@@ -24,6 +24,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 0: reset + bake pipeline | bot/websmith-rebuild-p0-pipeline | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 1: Key West ground, water, roads, buildings | bot/websmith-rebuild-p1-keywest | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 6: procedural interiors | bot/websmith-rebuild-p6-interiors | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| Weather: eased Clear/Rain/Snow/Fog, wet roads | bot/websmith-weather | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
@@ -177,3 +178,7 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 - **Safari:** interior pipeline is now prewarmed (a hidden pre-built interior) — walking into the first building compiled a pipeline mid-walk; tree textures decode via createImageBitmap (ImageBitmapLoader) instead of <img> decode on upload; no KTX2 in the project; GLTFLoader already uses ImageBitmap.
 - `?hud=1` opens the live frame-time graph (same as `?perf=1`), now with Hz/fps mode and quality/scale.
 - Not verified: WebKit headless (Playwright WebKit libs could not install: apt mirror 500), real GPU timings.
+
+## Weather (bot/websmith-weather)
+- `src/weather.ts`: `WEATHER_PRESETS` (data) + `createWeatherState()` which eases the live mix each frame; ground wetness/snow cover accumulate and dry slowly. `scene.setWeather(kind, k, instant?)` sets the target; `applyWeather()` in scene.ts is the single place that writes uniforms. Particles read `app.weatherMix`.
+- New kind = preset entry + its particle system. `?weather=rain` starts in rain (instant); `__weather()` exposes the mix. Test: `tests/weather.spec.ts`.
