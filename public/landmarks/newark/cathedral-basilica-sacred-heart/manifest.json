@@ -5,10 +5,10 @@
   "file": "cathedral-basilica-sacred-heart.glb",
   "lat": 40.75489715,
   "lon": -74.17846736,
-  "headingDeg": 201.7,
+  "headingDeg": 196.35,
   "scale": 1.0,
   "elevationM": null,
-  "lod": { "tris": [16727, 7932, 1464], "switchM": [150, 600] },
+  "lod": { "tris": [27633, 8062, 1606], "switchM": [150, 600] },
   "fictional": false,
   "attribution": [
     {

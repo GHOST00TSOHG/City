@@ -412,9 +412,12 @@ def add_lancet(stone, glass, origin, right, outward, width, z_sill, z_spring, le
             add_quad(stone, p0, p1, p2, p3, LV, outward)
         return
 
-    depth = 0.34 if level == 0 else 0.18
-    thick = 0.16 if level == 0 else 0.12
+    depth = 0.78 if level == 0 else 0.32 if level == 1 else 0.0
+    thick = 0.24 if level == 0 else 0.14
     pts = add_arch_frame(stone, spring, right, outward, width, nseg, thick, depth, TR if level == 0 else ST)
+    if level == 0:
+        # inner order, set back so the opening reads as carved
+        add_arch_frame(stone, spring, right, outward, width * 0.86, max(4, nseg - 2), thick * 0.55, depth * 0.48, TR)
     # jambs
     x_in_l, x_in_r = pts[0][0], pts[-1][0]
     x_out_l, x_out_r = x_in_l - thick, x_in_r + thick
@@ -438,14 +441,14 @@ def add_lancet(stone, glass, origin, right, outward, width, z_sill, z_spring, le
     fill_pts = [(x_in_l, z0)] + [(x, z) for x, z in pts] + [(x_in_r, z0)]
     # fan from a point inside the opening
     hub_x, hub_z = 0.0, (z0 + h_arch * 0.15)
-    hub = _place(spring, right, outward, hub_x, hub_z, 0.07)
+    hub = _place(spring, right, outward, hub_x, hub_z, 0.04)
     if kind == "glass":
         hub_uv = glass_uv_lancet(hub_x, hub_z - z0, width, total_h)
         for i in range(len(fill_pts) - 1):
             x0, z0p = fill_pts[i]
             x1, z1p = fill_pts[i + 1]
-            p0 = _place(spring, right, outward, x0, z0p, 0.07)
-            p1 = _place(spring, right, outward, x1, z1p, 0.07)
+            p0 = _place(spring, right, outward, x0, z0p, 0.04)
+            p1 = _place(spring, right, outward, x1, z1p, 0.04)
             add_tri_uv(
                 target,
                 hub,
@@ -469,23 +472,44 @@ def add_lancet(stone, glass, origin, right, outward, width, z_sill, z_spring, le
             p1 = _place(spring, right, outward, x1, z1p, 0.08)
             add_tri_uv(target, hub, p0, p1, (hub_uv, hub_uv, hub_uv), outward)
     if level == 0 and kind == "glass":
-        # simple Y mullion
+        # two-light tracery: mullion, transom, and a small eye under the apex
         add_beam(
             stone,
-            _place(spring, right, outward, 0.0, z0 + 0.15, 0.16),
-            _place(spring, right, outward, 0.0, h_arch * 0.55, 0.16),
-            0.045,
+            _place(spring, right, outward, 0.0, z0 + 0.12, 0.22),
+            _place(spring, right, outward, 0.0, h_arch * 0.62, 0.22),
             0.05,
+            0.055,
             TR,
         )
+        add_beam(
+            stone,
+            _place(spring, right, outward, -width * 0.28, h_arch * 0.22, 0.2),
+            _place(spring, right, outward, width * 0.28, h_arch * 0.22, 0.2),
+            0.04,
+            0.045,
+            TR,
+        )
+        eye = h_arch * 0.78
+        for i in range(6):
+            a0 = 2 * math.pi * i / 6
+            a1 = 2 * math.pi * (i + 1) / 6
+            r = width * 0.12
+            add_beam(
+                stone,
+                _place(spring, right, outward, math.cos(a0) * r, eye + math.sin(a0) * r, 0.2),
+                _place(spring, right, outward, math.cos(a1) * r, eye + math.sin(a1) * r, 0.2),
+                0.03,
+                0.035,
+                TR,
+            )
 
 
 def add_rose(stone, glass, center, right, outward, radius, level):
     right = vnorm(right)
     outward = vnorm(outward)
     up = vnorm(vcross(right, outward))
-    n = 20 if level == 0 else 12 if level == 1 else 10
-    depth = 0.28 if level < 2 else 0.04
+    n = 36 if level == 0 else 18 if level == 1 else 12
+    depth = 0.62 if level == 0 else 0.26 if level == 1 else 0.05
 
     def pt(r, i, extra=0.0):
         a = 2 * math.pi * i / n
@@ -494,13 +518,24 @@ def add_rose(stone, glass, center, right, outward, radius, level):
             vadd(vscale(right, math.cos(a) * r), vadd(vscale(up, math.sin(a) * r), vscale(outward, extra))),
         )
 
-    r_in = radius * 0.90
-    r_out = radius * 1.08
+    r_in = radius * 0.88
+    r_out = radius * 1.06
+    r_mid = radius * 0.48
     for i in range(n):
         add_quad(stone, pt(r_in, i, depth), pt(r_in, i + 1, depth), pt(r_out, i + 1, depth), pt(r_out, i, depth), TR, outward)
-    # glass disc
-    gn = 18 if level == 0 else 12
-    hub = vadd(center, vscale(outward, 0.06))
+        if level == 0:
+            add_quad(
+                stone,
+                pt(r_mid * 0.92, i, depth * 0.72),
+                pt(r_mid * 0.92, i + 1, depth * 0.72),
+                pt(r_mid * 1.12, i + 1, depth * 0.72),
+                pt(r_mid * 1.12, i, depth * 0.72),
+                TR,
+                outward,
+            )
+    # glass sits at the back of the reveal so the glow reads as interior light
+    gn = 24 if level == 0 else 14
+    hub = vadd(center, vscale(outward, 0.05))
     hub_uv = glass_uv_rose(0.0, 0.0)
     for i in range(gn):
         a0 = 2 * math.pi * i / gn
@@ -515,7 +550,7 @@ def add_rose(stone, glass, center, right, outward, radius, level):
             (hub_uv, glass_uv_rose(math.cos(a0), math.sin(a0)), glass_uv_rose(math.cos(a1), math.sin(a1))),
             outward,
         )
-    bars = 12 if level == 0 else 8 if level == 1 else 0
+    bars = 16 if level == 0 else 8 if level == 1 else 0
     for i in range(bars):
         a = 2 * math.pi * i / bars
         inner = vadd(center, vadd(vscale(right, math.cos(a) * radius * 0.12), vscale(up, math.sin(a) * radius * 0.12)))
@@ -592,11 +627,11 @@ def gable_roof_y(acc, x0, x1, y0, y1, z_eave, z_peak, region, tile, overhang=0.4
         tile,
     )
     if fascia:
-        wall(acc, (x0 - oh, y0), (x0 - oh, y1), z_eave - 0.38, z_eave, CU, tile, (-1, 0, 0))
-        wall(acc, (x1 + oh, y0), (x1 + oh, y1), z_eave - 0.38, z_eave, CU, tile, (1, 0, 0))
-        # soffit strip
-        flat(acc, x0 - oh, x0 - oh + 0.38, y0, y1, z_eave - 0.38, -1, RF, tile)
-        flat(acc, x1 + oh - 0.38, x1 + oh, y0, y1, z_eave - 0.38, -1, RF, tile)
+        # Copper cap overlaps the tile edge so the roof sheet does not read as a red sliver.
+        wall(acc, (x0 - oh, y0), (x0 - oh, y1), z_eave - 0.55, z_eave + 0.06, CU, tile, (-1, 0, 0))
+        wall(acc, (x1 + oh, y0), (x1 + oh, y1), z_eave - 0.55, z_eave + 0.06, CU, tile, (1, 0, 0))
+        flat(acc, x0 - oh, x0 - oh + 0.42, y0, y1, z_eave - 0.5, -1, CU, tile)
+        flat(acc, x1 + oh - 0.42, x1 + oh, y0, y1, z_eave - 0.5, -1, CU, tile)
 
 
 def copper_ridge_y(acc, x, y0, y1, z, tile_spacing, level):
@@ -614,6 +649,57 @@ def arc_pts(cx, cy, radius, a0, a1, n):
         a = math.radians(a0 + (a1 - a0) * i / n)
         pts.append((cx + radius * math.sin(a), cy - radius * math.cos(a)))
     return pts
+
+
+def _uv_in(uv, region, pad=0.012):
+    u, v, w, h = region
+    return (u - pad) <= uv[0] <= (u + w + pad) and (v - pad) <= uv[1] <= (v + h + pad)
+
+
+def take_regions(src, regions):
+    """Move faces whose UV centre lies in `regions` onto a new mesh."""
+    out = Acc()
+    remap = {}
+    kept = []
+
+    def vid(i):
+        if i not in remap:
+            remap[i] = out.add(src.V[i], src.N[i], src.UV[i])
+        return remap[i]
+
+    for f in src.F:
+        uvs = [src.UV[i] for i in f]
+        cu = sum(u[0] for u in uvs) / 3.0
+        cv = sum(u[1] for u in uvs) / 3.0
+        if any(_uv_in((cu, cv), r) for r in regions):
+            out.tri(vid(f[0]), vid(f[1]), vid(f[2]))
+        else:
+            kept.append(f)
+    src.F = kept
+    return out
+
+
+def add_uplights(lamps, level):
+    """Small warm fixtures. The emissive-lamp material is what night code scales."""
+    spots = [
+        (-4.4, Y_FACADE + 1.15, 0.05),
+        (4.4, Y_FACADE + 1.15, 0.05),
+        (-(TOWER_OUTER - 1.8), Y_FRONT + 0.35, 0.05),
+        ((TOWER_OUTER - 1.8), Y_FRONT + 0.35, 0.05),
+        (0.0, Y_FACADE + 0.85, 0.85),
+    ]
+    if level < 2:
+        step = 16.0 if level == 1 else 11.0
+        y = Y_TOWER_BACK - 2.0
+        while y > Y_CHOIR_END + 4:
+            for sign in (-1, 1):
+                spots.append((sign * (NAVE_HALF + 0.15), y, 0.08))
+            y -= step
+        for sign in (-1, 1):
+            spots.append((sign * (TRAN_HALF + 0.2), (Y_TRAN_W + Y_TRAN_E) * 0.5, 0.08))
+    for x, y, z in spots:
+        add_box(lamps, x - 0.16, x + 0.16, y - 0.16, y + 0.2, z, z + 0.28, CU, 4.0)
+        add_cone(lamps, x, y, z + 0.22, z + 0.62, 0.2, 6, CU)
 
 
 def build(level):
@@ -738,6 +824,12 @@ def build(level):
         ROSE_D * 0.5,
         level,
     )
+    if hi:
+        # dentil course under the rose, a carved trim band
+        x = xL + 0.35
+        while x < xR - 0.55:
+            add_box(stone, x, x + 0.26, Y_FACADE - 0.02, Y_FACADE + 0.28, 27.55, 28.15, TR, 2.0)
+            x += 0.58
     # arcade under the rose
     if mid:
         arcade_n = 7 if hi else 5
@@ -965,7 +1057,7 @@ def build(level):
             else:
                 slope(stone, (x_out, y0, Z_AISLE_WALL), (x_out, y1, Z_AISLE_WALL), (x_in, y1, Z_AISLE_JOIN), (x_in, y0, Z_AISLE_JOIN), RF, tile)
             if mid:
-                wall(stone, (x_out, y0), (x_out, y1), Z_AISLE_WALL - 0.28, Z_AISLE_WALL, CU, tile, (sign, 0, 0))
+                wall(stone, (x_out, y0), (x_out, y1), Z_AISLE_WALL - 0.55, Z_AISLE_WALL + 0.06, CU, tile, (sign, 0, 0))
 
     # close the west end of the aisles against the towers (short return)
     for sign in (-1, 1):
@@ -981,8 +1073,9 @@ def build(level):
         x_end = sign * TRAN_HALF
         outward = (sign, 0, 0)
         y0, y1 = Y_TRAN_E, Y_TRAN_W
+        # Lower wall stops at the gable spring. A second wall from 16.5 to 20.5
+        # sat on the same plane as the gable and z-fought both roses.
         bands((x_end, y0), (x_end, y1), 16.5, outward)
-        wall(stone, (x_end, y0), (x_end, y1), 16.5, 20.5, ST, tile, outward)
         # custom gable in the X-normal plane
         strips = max(2, int(round((ROOF_H - 16.5) / tile)))
         y_peak = (y0 + y1) * 0.5
@@ -1005,21 +1098,18 @@ def build(level):
         # return walls of the projection, outside the nave
         for y_face, y_hint in ((y1, 1), (y0, -1)):
             bands((sign * NAVE_HALF, y_face), (x_end, y_face), Z_AISLE_WALL, (0, y_hint, 0))
-            wall(stone, (sign * CL_HALF, y_face), (x_end, y_face), Z_AISLE_WALL, 16.2, ST, tile, (0, y_hint, 0))
-            if level < 2:
-                add_lancet(
-                    stone, glass, ((sign * (NAVE_HALF + TRAN_HALF) * 0.5), y_face, 0),
-                    (sign, 0, 0), (0, y_hint, 0), 2.1, 3.6, 7.2, level,
-                )
+            # Meets the transept eave so the tile edge is not left open.
+            wall(stone, (sign * CL_HALF, y_face), (x_end, y_face), Z_AISLE_WALL, 16.55, ST, tile, (0, y_hint, 0))
         # transept roof: ridge along X, from the nave body out to the end
-        x_in = sign * (CL_HALF + 0.05)
-        x_out = x_end + sign * 0.35
+        x_in = sign * (CL_HALF + 0.02)
+        x_out = x_end + sign * 0.22
         y_mid = y_peak
-        # two slopes
+        ye0, ye1 = y0 - 0.06, y1 + 0.06
+        ez = 16.48
         slope(
             stone,
-            (x_in, y0 - 0.3, 16.4),
-            (x_out, y0 - 0.3, 16.4),
+            (x_in, ye0, ez),
+            (x_out, ye0, ez),
             (x_out, y_mid, ROOF_H + 0.06),
             (x_in, y_mid, ROOF_H + 0.06),
             RF,
@@ -1030,14 +1120,16 @@ def build(level):
             stone,
             (x_in, y_mid, ROOF_H + 0.06),
             (x_out, y_mid, ROOF_H + 0.06),
-            (x_out, y1 + 0.3, 16.4),
-            (x_in, y1 + 0.3, 16.4),
+            (x_out, ye1, ez),
+            (x_in, ye1, ez),
             RF,
             tile,
             (0, 0, 1),
         )
         if mid:
             add_beam(stone, (x_in, y_mid, ROOF_H + 0.15), (x_out, y_mid, ROOF_H + 0.2), 0.18, 0.12, CU)
+            add_beam(stone, (x_in, ye0, ez - 0.02), (x_out, ye0, ez + 0.02), 0.12, 0.1, CU)
+            add_beam(stone, (x_in, ye1, ez - 0.02), (x_out, ye1, ez + 0.02), 0.12, 0.1, CU)
         # end pinnacles
         if level < 2:
             for yy in (y0, y1):
@@ -1168,7 +1260,10 @@ def build(level):
         add_box(col, NAVE_HALF, TRAN_HALF, Y_TRAN_E, Y_TRAN_W, 0, ROOF_H, ST, ct, bottom=True)
         add_box(col, -6, 6, Y_CHOIR_END - 2, Y_APSE, 0, 12, ST, ct, bottom=True)
 
-    return stone, glass, col
+    metal = take_regions(stone, (CU, BZ))
+    lamps = Acc()
+    add_uplights(lamps, level)
+    return stone, glass, metal, lamps, col
 
 
 def add_fleche(stone, glass, x, y, level):
@@ -1247,9 +1342,9 @@ def generate_textures(folder):
     draw_o = ImageDraw.Draw(orm)
 
     paints = {
-        ST: ((168, 163, 154), 150, (255, 148, 0)),
-        TR: ((198, 192, 178), 168, (255, 132, 0)),
-        BRN: ((120, 88, 72), 110, (255, 196, 0)),
+        ST: ((188, 154, 114), 150, (255, 158, 0)),
+        TR: ((214, 198, 172), 168, (255, 128, 0)),
+        BRN: ((102, 74, 54), 100, (230, 188, 0)),
         BZ: ((124, 88, 54), 140, (255, 108, 255)),
         RF: ((148, 106, 80), 120, (255, 178, 0)),
         CU: ((96, 158, 138), 170, (255, 88, 255)),
@@ -1270,7 +1365,37 @@ def generate_textures(folder):
         for x in range(noise.size[0]):
             npx[x, y] = rng.randrange(256)
     noise = noise.resize((size, size), Image.BILINEAR)
-    base = Image.blend(base, Image.merge("RGB", (noise, noise, noise)), 0.06)
+    base = Image.blend(base, Image.merge("RGB", (noise, noise, noise)), 0.08)
+    # Weathering on the sandstone only: damp blotches and a few vertical stains.
+    # Colour variation, not a baked shadow.
+    px = base.load()
+    sx0, sy0, sx1, sy1 = _region_pixels(ST, size)
+    rng2 = random.Random(77)
+    for y in range(sy0, sy1 - 3, 3):
+        for x in range(sx0, sx1 - 3, 3):
+            n = rng2.random()
+            if n > 0.94 or n < 0.05:
+                dark = n > 0.94
+                for dy in range(3):
+                    for dx in range(3):
+                        r, g, b = px[x + dx, y + dy]
+                        if dark:
+                            px[x + dx, y + dy] = (max(0, r - 36), max(0, g - 28), max(0, b - 18))
+                        else:
+                            px[x + dx, y + dy] = (min(255, r + 18), min(255, g + 12), min(255, b + 6))
+    stain = rng2
+    x = sx0 + 40
+    while x < sx1:
+        wid = 2 + stain.randrange(3)
+        for yy in range(sy0, sy1):
+            if stain.random() < 0.35:
+                continue
+            for dx in range(wid):
+                if x + dx >= sx1:
+                    break
+                r, g, b = px[x + dx, yy]
+                px[x + dx, yy] = (max(0, r - 14), max(0, g - 10), max(0, b - 6))
+        x += 90 + stain.randrange(70)
 
     draw_b = ImageDraw.Draw(base)
     draw_h = ImageDraw.Draw(height)
@@ -1352,9 +1477,6 @@ def generate_textures(folder):
     normal.save(os.path.join(folder, "main-normal.png"), "PNG", optimize=True)
     orm.save(os.path.join(folder, "main-orm.png"), "PNG", optimize=True)
     glass.save(os.path.join(folder, "windows-basecolor.png"), "PNG", optimize=True)
-    # Windows are dielectric. A tiny ORM keeps the glTF material explicit.
-    worm = Image.new("RGB", (64, 64), (255, 80, 0))
-    worm.save(os.path.join(folder, "windows-orm.png"), "PNG", optimize=True)
     print("textures", folder)
 
 
@@ -1387,17 +1509,17 @@ def _normal_from_height(height_img):
 
 def count_only():
     for level, name in ((0, "LOD0"), (1, "LOD1"), (2, "LOD2")):
-        stone, glass, col = build(level)
+        stone, glass, metal, lamps, col = build(level)
         xs = [p[0] for p in stone.V]
         ys = [p[1] for p in stone.V]
         zs = [p[2] for p in stone.V]
+        total = stone.tris + glass.tris + metal.tris + lamps.tris
         print(
-            f"{name} stone {stone.tris} glass {glass.tris} col {col.tris if col else 0} "
-            f"sum {stone.tris + glass.tris} "
+            f"{name} stone {stone.tris} metal {metal.tris} glass {glass.tris} lamps {lamps.tris} "
+            f"col {col.tris if col else 0} sum {total} "
             f"bounds x {min(xs):.1f}..{max(xs):.1f} y {min(ys):.1f}..{max(ys):.1f} z {min(zs):.1f}..{max(zs):.1f}"
         )
         cap = (100000, 30000, 6000)[level]
-        total = stone.tris + glass.tris
         if total > cap:
             print(f"OVER BUDGET {name} {total} > {cap}", file=sys.stderr)
             return 1
@@ -1437,7 +1559,9 @@ def build_scene():
     scene.unit_settings.length_unit = "METERS"
 
     main_mat = make_main_material(tex)
+    metal_mat = make_metal_material(tex)
     win_mat = make_window_material(tex)
+    lamp_mat = make_lamp_material()
 
     repo = os.path.abspath(os.path.join(root, "..", "..", "..", ".."))
     public = os.path.join(repo, "public", "landmarks", "newark", SLUG)
@@ -1446,30 +1570,43 @@ def build_scene():
     roots = []
     stats = []
     for level in (0, 1, 2):
-        stone, glass, col = build(level)
+        stone, glass, metal, lamps, col = build(level)
         parent = bpy.data.objects.new(f"{SLUG}_LOD{level}", None)
         scene.collection.objects.link(parent)
         body = acc_object(f"masonry-lod{level}", stone, main_mat)
         wins = acc_object(f"windows-lod{level}", glass, win_mat)
+        met = acc_object(f"metal-lod{level}", metal, metal_mat)
         body.name = f"masonry-lod{level}"
         wins.name = f"windows-lod{level}"
+        met.name = f"metal-lod{level}"
         body.parent = parent
         wins.parent = parent
+        met.parent = parent
+        if lamps.tris:
+            lamp = acc_object(f"uplights-lod{level}", lamps, lamp_mat)
+            lamp.name = f"uplights-lod{level}"
+            lamp.parent = parent
         if col is not None:
-            col_obj = acc_object(f"{SLUG}_COL", col, None)
+            col_obj = acc_object(f"{SLUG}_COL", col, None, uvs=False)
             col_obj.name = f"{SLUG}_COL"
             col_obj.parent = parent
         roots.append(parent)
+        total = stone.tris + glass.tris + metal.tris + lamps.tris
         stats.append(
             {
                 "level": level,
                 "stone": stone.tris,
+                "metal": metal.tris,
                 "glass": glass.tris,
+                "lamps": lamps.tris,
                 "col": col.tris if col else 0,
-                "total": stone.tris + glass.tris,
+                "total": total,
             }
         )
-        print(f"LOD{level} tris {stone.tris + glass.tris} (masonry {stone.tris} windows {glass.tris} col {col.tris if col else 0})")
+        print(
+            f"LOD{level} tris {total} (masonry {stone.tris} metal {metal.tris} "
+            f"windows {glass.tris} lamps {lamps.tris} col {col.tris if col else 0})"
+        )
 
     for img in list(bpy.data.images):
         if img.name in ("Render Result", "Viewer Node"):
@@ -1501,26 +1638,32 @@ def build_scene():
     stats_path = "/tmp/cathedral-stats.txt"
     with open(stats_path, "w", encoding="utf-8") as fh:
         for row in stats:
-            fh.write(f"{row['level']} {row['stone']} {row['glass']} {row['col']} {row['total']}\n")
+            fh.write(
+                f"{row['level']} {row['stone']} {row['metal']} {row['glass']} {row['lamps']} {row['col']} {row['total']}\n"
+            )
 
     shots = os.environ.get("CATHEDRAL_SHOTS")
     if shots:
         render_shots(roots, win_mat, shots, preview=os.environ.get("CATHEDRAL_PREVIEW") == "1")
 
 
-def acc_object(name, acc, material):
+def acc_object(name, acc, material, uvs=True):
     import bpy
 
     mesh = bpy.data.meshes.new(name + "-mesh")
     mesh.from_pydata(acc.V, [], [list(f) for f in acc.F])
     mesh.validate(clean_customdata=False)
     mesh.update()
-    uv = mesh.uv_layers.new(name="UVMap")
-    for poly in mesh.polygons:
-        poly.use_smooth = False
-        for li in poly.loop_indices:
-            vi = mesh.loops[li].vertex_index
-            uv.data[li].uv = acc.UV[vi]
+    if uvs:
+        uv = mesh.uv_layers.new(name="UVMap")
+        for poly in mesh.polygons:
+            poly.use_smooth = False
+            for li in poly.loop_indices:
+                vi = mesh.loops[li].vertex_index
+                uv.data[li].uv = acc.UV[vi]
+    else:
+        for poly in mesh.polygons:
+            poly.use_smooth = False
     obj = bpy.data.objects.new(name, mesh)
     bpy.context.scene.collection.objects.link(obj)
     if material is not None:
@@ -1576,7 +1719,8 @@ def make_main_material(tex):
     sep.location = (-360, -40)
     links.new(orm.outputs["Color"], sep.inputs["Color"])
     links.new(sep.outputs["Green"], bsdf.inputs["Roughness"])
-    links.new(sep.outputs["Blue"], bsdf.inputs["Metallic"])
+    # Sandstone stays dielectric. Copper and bronze live on the metal material.
+    bsdf.inputs["Metallic"].default_value = 0.0
     nmap = nodes.new("ShaderNodeNormalMap")
     nmap.location = (-80, -300)
     nmap.inputs["Strength"].default_value = 0.8
@@ -1612,8 +1756,73 @@ def make_window_material(tex):
     tex_node.image = image
     links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
     links.new(tex_node.outputs["Color"], bsdf.inputs["Emission Color"])
-    bsdf.inputs["Emission Strength"].default_value = 0.45
-    bsdf.inputs["Roughness"].default_value = 0.32
+    # Smooth transmitted glass, with emission so the colour reads as light from inside.
+    bsdf.inputs["Emission Strength"].default_value = 1.15
+    bsdf.inputs["Roughness"].default_value = 0.08
+    bsdf.inputs["Metallic"].default_value = 0.0
+    if "Transmission Weight" in bsdf.inputs:
+        bsdf.inputs["Transmission Weight"].default_value = 0.72
+    elif "Transmission" in bsdf.inputs:
+        bsdf.inputs["Transmission"].default_value = 0.72
+    if "IOR" in bsdf.inputs:
+        bsdf.inputs["IOR"].default_value = 1.52
+    return mat
+
+
+def make_metal_material(tex):
+    import bpy
+
+    mat = bpy.data.materials.new(f"{SLUG}-metal")
+    mat.use_nodes = True
+    try:
+        mat.use_backface_culling = True
+    except Exception:
+        pass
+    nt = mat.node_tree
+    nodes = nt.nodes
+    links = nt.links
+    nodes.clear()
+    out = nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+    links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    image = bpy.data.images.load(os.path.join(tex, "main-basecolor.png"))
+    image.colorspace_settings.name = "sRGB"
+    image.filepath = "//textures/main-basecolor.png"
+    tex_node = nodes.new("ShaderNodeTexImage")
+    tex_node.image = image
+    links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
+    nor = bpy.data.images.load(os.path.join(tex, "main-normal.png"))
+    nor.colorspace_settings.name = "Non-Color"
+    nor.filepath = "//textures/main-normal.png"
+    nnode = nodes.new("ShaderNodeTexImage")
+    nnode.image = nor
+    nmap = nodes.new("ShaderNodeNormalMap")
+    nmap.inputs["Strength"].default_value = 0.45
+    links.new(nnode.outputs["Color"], nmap.inputs["Color"])
+    links.new(nmap.outputs["Normal"], bsdf.inputs["Normal"])
+    bsdf.inputs["Metallic"].default_value = 1.0
+    bsdf.inputs["Roughness"].default_value = 0.34
+    return mat
+
+
+def make_lamp_material():
+    import bpy
+
+    mat = bpy.data.materials.new("emissive-lamp")
+    mat.use_nodes = True
+    nt = mat.node_tree
+    nodes = nt.nodes
+    links = nt.links
+    bsdf = nodes.get("Principled BSDF")
+    if bsdf is None:
+        nodes.clear()
+        out = nodes.new("ShaderNodeOutputMaterial")
+        bsdf = nodes.new("ShaderNodeBsdfPrincipled")
+        links.new(bsdf.outputs["BSDF"], out.inputs["Surface"])
+    bsdf.inputs["Base Color"].default_value = (1.0, 0.78, 0.42, 1.0)
+    bsdf.inputs["Emission Color"].default_value = (1.0, 0.75, 0.38, 1.0)
+    bsdf.inputs["Emission Strength"].default_value = 2.4
+    bsdf.inputs["Roughness"].default_value = 0.4
     bsdf.inputs["Metallic"].default_value = 0.0
     return mat
 
@@ -1704,8 +1913,11 @@ def render_shots(roots, win_mat, folder, preview=False):
     ]
     if not preview:
         shots += [
+            ("side", (175, -4, 34), (0, -4, 26)),
             ("back", (6, -210, 48), (0, -8, 24)),
             ("top", (30, -20, 210), (0, 0, 10)),
+            # Transept rose and eave, the view that showed the coplanar wall and the roof slivers.
+            ("close-up-side", (42, 6, 11), (18, -1.5, 16)),
         ]
     show(0)
     for name, loc, tgt in shots:
@@ -1717,29 +1929,58 @@ def render_shots(roots, win_mat, folder, preview=False):
     if preview:
         return
 
-    # Night. Emission is boosted only for this still; the exported material stays at 0.45.
-    bg.inputs[0].default_value = (0.02, 0.03, 0.06, 1)
-    bg.inputs[1].default_value = 0.4
-    sun_data.energy = 0.15
-    fill_data.energy = 400
+    # Night still. The glb keeps the authored emission; this only boosts the picture
+    # and adds soft uplights that are not exported.
+    bg.inputs[0].default_value = (0.015, 0.02, 0.045, 1)
+    bg.inputs[1].default_value = 0.25
+    sun_data.energy = 0.08
+    fill_data.energy = 80
     for mat in bpy.data.materials:
-        if mat.name != WIN_MAT or not mat.use_nodes:
+        if not mat.use_nodes:
             continue
         for node in mat.node_tree.nodes:
-            if node.type == "BSDF_PRINCIPLED":
-                node.inputs["Emission Strength"].default_value = 8.0
-    _look_at(cam, (110, 160, 46), (0, 0, 30))
+            if node.type != "BSDF_PRINCIPLED":
+                continue
+            if mat.name == WIN_MAT:
+                node.inputs["Emission Strength"].default_value = 7.5
+            elif mat.name == "emissive-lamp":
+                node.inputs["Emission Strength"].default_value = 18.0
+    up_objs = []
+    for loc, aim, energy in (
+        ((0, 82, 1.6), (0, 50, 38), 18000),
+        ((-16, 76, 1.4), (-14, 48, 52), 12000),
+        ((16, 76, 1.4), (14, 48, 52), 12000),
+        ((0, -72, 1.5), (0, -46, 26), 8000),
+        ((42, -1, 1.4), (18, -2, 24), 7000),
+    ):
+        ld = bpy.data.lights.new("uplight", "SPOT")
+        ld.energy = energy
+        ld.spot_size = 1.45
+        ld.spot_blend = 0.45
+        ld.color = (1.0, 0.84, 0.62)
+        obj = bpy.data.objects.new("uplight", ld)
+        scene.collection.objects.link(obj)
+        _look_at(obj, loc, aim)
+        up_objs.append(obj)
+    _look_at(cam, (110, 160, 40), (0, 0, 30))
     scene.render.filepath = os.path.join(folder, "night.png")
     bpy.ops.render.render(write_still=True)
     print("shot night")
+    for obj in up_objs:
+        bpy.data.objects.remove(obj, do_unlink=True)
     for mat in bpy.data.materials:
-        if mat.name != WIN_MAT or not mat.use_nodes:
+        if not mat.use_nodes:
             continue
         for node in mat.node_tree.nodes:
-            if node.type == "BSDF_PRINCIPLED":
-                node.inputs["Emission Strength"].default_value = 0.45
-    sun_data.energy = 4.2
-    bg.inputs[0].default_value = (0.62, 0.66, 0.7, 1)
+            if node.type != "BSDF_PRINCIPLED":
+                continue
+            if mat.name == WIN_MAT:
+                node.inputs["Emission Strength"].default_value = 1.15
+            elif mat.name == "emissive-lamp":
+                node.inputs["Emission Strength"].default_value = 2.4
+    sun_data.energy = 2.4
+    bg.inputs[0].default_value = (0.42, 0.55, 0.75, 1)
+    bg.inputs[1].default_value = 0.55
 
     # Wireframe of LOD0 via the wireframe modifier.
     show(0)
