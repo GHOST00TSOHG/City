@@ -81,7 +81,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
 
 /** Night readability tweaks for landmark glTF materials (emissive-* slots). */
 function tuneLandmarkMaterials(root: THREE.Object3D, id: string) {
-  const lampBoost = id === 'newark-schools-stadium' ? 2.4 : 1;
+  const lampBoost = id === 'newark-schools-stadium' ? 1.2 : 1 // glb lamp emission is already doubled (f7c3be6);
   root.traverse((n) => {
     const mesh = n as THREE.Mesh;
     if (!mesh.isMesh) return;

@@ -23,6 +23,10 @@ Used for what the 2011 stadium is, not as traced drawings. No photographs from t
 - Epic Management, project page. Arch-wall entrance, 400 metre track, home and away bleachers, clock tower and ticket office, elevator tower to the home bleachers. The community building is listed as 5,000 sf and two storeys; it is not a separate OSM footprint, so it is not given its own mass. https://www.epicbuilds.com/portfolio/newark-public-schools-stadium/
 - The Star-Ledger / NJ.com, 2 July 2009, "Construction of new super site finally underway at iconic Newark Schools Stadium". 30-foot arches along Bloomfield Avenue, clock tower with the ticket office, aluminium bleachers. https://www.nj.com/sports/njsports/2009/07/construction_of_new_super_site.html
 
+## Ground and press box (Luis, 1 Nov 2026, round 2)
+
+Ground level is +0.8 m above the origin. Walkable sheets (pad, plaza, concourse, parking edge, track, pitch) and the bases of the stands, walls, fence, and tower sit at or above that. A solid skirt drops from +0.8 m to y = -1.0. Overlapping ground sheets are at least 5 cm apart. The press box is on the top of the west (home) stand, same heights on every LOD, with framed glass on `emissive-windows`.
+
 ## Enclosure (Luis, 1 Nov 2026)
 
 The review asked for a closed stadium. The seat ring runs all the way around the track, including both end zones, so the corners are stands rather than gaps. The outer facade follows OSM way 446152545, with gate openings, and the Bloomfield edge is the arch wall. The ticket-office tower is moved onto that wall so it is the main entrance, not a detached block. A fence sits just outside the wall. The ground pad, front plaza, bowl concourse, and a parking edge are the apron. Seat rows and risers are separate texture regions. Railings are a rail above the top deck, not a second slab on it. The scoreboard is at the end opposite Bloomfield Avenue. Four light banks stand at the corners of the bowl.
