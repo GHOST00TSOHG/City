@@ -227,3 +227,7 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 
 ## Flight (per type)
 - FlightProfile in types.ts; poser take-off/hover/cruise/land per style; controller crouch-launch + landing burn; thrust.ts single instanced flame draw + sparks; medic backpack + palm nozzles; glitch cube-stream dissolve. Clips: tools/clips-robot-fly.mjs → /workspace/robot-clips/<type>-fly.mp4 (~12 s/frame on SwiftShader, ~23 min per type).
+
+## Mac / Claude Code run (2026-11-01)
+- From now on, build work runs through Claude Code on the Mac in ~/builds/City-gh, which gets the branch by git bundle from the box (the Mac has no GitHub login). The box pushes to GitHub.
+- Task for this run: render the four flight clips (heavy, worker, scout, glitch) in a real GPU browser into robot-clips/<type>-fly.mp4 (do NOT commit the mp4s); check Heavy's foot thrusters sit on the new round feet (typed.ts noz FootNozzle uses TYPES[type].sole; heavy sole -0.16 may need adjusting for v5 feet); fix Scout's missing decalColor surface so `TYPES=scout node tools/test-robot-types.mjs <port>` colour check passes.
