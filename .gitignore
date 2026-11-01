@@ -8,3 +8,6 @@ tools/cache/
 config.private.json
 *.key
 .DS_Store
+
+*.blend
+*.blend1
