@@ -29,6 +29,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Better water: normal-mapped waves, reflections, foam | bot/websmith-water | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Better roads + walk on road surface | bot/websmith-roads | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Palms only in Key West | bot/websmith-no-nj-palms | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| One world, step 6a: world.json, compressed NJ road, open-data re-bake | bot/websmith-one-world | Grok Bot (Websmith) | draft PR | 2026-11-01 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
