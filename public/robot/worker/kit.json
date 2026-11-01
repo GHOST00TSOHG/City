@@ -1,0 +1,72 @@
+{
+ "addons_used": {
+  "HOps add_mod_bevel": 51,
+  "HOps mod_weighted_normal": 51,
+  "MESHmachine fuse": 16,
+  "HOps bool_difference": 64
+ },
+ "type": "worker",
+ "pistons": [],
+ "tris": {
+  "body:base": 4880,
+  "helmet:boxcam": 3583,
+  "helmet:welder": 2164,
+  "helmet:lamp": 2069,
+  "arms:claw": 6382,
+  "arms:drill": 4208,
+  "arms:welder": 3550,
+  "bionics:tanks": 2889,
+  "bionics:battery": 1904,
+  "bionics:reel": 937,
+  "legs:cans": 9144,
+  "legs:strut": 2236,
+  "legs:ribbed": 17876,
+  "thrusters:stacks": 1104,
+  "thrusters:fans": 4544,
+  "thrusters:rocket": 2259,
+  "boots:stabilizer": 824,
+  "boots:wheels": 1976,
+  "boots:clamp": 1528
+ },
+ "slots": {
+  "helmet": [
+   "boxcam",
+   "welder",
+   "lamp"
+  ],
+  "arms": [
+   "claw",
+   "drill",
+   "welder"
+  ],
+  "bionics": [
+   "tanks",
+   "battery",
+   "reel"
+  ],
+  "legs": [
+   "cans",
+   "strut",
+   "ribbed"
+  ],
+  "thrusters": [
+   "stacks",
+   "fans",
+   "rocket"
+  ],
+  "boots": [
+   "stabilizer",
+   "wheels",
+   "clamp"
+  ]
+ },
+ "screens": {
+  "lamp": [
+   0,
+   0.22,
+   0.1,
+   0.12,
+   0.12
+  ]
+ }
+}
