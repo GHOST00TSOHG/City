@@ -186,3 +186,9 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Runtime: Glitch is now a mesh kit (`createKitRobot`) + 16-shard overlay (`createGlitchBody`) on the same rig; kit meshes hide while uDash > 0.5 during blink-dash. cubes.json removed. Paint dark (#16181f / #1d2029, visor #3ff4ff, decal #ff2fb0); height 2.3, sole -0.2.
 - Stats: kit 25,830 tris (budget 26k); TYPES=glitch PASS: garage 50 calls, world 44 calls, 25,036 robot tris, walk 3.57 m/s, 0 console errors.
 - Note: skeleton.json `height` metadata counts every slot option (3.884), unused at runtime.
+
+## Worker v4 healer (combat medic)
+- Crane removed. Back regen core (glowing green core, slats, fins, hoses to shoulders, green plus), right-forearm heal emitter, left-forearm injector (vial, cage, needle), green light strips on forearms/shins/chest, chest pulse line. No red cross. Hands kept, curled, palms in.
+- Palette: olive/gunmetal kept; accent (shorts slot) #2f8a3e, heal glow on decalColor #3dff6e (emissive), visor red #ff3020. All 7 paint slots recolourable.
+- Renders: /workspace/robot-renders/worker-v4-34.png, worker-v4-closeup.png (rear 3/4, regen core). `worker_v2.py -- --preview [--closeup]`.
+- Kit: 25,684 tris exported (budget=25800), 24,124 visible in garage. TYPES=worker: all PASS incl. new garage colour check (each slot click → colour appears in robot material uniforms), 0 console errors, garage 50 / world 44 draw calls.
