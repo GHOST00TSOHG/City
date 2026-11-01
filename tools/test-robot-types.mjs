@@ -27,6 +27,20 @@ for (const t of (process.env.TYPES || 'scout,heavy,worker,glitch').split(',')) {
   const g = await p.evaluate(() => ({ calls: window.__city.calls, pressed: document.querySelector('#hangar .types [aria-pressed="true"]')?.dataset.t, slots: document.querySelectorAll('#hangar .opts button').length }));
   const tris = await robotTris();
   check(g.pressed === t && g.slots === 18, `${t} garage: picker=${g.pressed} slot buttons=${g.slots} calls=${g.calls} robot tris=${tris}`);
+  // every garage colour slot must visibly recolour the robot (material color/emissive or shader colour uniforms)
+  const colRes = await p.evaluate(async () => {
+    const seen = () => { const h = new Set(); window.__robot.model.root.traverse((o) => { if (!o.isMesh) return; for (const m of [].concat(o.material)) { for (const k of ['color', 'emissive']) if (m[k]?.isColor) h.add('#' + m[k].getHexString()); for (const u of Object.values(m.uniforms || {})) if (u.value?.isColor) h.add('#' + u.value.getHexString()); for (const u of Object.values(m.userData || {})) if (u?.value?.isColor) h.add('#' + u.value.getHexString()); } }); return h; };
+    const out = {};
+    for (const col of document.querySelectorAll('#hangar .col')) {
+      const k = col.dataset.k, cur = window.__robot.customizer.look[k];
+      const sw = [...col.querySelectorAll('i[data-c]')].map((i) => i.dataset.c).filter((c) => c !== cur && !seen().has(c.toLowerCase()));
+      if (!sw.length) { out[k] = 'noswatch'; continue; }
+      col.querySelector(`i[data-c="${sw[0]}"]`).click(); await new Promise((r) => setTimeout(r, 300));
+      out[k] = seen().has(sw[0].toLowerCase()) ? 'ok' : 'MISSING ' + sw[0];
+    }
+    return out;
+  });
+  check(Object.values(colRes).every((v) => v === 'ok'), `${t} garage colours: ${JSON.stringify(colRes)}`);
   // world: drop in, walk 2 s on the ground and measure speed
   await p.evaluate(() => window.__robot.hangar(false)); await p.waitForTimeout(500);
   const w = await p.evaluate(() => { const r = window.__robot; r.dropIn(0); for (let i = 0; i < 60; i++) r.ctl.update(1 / 30);
