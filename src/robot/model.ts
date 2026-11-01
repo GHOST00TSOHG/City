@@ -1,26 +1,23 @@
 import * as THREE from 'three/webgpu';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { attachParts, applyParts, type PartLib } from './parts';
+import { TYPES, defaultSlots, sanitizeSlots, type RobotType, type Slot as TSlot } from './types';
 
 /** Colour regions a player can customise later (join screen). Keys are stable: saved looks depend on them. */
 export interface RobotLook {
   shell: string; joints: string; torso: string; shorts: string; backpack: string; visor: string; decalColor: string;
   helmet: string; arms: string; bionics: string; legs: string; thrusters: string; boots: string;
 }
-/** Mecha part slots and their options (Blender-built GLBs in public/robot/parts/<slot>.glb; objects named <slot>__<option>__<Bone>). */
-export const SLOTS = {
-  helmet: ['kai', 'saiyan', 'oni'], arms: ['strike', 'brawler', 'blade'], bionics: ['core', 'aegis', 'cannon'],
-  legs: ['sprint', 'heavy', 'spike'], thrusters: ['twin', 'wing', 'halo'], boots: ['jet', 'talon', 'tank'],
-} as const;
-export type Slot = keyof typeof SLOTS;
-export const DEFAULT_LOOK: RobotLook = { shell: '#eceae4', joints: '#2b2e33', torso: '#d7263d', shorts: '#3c3f45', backpack: '#2f6fdb', visor: '#3df2ff', decalColor: '#ffd23f',
-  helmet: 'kai', arms: 'strike', bionics: 'core', legs: 'sprint', thrusters: 'twin', boots: 'jet' };
-const REGIONS = ['shell', 'joints', 'torso', 'shorts', 'backpack', 'visor', 'decalColor'] as const;
-/** Merge a saved look over the defaults, dropping unknown values (old saves, hand edits). */
-export function sanitizeLook(raw: unknown): RobotLook {
-  const out: RobotLook = { ...DEFAULT_LOOK }, r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+/** Slots per robot type live in ./types (TYPES[type].slots); the look carries the active type's build. */
+export const SLOTS = TYPES.scout.slots;
+export type Slot = TSlot;
+export const DEFAULT_LOOK: RobotLook = { ...TYPES.scout.paint, ...defaultSlots('scout') };
+export const REGIONS = ['shell', 'joints', 'torso', 'shorts', 'backpack', 'visor', 'decalColor'] as const;
+/** Merge a saved look over the type's defaults, dropping unknown values (old saves, hand edits, other types' parts). */
+export function sanitizeLook(raw: unknown, type: RobotType = 'scout'): RobotLook {
+  const out: RobotLook = { ...TYPES[type].paint, ...defaultSlots(type) }, r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
   for (const k of REGIONS) if (typeof r[k] === 'string' && /^#[0-9a-f]{6}$/i.test(r[k] as string)) (out as any)[k] = r[k];
-  for (const k of Object.keys(SLOTS) as Slot[]) if ((SLOTS[k] as readonly string[]).includes(r[k] as string)) (out as any)[k] = r[k];
+  Object.assign(out, sanitizeSlots(r, type));
   return out;
 }
 type Region = (typeof REGIONS)[number];
@@ -44,11 +41,11 @@ export interface RobotModel {
 export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number }
 
 /** Bones by Mixamo-style names so Jonn's rig and the placeholder share one pose code path. */
-const BONES = ['Hips', 'Spine', 'Head', 'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot'] as const;
-type Bones = Partial<Record<(typeof BONES)[number], THREE.Object3D>>;
+export const BONES = ['Hips', 'Spine', 'Head', 'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot'] as const;
+export type Bones = Partial<Record<(typeof BONES)[number], THREE.Object3D>>;
 
 /** Procedural pose: Euler targets (x pitch, z roll) per bone; damped so state changes blend. */
-function makePoser(b: Bones) {
+export function makePoser(b: Bones) {
   const rest = new Map<THREE.Object3D, THREE.Quaternion>();
   for (const o of Object.values(b)) if (o) rest.set(o, o.quaternion.clone());
   const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), e = new THREE.Euler();

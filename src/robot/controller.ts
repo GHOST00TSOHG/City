@@ -4,7 +4,9 @@ import type { RobotModel, RobotAnim } from './model';
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
 export interface World { floorAt(x: number, z: number, y: number): { y: number; water: boolean; roof: boolean }; blocked(x: number, z: number, y: number): boolean }
 
-const G = 22, WALK = 3.4, RUN = 7.5, CRUISE = 90, BURST = 140; // m/s; 90 m/s ≈ 200 mph
+const G = 22, BASE = { walk: 3.4, run: 7.5, cruise: 90, burst: 140, jump: 7.2, turn: 1, accel: 1 }; // m/s; 90 m/s ≈ 200 mph
+/** Live movement constants; `setTuning` scales them per robot type (types.ts TYPES[type].tune). */
+let WALK = BASE.walk, RUN = BASE.run, CRUISE = BASE.cruise, BURST = BASE.burst, JUMP = BASE.jump, TURN = 1, ACCEL = 1;
 export const MPH = 2.23694;
 
 /**
@@ -25,7 +27,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   addEventListener('keydown', (e) => {
     if (!enabled || isTyping(e)) return; keys.add(e.code);
     if (e.code === 'Space' && !e.repeat) {
-      if (mode === 'GROUND') { vel.y = 7.2; mode = 'SKYDIVING'; airT = 0; anim = 'jump'; }
+      if (mode === 'GROUND') { vel.y = JUMP; mode = 'SKYDIVING'; airT = 0; anim = 'jump'; }
       else if (mode === 'SKYDIVING') mode = 'ROCKETS';
     }
     if (e.code === 'KeyF' && !e.repeat) { if (mode === 'ROCKETS') mode = 'SKYDIVING'; else if (mode === 'SKYDIVING') mode = 'ROCKETS'; else if (mode === 'GROUND') { vel.y = 9; mode = 'ROCKETS'; } }
@@ -58,6 +60,9 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   }
 
   return {
+    /** Per-type movement multipliers (1 = the original tuning). */
+    setTuning(m: Partial<typeof BASE>) { WALK = BASE.walk * (m.walk ?? 1); RUN = BASE.run * (m.run ?? 1); CRUISE = BASE.cruise * (m.cruise ?? 1); BURST = BASE.burst * (m.burst ?? 1); JUMP = BASE.jump * (m.jump ?? 1); TURN = m.turn ?? 1; ACCEL = m.accel ?? 1; },
+    get tuning() { return { walk: WALK, run: RUN, cruise: CRUISE, burst: BURST, jump: JUMP, turn: TURN, accel: ACCEL }; },
     get pos() { return pos; }, get vel() { return vel; }, get mode() { return mode; }, get burst() { return burst; }, get heading() { return heading; },
     get thrust() { return power; }, get burstOn() { return burstOn; }, get floor() { return floor; }, get anim() { return anim; },
     get enabled() { return enabled; },
@@ -86,8 +91,8 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         want.set(0, 0, 0).addScaledVector(camF, iF).addScaledVector(right, iR); if (charging) want.set(0, 0, 0);
         const moving = want.lengthSq() > 0 && mode === 'GROUND';
         const sp = iBurst ? RUN : WALK;
-        if (moving) { want.normalize(); heading += angDiff(Math.atan2(want.x, want.z), heading) * (1 - Math.exp(-dt * 12)); want.multiplyScalar(sp); } else want.set(0, 0, 0);
-        vel.x += (want.x - vel.x) * (1 - Math.exp(-dt * 10)); vel.z += (want.z - vel.z) * (1 - Math.exp(-dt * 10)); vel.y = 0;
+        if (moving) { want.normalize(); heading += angDiff(Math.atan2(want.x, want.z), heading) * (1 - Math.exp(-dt * 12 * TURN)); want.multiplyScalar(sp); } else want.set(0, 0, 0);
+        vel.x += (want.x - vel.x) * (1 - Math.exp(-dt * 10 * ACCEL)); vel.z += (want.z - vel.z) * (1 - Math.exp(-dt * 10 * ACCEL)); vel.y = 0;
         const vh = Math.hypot(vel.x, vel.z); phase += dt * vh * (vh > 5 ? 1.5 : 2.6);
         anim = mode === 'LAND' ? 'land' : vh > 5 ? 'run' : vh > 0.4 ? 'walk' : 'idle';
         if (mode === 'LAND') { landT += dt; if (landT > 0.38) mode = 'GROUND'; }
@@ -100,11 +105,11 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         // A/D turn (bank), W/S speed along heading, Space/C climb/descend, no input = hover holds altitude.
         // Releasing a camera drag lets the heading follow the camera, so you can steer with the mouse too.
         if (t - lastDrag < 0.05 && Math.hypot(vel.x, vel.z) > 8) yawRate += (angDiff(camYaw, heading) * 4 - yawRate) * 0.5;
-        else yawRate += (-iR * (1.9 - Math.min(1, Math.hypot(vel.x, vel.z) / BURST) * 0.9) - yawRate) * (1 - Math.exp(-dt * 6));
+        else yawRate += (-iR * TURN * (1.9 - Math.min(1, Math.hypot(vel.x, vel.z) / BURST) * 0.9) - yawRate) * (1 - Math.exp(-dt * 6));
         heading += yawRate * dt; fwd.set(Math.sin(heading), 0, Math.cos(heading));
         const top = burstOn > 0.5 ? BURST : CRUISE, cur = vel.x * fwd.x + vel.z * fwd.z;
         const target = iF > 0 ? top : iF < 0 ? 0 : Math.max(0, cur - dt * 6);
-        const acc = iF > 0 ? (burstOn > 0.5 ? 70 : 28) : 40;
+        const acc = (iF > 0 ? (burstOn > 0.5 ? 70 : 28) : 40) * ACCEL;
         const ns = cur + Math.sign(target - cur) * Math.min(Math.abs(target - cur), acc * dt);
         const side = vel.x * fwd.z - vel.z * fwd.x; // lateral slip decays fast so turns carve
         const sd = side * Math.exp(-dt * 4);

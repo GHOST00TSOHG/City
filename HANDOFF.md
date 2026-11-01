@@ -26,6 +26,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 6: procedural interiors | bot/websmith-rebuild-p6-interiors | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| Robot types: Scout / Heavy / Worker / Glitch, save v2, garage type picker | bot/websmith-robot-types | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Landmark #1 Newark Schools Stadium (pending Luis) | bot/jonn-newark-schools-stadium | (unclaimed, Jonn) | open | |
 
@@ -119,3 +120,16 @@ Built on Grok Bot (no Claude). Estimate for v01 streets: medium.
 - Seam pattern is in part-local space, so seam spacing differs slightly per part.
 - Slow-mo and FX timing were tuned in stepped headless runs; check feel and cost at 60 fps on the Air M4.
 - Damage only comes from `K` for now.
+
+## Robot types (Scout, Heavy, Worker, Glitch)
+Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/blender/robot_types.py` (Hard Ops and MESHmachine run when installed in the box's Blender user dir; the add-ons themselves are never committed).
+- **Types (`src/robot/types.ts`):** `TYPES[type]` holds the label, height, 3 options for each of the 6 slots, default paint, movement multipliers and tri budget. All types share the Mixamo-style skeleton (`skeleton.json`, scaled per type).
+- **Renderer (`src/robot/kit.ts`, `typed.ts`):** each mesh type loads `public/robot/<type>/{parts.glb, kit.json, masks.webp, normal.webp}` plus the shared `decals.webp`. The visible nodes are merged into one rigid-skinned mesh per material region, so a robot costs 6 to 9 draws. Paint × baked AO/edge-wear/grime masks, a normal map, a decal atlas on UV1, pistons that aim at runtime, and per-pixel damage and repair sweep. **Screen face:** an eye glyph shader on the `screen` region (rect from `kit.json screens[helmet]`). It blinks, squints during burst, and shows X eyes when damage is above 70 %.
+- **Glitch:** `public/robot/glitch/cubes.json` (4,126 cubes in 48 parts) is drawn as one `InstancedMesh`. Bones come from a mat4 uniform array, and hidden slot options scale to 0. Idle drift, burst scatter and damage loosening all run on the GPU.
+- **Tris:** each kit is decimated after export with `node tools/robot-simplify.mjs <type> <ratio> <error>` (meshoptimizer, attribute-aware). `kit.json` keeps `tris_export` (pre-decimation), `tris` and `simplify`. Heavy uses 0.4/0.03: default build 22.0k, worst-case 29.8k (was 43k / 54k). Scout uses 0.7/0.01 (23.3k / 27.3k) and Worker 0.7/0.01 (19.0k / 28.4k). Re-run it after every Blender re-export, because it is not idempotent on an already-decimated file.
+- **Save v2 (`src/save.ts`):** `city.save.v2` = `{ type, paint: per type, slots: per type, damage }`. v1 migrates to scout: v1 colours go to scout, v1 part names (retired set) fall back to scout defaults, and damage is kept. v1 stays in storage. Bad values are sanitised.
+- **Garage:** 4 type cards above the slots. Switching type restores that type's last build and paint. The camera framing scales with the robot's height.
+- **Movement:** `ctl.setTuning(TYPES[t].tune)` sets walk/run/cruise/burst/jump/turn/accel multipliers. Scout is fast and agile, Heavy is slow with high inertia, Worker is the baseline, and Glitch is floaty and has the fastest burst.
+- **Test:** `npx vite --port 5180` then `node tools/test-robot-types.mjs 5180`. It covers migration, each type in the garage and the world, build restore on switch, reload, a corrupt save, and zero console errors. Shots go to `/workspace/city-shots/types-final-*.png`.
+- Measured (SwiftShader, Key West start): 41 to 51 draw calls in the garage and 35 to 45 in the world.
+- **Still to do:** Heavy ground-pound dust ring and shove; Glitch blink-dash; Scout double-jump/dash; LOD1/LOD2 for other players' robots past 25/80 m; KTX2 textures (WebP now); a phone cube-count drop for Glitch; a real-GPU fps check on an M4 Air. The old phase-7b parts (`public/robot/parts/*.glb`, `src/robot/parts.ts`, `loadRobot`, `robot_parts.py`) are unused but not deleted, because the plan doesn't call for removing them.

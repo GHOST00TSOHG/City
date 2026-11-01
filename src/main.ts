@@ -3,11 +3,12 @@ import '@fontsource/inter/600.css';
 import './style.css';
 import * as THREE from 'three/webgpu';
 import { createScene } from './scene';
-import { loadRobot, type RobotLook } from './robot/model';
+import { type RobotLook } from './robot/model';
+import { createRobotSwitch } from './robot/typed';
+import { TYPES, TYPE_KEYS, type RobotType } from './robot/types';
 import { createCustomizer } from './robot/customizer';
-import { loadParts } from './robot/parts';
 import { createRobotFx } from './robot/fx';
-import { loadSave, writeSave } from './save';
+import { loadSave, writeSave, lookOf, storeLook } from './save';
 import { createRobotController } from './robot/controller';
 import { createThrust } from './robot/thrust';
 import { createRobotHud } from './robot/hud';
@@ -58,18 +59,26 @@ createScene(canvas, areaId).then(async (app) => {
   hint.textContent = 'Free cam: WASD move · drag look · E/Q up/down · Shift fast · G walk · V robot';
   document.body.appendChild(hint); hint.classList.add('gone');
 
-  // Player robot. Build + battle damage live in the versioned save (city.save.v1); the garage opens on every entry.
+  // Player robot. Type, per-type build, paint + battle damage live in the versioned save (city.save.v2); the garage
+  // opens on every entry. The robot is a switch host: changing type swaps the body under a stable root.
   const save = loadSave();
-  const look: RobotLook = { ...save.robot.look };
-  const [robot, parts] = await Promise.all([loadRobot(look), loadParts()]); app.scene.add(robot.root);
-  robot.equip(parts);
+  const look: RobotLook = lookOf(save);
+  const robot = await createRobotSwitch(save.robot.type, look); app.scene.add(robot.root);
+  const parts = robot; // uniforms (energy / damage / sweep) live on the switch, shared by every type
   const fx = createRobotFx(app.scene, app.camera); fx.setColor(look.visor);
-  const joints: THREE.Object3D[] = []; robot.root.traverse((o) => { if (/^(Left|Right)(ForeArm|Leg|Arm)$|^Head$/.test(o.name)) joints.push(o); });
+  let joints: THREE.Object3D[] = robot.joints;
   let damage = save.robot.damage, repairT = -1;
-  const setDamage = (d: number) => { damage = Math.min(1, Math.max(0, d)); if (parts) parts.uniforms.damage.value = damage; save.robot.damage = damage; writeSave(save); };
+  const setDamage = (d: number) => { damage = Math.min(1, Math.max(0, d)); parts.uniforms.damage.value = damage; save.robot.damage = damage; writeSave(save); };
   setDamage(damage);
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
+  ctl.setTuning(TYPES[save.robot.type].tune);
+  robot.onSwap = () => { thrust.attach(robot.nozzles); joints = robot.joints; };
+  idle(() => TYPE_KEYS.forEach((t) => robot.preload(t)));
+  const switchType = (t: RobotType): RobotLook => {
+    storeLook(save, cust.look); save.robot.type = t; writeSave(save);
+    const l = lookOf(save); void robot.setType(t, l); ctl.setTuning(TYPES[t].tune); fx.setColor(l.visor); return l;
+  };
   const hud = createRobotHud();
   const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
   const heroDrop = () => { const s = app.spawnPoint(); ctl.heroDrop(s.x, s.ground + 160, s.z, s.heading); };
@@ -83,8 +92,8 @@ createScene(canvas, areaId).then(async (app) => {
   // Hangar (join screen): robot stands on the street start on a turntable; pick a look, then Drop in.
   const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0 };
   const placeHangar = () => { const s = app.spawnPoint(); hangar.x = s.x; hangar.z = s.z; hangar.h = s.heading; hangar.y = app.world.floorAt(s.x, s.z, s.ground + 1.5).y; hangar.yaw = s.heading + Math.PI * 0.85; ctl.pos.set(s.x, hangar.y, s.z); };
-  const cust = createCustomizer(look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); save.robot.look = { ...l }; writeSave(save); },
-    () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
+  const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
+    (t) => switchType(t), () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
   const setHangar = (on: boolean) => {
     cust.setOpen(on); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
     if (on) { placeHangar(); robot.root.visible = true; robot.root.quaternion.identity(); app.setFocus(ctl.pos); } else if (robotMode) heroDrop();
@@ -98,10 +107,11 @@ createScene(canvas, areaId).then(async (app) => {
     r.position.set(hangar.x, hangar.y, hangar.z); r.quaternion.identity(); r.rotation.set(0, hangar.yaw, 0);
     robot.animate({ anim: 'idle', phase: 0, speed: 0, lean: 0, bank: 0, crouch: 0, t: hangar.t }, dt);
     // Camera in front of the street heading, robot framed right of the panel.
-    const fx = Math.sin(hangar.h), fz = Math.cos(hangar.h), d = 3.1, cam = app.camera;
-    cam.position.set(hangar.x + fx * d, hangar.y + 1.15, hangar.z + fz * d);
+    // Framing scales with the type's height (2.0 m glitch .. 2.6 m heavy).
+    const H = robot.height, fx = Math.sin(hangar.h), fz = Math.cos(hangar.h), d = 2.75 * H, cam = app.camera;
+    cam.position.set(hangar.x + fx * d, hangar.y + 0.62 * H, hangar.z + fz * d);
     if (cam.fov !== 40) { cam.fov = 40; cam.updateProjectionMatrix(); }
-    cam.lookAt(hangar.x - fz * 0.55, hangar.y + 0.62, hangar.z + fx * 0.55);
+    cam.lookAt(hangar.x - fz * 0.5 * H, hangar.y + 0.5 * H, hangar.z + fx * 0.5 * H);
   };
   const joinScreen = robotMode && qs.get('join') !== '0';
   setRobotMode(robotMode);
@@ -137,7 +147,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__cityCam = app.camera; w.__cityControls = app.controls;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
-  w.__robot = { ctl, model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, hangarState: hangar };
+  w.__robot = { ctl, model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
   let frames = 0, last = performance.now(), t = 0;
@@ -147,14 +157,15 @@ createScene(canvas, areaId).then(async (app) => {
     const dt = rdt * (slowT > 0 ? 0.3 + 0.7 * (1 - Math.sin((slowT / 0.55) * Math.PI)) : 1);
     if (cust.open) {
       updateHangar(rdt); cust.tick();
-      if (repairT >= 0 && parts) { // repair: scan band sweeps up each part while damage drains
+      if (repairT >= 0) { // repair: scan band sweeps up each part while damage drains
         repairT += rdt; parts.uniforms.sweep.value = -0.35 + ((repairT * 0.9) % 0.8);
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
     } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); hud.update(dt, ctl); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
-    if (parts) parts.uniforms.energy.value = cust.open ? 1.2 : energy;
+    parts.uniforms.energy.value = cust.open ? 1.2 : energy;
+    const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
     app.update(dt, t); rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     app.renderer.render(app.scene, app.camera);
     frames++;
