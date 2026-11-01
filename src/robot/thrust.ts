@@ -103,7 +103,7 @@ export function createThrust(scene: THREE.Scene, _count = MAXN) {
     const si = sNext, o = S[si]; sNext = (sNext + 1) % SN; o.p.copy(p); o.v.copy(v); o.life = o.max = life; o.ember = ember; sparks.setColorAt(si, typeof col === 'number' ? c.set(col) : c.copy(col));
   };
   const sv = new THREE.Vector3(), sp0 = new THREE.Vector3(), hot = new THREE.Color(0xffb050).multiplyScalar(2.4), white = new THREE.Color(0xfff0d0).multiplyScalar(2.6);
-  const tmp = new THREE.Vector3(), dir = new THREE.Vector3(), rv = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), fp = new THREE.Vector3(), fq = new THREE.Quaternion();
+  const jit = new THREE.Vector3(), tmp = new THREE.Vector3(), dir = new THREE.Vector3(), rv = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), fp = new THREE.Vector3(), fq = new THREE.Quaternion();
   const fpos: THREE.Vector3[] = [], fdir: THREE.Vector3[] = [], flen: number[] = []; for (let i = 0; i < MAXN; i++) { fpos.push(new THREE.Vector3()); fdir.push(new THREE.Vector3()); flen.push(0); }
   const midC = new THREE.Color(), dustC = new THREE.Color(0x6b6152);
   return {
@@ -150,7 +150,7 @@ export function createThrust(scene: THREE.Scene, _count = MAXN) {
       while (acc >= 1) { acc -= 1;
         for (let i = 0; i < n; i++) {
           dir.copy(fdir[i]); tmp.copy(fpos[i]).addScaledVector(dir, flen[i] * 0.9);
-          rv.copy(vel).multiplyScalar(0.15).addScaledVector(dir, 2.5).add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0.4, (Math.random() - 0.5) * 0.6));
+          rv.copy(vel).multiplyScalar(0.15).addScaledVector(dir, 2.5).add(jit.set((Math.random() - 0.5) * 0.6, 0.4, (Math.random() - 0.5) * 0.6));
           if (burst > 0.2 && Math.random() < 0.5) emit(tmp, rv, 0.35, 0.18, 1.5, 0xdff1ff); // white-hot trail
           else if (Math.random() < F.smoke) emit(tmp, rv, 0.7 + Math.random() * 0.4, 0.12 * Math.sqrt(F.flame), 2.2, F.style === 'medic' ? 0x3a4a40 : 0x1c1c1e);
           if (ground !== null && fpos[i].y - ground < dustH && dir.y < -0.5 && Math.random() < 0.6 * Math.min(1.5, F.dust)) { // dust / spray where the jet hits

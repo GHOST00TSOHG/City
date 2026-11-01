@@ -1,4 +1,7 @@
+import { quality } from '../perf/quality';
+import { diag } from '../perf/diag';
 import * as THREE from 'three/webgpu';
+import { A6, budget } from '../perf/frame';
 import { vertexColor, positionWorld, normalWorld, uniform, vec3, float, floor, clamp, max, dot, normalize, length, mix, hash, select } from 'three/tsl';
 import type { Building, Terrain } from './data';
 import { Soup, ringPts, signedArea, flatPoly } from './geom';
@@ -12,7 +15,7 @@ import { Soup, ringPts, signedArea, flatPoly } from './geom';
  */
 interface Cand { i: number; cx: number; cz: number; r: number; ring: [number, number][]; base: number; slab: number; ceil: number; house: boolean; seed: number; rect: boolean }
 
-const NEAR = 18; // m from the footprint edge at which the interior loads
+const NEAR = quality.interiorNear; // Air tier 14, High 18; // m from the footprint edge at which the interior loads
 const INSET = 0.28; // inner shell sits inside the exterior wall
 
 export function createInteriors(list: Building[], terrain: Terrain) {
@@ -161,20 +164,38 @@ export function createInteriors(list: Building[], terrain: Terrain) {
     for (const c of cands) { const d = Math.hypot(c.cx - x, c.cz - z) - c.r; if (d < bd) { const di = inside(c, x, z) ? -1 : d; if (di < bd) { bd = di; best = c; } } }
     return best;
   }
+  // A6: keep the last few built interiors (LRU) so flying back and forth doesn't rebuild them; uniforms re-applied on show.
+  const cache = new Map<Cand, { m: THREE.Mesh; u: [THREE.Vector3, THREE.Vector3, number, number, number] }>();
   function show(c: Cand | null) {
     if (c === current) return;
-    if (mesh) { group.remove(mesh); mesh.geometry.dispose(); mesh = null; }
-    current = c; if (c) { mesh = build(c); group.add(mesh); }
+    if (mesh) { group.remove(mesh); if (!A6) mesh.geometry.dispose(); mesh = null; }
+    current = c; if (!c) return;
+    const hit = A6 ? cache.get(c) : undefined;
+    if (hit) { cache.delete(c); cache.set(c, hit); mesh = hit.m; uC.value.copy(hit.u[0]); uU.value.copy(hit.u[1]); uL.value = hit.u[2]; uRoom.value = hit.u[3]; uN.value = hit.u[4]; }
+    else {
+      { const t0 = performance.now(); mesh = build(c); diag.event('interior build', performance.now() - t0); }
+      if (A6) { cache.set(c, { m: mesh, u: [uC.value.clone(), uU.value.clone(), uL.value, uRoom.value, uN.value] });
+        if (cache.size > 4) { const [k, v] = cache.entries().next().value!; cache.delete(k); v.m.geometry.dispose(); } }
+    }
+    group.add(mesh);
   }
+  const lastCam = new THREE.Vector3(1e9, 0, 0);
+  // A6/Safari: one hidden pre-built interior so prewarm compiles its pipeline at load (walking into the first
+  // building otherwise compiled a new pipeline mid-walk). Hidden; prewarm shows it only during compileAsync.
+  const warm = A6 && cands.length ? build(cands[0]) : null;
+  if (warm) { warm.visible = false; group.add(warm); }
   return {
     group, count: cands.length,
     get current() { return current ? current.i : -1; },
     /** Floor height when (x, z) is inside the loaded interior, else null (walk mode stands on the slab). */
     floorAt(x: number, z: number) { return current && inside(current, x, z) ? current.slab : null; },
     update(cam: THREE.Vector3, groundY: number, dt: number) {
-      timer -= dt; if (timer > 0) return; timer = 0.25;
+      timer -= dt; if (timer > 0) return;
+      const speed = lastCam.x < 1e8 ? Math.hypot(cam.x - lastCam.x, cam.z - lastCam.z) / (0.25 - timer) : 0; lastCam.copy(cam); timer = 0.25;
       if (cam.y - groundY > 25) { show(null); return; }
       const n = nearest(cam.x, cam.z);
+      // A6: building one is a few ms of CPU + an upload; skip while flying fast past, and wait for a frame with budget room.
+      if (A6 && n && n !== current && !cache.has(n)) { if (speed > 25) return; if (budget.left() < 2) { timer = 0; return; } }
       // hysteresis: keep the loaded one unless we stepped inside another or walked away from it
       if (current && n !== current && !(n && inside(n, cam.x, cam.z)) && Math.hypot(current.cx - cam.x, current.cz - cam.z) - current.r < NEAR) return;
       show(n);
@@ -188,7 +209,7 @@ export function createInteriors(list: Building[], terrain: Terrain) {
       const ox = b.o[0] / 10, oz = b.o[1] / 10;
       return { i: best.i, out: [ox + vx * (S + 7), best.slab, oz + vz * (S + 7)] as [number, number, number], in: [ox + vx * (S * 0.55), best.slab, oz + vz * (S * 0.55)] as [number, number, number], look: [ox - vx * S, best.slab + 1.5, oz - vz * S] as [number, number, number], show: () => show(best) };
     },
-    dispose() { show(null); mat.dispose(); },
+    dispose() { show(null); warm?.geometry.dispose(); for (const v of cache.values()) v.m.geometry.dispose(); cache.clear(); mat.dispose(); },
   };
 }
 

@@ -74,3 +74,22 @@ html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; fon
   animation: speedspin 0.18s steps(3) infinite; }
 @keyframes speedspin { from { transform: rotate(0deg); } to { transform: rotate(3deg); } }
 @media (prefers-reduced-motion: reduce) { #speedlines { display: none; } }
+
+/* A6 perf overlay + benchmark report */
+#perf { position: fixed; top: 8px; right: 8px; z-index: 50; display: none; background: rgba(8, 12, 22, .78); color: #dfe6f3; padding: 6px 8px; border-radius: 6px; font: 11px/1.35 ui-monospace, Menlo, monospace; pointer-events: auto; }
+#perf.on { display: block; }
+#perf canvas { display: block; width: 240px; height: 70px; }
+#perf pre { margin: 4px 0; white-space: pre; font: inherit; }
+#perf button, #bench button { font: inherit; background: #26314a; color: #dfe6f3; border: 1px solid #3c4a6a; border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+#bench { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 60; background: rgba(8, 12, 22, .92); color: #dfe6f3; padding: 14px 16px; border-radius: 8px; font: 12px/1.4 ui-monospace, Menlo, monospace; max-width: 92vw; }
+#bench table { border-collapse: collapse; margin: 8px 0; }
+#bench td, #bench th { padding: 2px 8px; text-align: right; border-bottom: 1px solid #2a3550; }
+#bench th:first-child, #bench td:first-child { text-align: left; }
+#bench .pass { color: #4dd88a; } #bench .fail { color: #ff6b6b; }
+#bench-status { position: fixed; left: 8px; bottom: 8px; z-index: 55; background: rgba(8, 12, 22, .8); color: #dfe6f3; padding: 4px 8px; border-radius: 4px; font: 12px ui-monospace, Menlo, monospace; }
+#bench { max-height: 92vh; overflow-y: auto; width: min(980px, 92vw); }
+#bench button.copy { display: block; width: 100%; font-size: 20px; font-weight: 600; padding: 12px; margin-bottom: 10px; background: #f07a22; border-color: #f07a22; color: #111; }
+#bench h3 { margin: 10px 0 0; font-size: 13px; text-transform: uppercase; }
+#bench ol { margin: 4px 0 6px 18px; padding: 0; } #bench .w { font-size: 11px; }
+#bench textarea { width: 100%; height: 120px; font: 10px ui-monospace, monospace; }
+#bench tr.tot td { font-weight: 600; }

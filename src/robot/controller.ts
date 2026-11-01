@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { A6 } from '../perf/frame';
 import type { RobotModel, RobotAnim, LandKind } from './model';
 
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
@@ -65,7 +66,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   let onLaunch: ((dur: number) => void) | null = null, onBump: (() => void) | null = null, onSlide: (() => void) | null = null;
   let onScrape: ((p: THREE.Vector3, v: THREE.Vector3, k: number) => void) | null = null;
   const qBall = new THREE.Quaternion(), tmpV = new THREE.Vector3();
-  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
+  const X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1), camF = new THREE.Vector3();
   const angDiff = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
   function touchDown() {
@@ -83,7 +84,9 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     vel.y = 0; pos.y = floor.y;
   }
 
-  return {
+  const STEP = 1 / 120, pPos = new THREE.Vector3(), ipos = new THREE.Vector3();
+  let acc = 0, pHead = 0, pLean = 0, pBank = 0;
+  const api = {
     /** Per-type movement multipliers (1 = the original tuning). */
     setTuning(m: Partial<typeof BASE>) { WALK = BASE.walk * (m.walk ?? 1); RUN = BASE.run * (m.run ?? 1); CRUISE = BASE.cruise * (m.cruise ?? 1); BURST = BASE.burst * (m.burst ?? 1); JUMP = BASE.jump * (m.jump ?? 1); TURN = m.turn ?? 1; ACCEL = m.accel ?? 1; },
     get tuning() { return { walk: WALK, run: RUN, cruise: CRUISE, burst: BURST, jump: JUMP, turn: TURN, accel: ACCEL }; },
@@ -108,13 +111,22 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     set onImpact(f: ((p: THREE.Vector3, s: number) => void) | null) { onImpact = f; },
     /** Power-up stance: hold to charge (ground: crouch in place; air: hover). Refills BURST faster. */
     set charging(v: boolean) { charging = v; }, get charging() { return charging && enabled; },
-    spawn(x: number, y: number, z: number, h = 0) { hero = false; pos.set(x, y, z); vel.set(Math.sin(h) * 6, 0, Math.cos(h) * 6); heading = h; camYaw = h; mode = 'SKYDIVING'; airT = 1; anim = 'fall'; camOff.set(-Math.sin(h) * 8, 3, -Math.cos(h) * 8); },
+    spawn(x: number, y: number, z: number, h = 0) { hero = false; pos.set(x, y, z); vel.set(Math.sin(h) * 6, 0, Math.cos(h) * 6); heading = h; camYaw = h; mode = 'SKYDIVING'; airT = 1; anim = 'fall'; camOff.set(-Math.sin(h) * 8, 3, -Math.cos(h) * 8); pPos.copy(pos); pHead = h; acc = 0; },
     /** Test hook: set the held keys directly. */
     press(code: string, down: boolean) { if (down) { keys.add(code); dispatchEvent(new KeyboardEvent('keydown', { code })); } else keys.delete(code); },
+    /** A6: physics runs at a fixed 120 Hz; the pose and camera are drawn interpolated between the last two steps. */
     update(dt0: number) {
-      const dt = Math.min(dt0, 1 / 20); t += dt;
+      const fdt = Math.min(dt0, 1 / 20);
+      if (!A6) { step(fdt); present(1, fdt); return; }
+      acc = Math.min(acc + fdt, STEP * 8);
+      while (acc >= STEP) { pPos.copy(pos); pHead = heading; pLean = lean; pBank = bank; step(STEP); acc -= STEP; }
+      present(acc / STEP, fdt);
+    },
+  };
+  function step(dt: number) {
+      t += dt;
       // camera-relative input basis (ground) / heading basis (air)
-      const camF = new THREE.Vector3(Math.sin(camYaw), 0, Math.cos(camYaw));
+      camF.set(Math.sin(camYaw), 0, Math.cos(camYaw)); // reused: no per-frame allocation (A6)
       right.crossVectors(camF, up).normalize();
       const iF = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0), iR = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
       const iUp = k('Space') || k('KeyE') ? 1 : 0, iDown = k('KeyC') || k('KeyQ') || k('ControlLeft') ? 1 : 0, iBurst = k('ShiftLeft') || k('ShiftRight');
@@ -174,7 +186,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       } else if (mode === 'ROCKETS') {
         // A/D turn (bank), W/S speed along heading, Space/C climb/descend, no input = hover holds altitude.
         // Releasing a camera drag lets the heading follow the camera, so you can steer with the mouse too.
-        if (t - lastDrag < 0.05 && Math.hypot(vel.x, vel.z) > 8) yawRate += (angDiff(camYaw, heading) * 4 - yawRate) * 0.5;
+        if (t - lastDrag < 0.05 && Math.hypot(vel.x, vel.z) > 8) yawRate += (angDiff(camYaw, heading) * 4 - yawRate) * (1 - Math.exp(-dt * 40));
         else yawRate += (-iR * TURN * (1.9 - Math.min(1, Math.hypot(vel.x, vel.z) / BURST) * 0.9) - yawRate) * (1 - Math.exp(-dt * 6));
         heading += yawRate * dt; fwd.set(Math.sin(heading), 0, Math.cos(heading));
         const top = burstOn > 0.5 ? BURST : CRUISE, cur = vel.x * fwd.x + vel.z * fwd.z;
@@ -223,32 +235,34 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         else touchDown();
       }
       pos.y = Math.min(pos.y, 3000);
-
-      // pose the model
-      const r = model.root; r.position.copy(pos);
-      qYaw.setFromAxisAngle(up, heading); qLean.setFromAxisAngle(X, lean); qBank.setFromAxisAngle(Z, bank);
-      r.quaternion.copy(qYaw).multiply(qBank).multiply(qLean);
-      if (mode === 'LAND' || mode === 'ROLL') {
-        if (mode === 'ROLL') { const a = Math.min(1, rollT / 0.8) * Math.PI * 2; qRoll.setFromAxisAngle(X, a); r.quaternion.copy(qYaw).multiply(qRoll); r.position.y += Math.sin(Math.min(1, rollT / 0.8) * Math.PI) * 0.35 + 0.3 * (rollT < 0.8 ? 1 : 0); }
-      }
-      // lean pivots around the hips so the flying body stays centred
-      if (lean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(lean) * 0.55;
-      if (ballT > 0.02) { // rolling ball: rotate about the body centre, not the feet
-        qBall.setFromAxisAngle(X, ballAng); r.quaternion.copy(qYaw).multiply(qBall); const bs = Math.max(0, Math.min(1, (ballT - 0.3) / 0.7)), rc = 0.62 * bs * bs * (3 - 2 * bs); tmpV.set(0, rc, 0).applyQuaternion(r.quaternion); r.position.set(pos.x, pos.y + rc, pos.z).sub(tmpV);
-      }
       const hAbove = pos.y - floor.y, voxT = landKind === 'voxel' && ((mode === 'SKYDIVING' && hAbove < 1.7 && vel.y < -3) || (mode === 'LAND' && landActive === 'voxel' && landT < 0.18)) ? 1 : 0;
       vox += (voxT - vox) * (1 - Math.exp(-dt * (voxT > vox ? 16 : 6)));
-      const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
       if (specialT >= 0) {
         const p0 = specialT; specialT += dt;
         if (specialKind === 'groundpound') { vel.x *= 0.5; vel.z *= 0.5; if (p0 < 0.47 && specialT >= 0.47) { onSpecial?.(specialKind, 'hit', pos); onImpact?.(pos, 1.2); } }
         if (specialKind === 'blinkdash' && specialT > 0.12 && p0 < 0.3) { // ~7 m blink along the heading, stopped by walls
           const step = 40 * Math.min(dt, 0.3 - Math.max(p0, 0.12)), nx = pos.x + Math.sin(heading) * step, nz = pos.z + Math.cos(heading) * step;
-          if (!world.blocked(nx, nz, pos.y + 1)) { pos.x = nx; pos.z = nz; r.position.copy(pos); }
+          if (!world.blocked(nx, nz, pos.y + 1)) { pos.x = nx; pos.z = nz; }
         }
         if (specialKind === 'blinkdash' && p0 < 0.42 && specialT >= 0.42) onSpecial?.(specialKind, 'hit', pos);
         if (specialT > specialDur) { specialT = -1; onSpecial?.(specialKind, 'end', pos); }
       }
+  }
+  function present(a: number, dt: number) {
+      ipos.lerpVectors(pPos, pos, a); const iHead = pHead + angDiff(heading, pHead) * a, iLean = pLean + (lean - pLean) * a, iBank = pBank + (bank - pBank) * a;
+      // pose the model
+      const r = model.root; r.position.copy(ipos);
+      qYaw.setFromAxisAngle(up, iHead); qLean.setFromAxisAngle(X, iLean); qBank.setFromAxisAngle(Z, iBank);
+      r.quaternion.copy(qYaw).multiply(qBank).multiply(qLean);
+      if (mode === 'LAND' || mode === 'ROLL') {
+        if (mode === 'ROLL') { const a = Math.min(1, rollT / 0.8) * Math.PI * 2; qRoll.setFromAxisAngle(X, a); r.quaternion.copy(qYaw).multiply(qRoll); r.position.y += Math.sin(Math.min(1, rollT / 0.8) * Math.PI) * 0.35 + 0.3 * (rollT < 0.8 ? 1 : 0); }
+      }
+      // lean pivots around the hips so the flying body stays centred
+      if (iLean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(iLean) * 0.55;
+      if (ballT > 0.02) { // rolling ball: rotate about the body centre, not the feet
+        qBall.setFromAxisAngle(X, ballAng); r.quaternion.copy(qYaw).multiply(qBall); const bs = Math.max(0, Math.min(1, (ballT - 0.3) / 0.7)), rc = 0.62 * bs * bs * (3 - 2 * bs); tmpV.set(0, rc, 0).applyQuaternion(r.quaternion); r.position.set(ipos.x, ipos.y + rc, ipos.z).sub(tmpV);
+      }
+      const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
       model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn,
         launch: launchT >= 0 ? Math.min(1, launchT / Math.max(0.01, launchDur)) : 0, flyT, thrust: power,
         gs: Math.hypot(vel.x, vel.z), form: ballT, cloud: cloudW, slide: slideW, vox,
@@ -260,14 +274,14 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if (air && t - lastDrag > 1.2 && spd > 4) { camYaw += angDiff(heading, camYaw) * (1 - Math.exp(-dt * 2.5)); camPitch += (0.18 - camPitch) * (1 - Math.exp(-dt * 1.5)); }
       const dist = camDist * (1 + sf * 0.9) + (air ? 1 : 0);
       fov += ((air ? 62 : 52) + sf * 26 + burstOn * 8 - fov) * (1 - Math.exp(-dt * 3));
-      look.set(pos.x, pos.y + 1.0 + (air ? Math.sin(lean) * 0.4 : 0), pos.z);
+      look.set(ipos.x, ipos.y + 1.0 + (air ? Math.sin(iLean) * 0.4 : 0), ipos.z);
       const cy2 = camYaw + camSide, cw = camWant.set(look.x - Math.sin(cy2) * Math.cos(camPitch) * dist, look.y + Math.sin(camPitch) * dist, look.z - Math.cos(cy2) * Math.cos(camPitch) * dist);
       // smooth the offset from the robot, not the absolute position, so the camera never lags behind at 300 mph
       cw.sub(look); camOff.lerp(cw, 1 - Math.exp(-dt * (air ? 5 : 10))); camPos.copy(look).add(camOff);
       const cf = world.floorAt(camPos.x, camPos.z, camPos.y).y; if (camPos.y < cf + 0.6) camPos.y = cf + 0.6;
       camera.position.copy(camPos); camera.lookAt(look);
       if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
-    },
-  };
+  }
+  return api;
 }
 export type RobotController = ReturnType<typeof createRobotController>;

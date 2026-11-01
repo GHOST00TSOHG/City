@@ -1,12 +1,13 @@
 import * as THREE from 'three/webgpu';
 import type { Building, Terrain } from './data';
 import { Soup, ringPts, signedArea, flatPoly } from './geom';
+import { type AreaStyle, styleFor, pick, WALL, ROOF, SHINGLE } from './textures';
 
 const CHUNK = 600; // m — one merged mesh per chunk keeps draw calls low and still frustum-culls
 const UP: [number, number, number] = [0, 1, 0];
 
 /** Solid, clean building shells from baked footprints: walls + roof (flat / gabled / hipped / pyramidal / skillion). */
-export function buildBuildings(list: Building[], terrain: Terrain, material: THREE.Material) {
+export function buildBuildings(list: Building[], terrain: Terrain, material: THREE.Material, style: AreaStyle = styleFor('')) {
   const chunks = new Map<string, Soup>();
   const wall = new THREE.Color(), roof = new THREE.Color(), trim = new THREE.Color();
   let count = 0;
@@ -16,7 +17,19 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     const outer = rings[0], [cx, cz] = [b.o[0] / 10, b.o[1] / 10];
     const key = `${Math.floor(cx / CHUNK)},${Math.floor(cz / CHUNK)}`;
     let s = chunks.get(key); if (!s) { chunks.set(key, (s = new Soup())); s.f = []; }
-    wall.setHex(b.wc); roof.setHex(b.rc); trim.copy(wall).multiplyScalar(0.82);
+    // Painting: pick a wall material per building from the area style (bake colour hints brick), then a paint colour.
+    const seed0 = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0, h1 = (seed0 % 1009) / 1009, h2 = ((seed0 >>> 10) % 997) / 997, h3 = ((seed0 >>> 20) % 991) / 991;
+    wall.setHex(b.wc); const hsl = { h: 0, s: 0, l: 0 }; wall.getHSL(hsl);
+    const brickHint = hsl.h < 0.06 && hsl.s > 0.25 && hsl.l < 0.5;
+    const small = (b.s !== 'flat' && b.rh > 0.2) || b.h < 7.5;
+    const wm = brickHint && style.house[WALL.brick] + style.big[WALL.brick] > 0.1 ? WALL.brick : pick(small ? style.house : style.big, h1);
+    const pitchedR = b.s !== 'flat' && b.rh > 0.2;
+    const rm = pitchedR ? pick(style.roofPitched, h3) : ROOF.gravel;
+    if (wm === WALL.brick || wm === WALL.concrete) wall.setRGB(1, 1, 1).multiplyScalar(0.92 + h2 * 0.16); // real material colour, slight variation
+    else wall.setHex(style.paints[Math.floor(h2 * style.paints.length) % style.paints.length]).lerp(new THREE.Color(b.wc), 0.25);
+    if (rm === ROOF.shingle) roof.setHex(SHINGLE[((seed0 >>> 5) % SHINGLE.length)]).multiplyScalar(0.85 + h2 * 0.3);
+    else roof.setRGB(1, 1, 1).multiplyScalar(0.85 + h3 * 0.3); trim.copy(wall).multiplyScalar(0.82);
+    const pack = wm * 4 + rm * 32;
     let gmin = Infinity; for (const [x, z] of outer) gmin = Math.min(gmin, terrain.heightAt(x, z));
     gmin = Math.max(gmin, 0.2);
     const base = b.m > 0 ? gmin + b.m : gmin - 0.4;
@@ -27,7 +40,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     const area = Math.abs(signedArea(outer));
     const kind = b.m > 2 ? 0 : (pitched || b.h < 7.5) && area < 400 ? 1 : 2;
     const seed = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0;
-    s.cur = [base, eave, kind, (seed % 997) / 997];
+    s.cur = [base, eave, kind + pack, (seed % 997) / 997];
     // Walls: darker at the foot (cheap contact shading), lighter under the eave.
     for (const ring of rings) {
       const sign = signedArea(ring) > 0 ? 1 : -1;
@@ -39,7 +52,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
         s.quad([x0, base, z0], [x1, base, z1], [x1, eave, z1], [x0, eave, z0], wall, nrm, [foot, foot, 1, 1]);
       }
     }
-    s.cur = [base, eave, 0, 0]; // roofs, gables, soffits: no windows
+    s.cur = [base, eave, pack, 0]; // roofs, gables, soffits: no windows
     if (!pitched) {
       flatPoly(s, outer, rings.slice(1), top, roof);
       // Parapet lip on larger flat roofs reads as a real roof edge instead of a cut box.

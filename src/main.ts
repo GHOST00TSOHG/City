@@ -14,7 +14,15 @@ import { createThrust } from './robot/thrust';
 import { loadClips } from './robot/clips';
 import { createRobotHud } from './robot/hud';
 import { createRobotAudio } from './robot/audio';
-import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
+import { A6, budget } from './perf/frame';
+import { gpu, installGpuHooks, resetGpuFrame } from './perf/gpuHooks';
+import { createPerfOverlay } from './perf/overlay';
+import { createBench } from './perf/bench';
+import { diag } from './perf/diag';
+import { pacing } from './perf/pacing';
+import { quality, warmupTier, dynres, qualityLabel } from './perf/quality';
+import { prewarm } from './perf/prewarm';
+import { createSnow, createRain, createWeatherUI, WEATHER_PRESETS, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
 const canvas = document.getElementById('city') as HTMLCanvasElement;
@@ -31,11 +39,10 @@ setTitle(areaId);
 
 createScene(canvas, areaId).then(async (app) => {
   loading?.remove();
+  installGpuHooks((app.renderer as any).backend); // per-frame upload bytes + pipeline compiles for the perf overlay / bench
   const rain = createRain(), snow = createSnow(); app.scene.add(rain.mesh, snow.mesh);
   const setWeather = (kind: WeatherKind, intensity = 0.6) => {
-    rain.mesh.visible = kind === 'rain'; rain.setIntensity(intensity);
-    snow.mesh.visible = kind === 'snow'; snow.setIntensity(intensity);
-    app.setWeather(kind, intensity);
+    app.setWeather(kind, intensity); // particles follow the eased mix in the frame loop, so they fade in/out with the sky
   };
   const weatherUI = createWeatherUI(setWeather);
   // Area switcher: fade to dark, build + compile the next area off-scene, swap, fade back in. No pop-in.
@@ -163,7 +170,8 @@ createScene(canvas, areaId).then(async (app) => {
     const sh = hangar.shot; // low close-up: orbit (yaw) camera at distance d, height y above the floor, looking at ty
     if (sh) { const a = hangar.yaw; cam.position.set(hangar.x + Math.sin(a) * sh.d, hangar.y + sh.y, hangar.z + Math.cos(a) * sh.d); if (cam.fov !== sh.fov) { cam.fov = sh.fov; cam.updateProjectionMatrix(); } cam.lookAt(hangar.x, hangar.y + sh.ty, hangar.z); }
   };
-  const joinScreen = robotMode && qs.get('join') !== '0';
+  const benchKind = (['walk', 'flight', 'all'] as const).find((k) => k === qs.get('bench')) ?? null, benchMode = !!benchKind;
+  const joinScreen = robotMode && qs.get('join') !== '0' && !benchMode;
   setRobotMode(robotMode);
   if (joinScreen) setHangar(true); else if (robotMode) dropIn();
   addEventListener('keydown', (e) => {
@@ -194,18 +202,48 @@ createScene(canvas, areaId).then(async (app) => {
   statsEl.hidden = !showStats;
   const w = window as any;
   w.__setWeather = (k: WeatherKind, i = 0.6) => weatherUI.set(k, i);
-  w.__cityCam = app.camera; w.__cityControls = app.controls;
+  { const qw = new URLSearchParams(location.search).get('weather') as WeatherKind | null; if (qw && qw in WEATHER_PRESETS) { weatherUI.set(qw, 0.8); app.setWeather(qw, 0.8, true); } }
+  w.__weather = () => ({ ...app.weatherMix });
+  w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
+  w.__stats = () => app.stats;
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
+  w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
-  let frames = 0, last = performance.now(), t = 0;
-  const timer = new THREE.Timer();
+  // A6: compile every pipeline the flight can need (hidden rockets, crater, weather, empty LOD buckets) while the
+  // garage is up, so nothing compiles on first sight mid-flight.
+  if (A6) { const ms = await prewarm(app.renderer, app.scene, app.camera); console.info(`[City] prewarm ${ms.toFixed(0)} ms, ${gpu.totalCompiles} pipelines`); }
+  const setPR = (pr: number) => { app.renderer.setPixelRatio(pr); app.renderer.setSize(innerWidth, innerHeight, false); };
+  // Measure the display refresh (first second of rAFs) and pick the auto quality tier, still behind the garage/loading.
+  await new Promise<void>((done) => { const f = (t: number) => { pacing.tick(t); if (pacing.hz) done(); else requestAnimationFrame(f); }; requestAnimationFrame(f); });
+  await warmupTier(() => app.renderer.render(app.scene, app.camera), setPR, pacing.intervalMs);
+  console.info(`[City] ${pacing.label()} · quality ${qualityLabel()}`, quality.warmup ?? '');
+  const adapter = (() => { try { const i = (app.renderer.backend as any).adapter?.info; if (i) return [i.vendor, i.architecture, i.description].filter(Boolean).join(' '); const gl = (app.renderer.backend as any).gl as WebGL2RenderingContext | undefined; const x = gl?.getExtension('WEBGL_debug_renderer_info'); return x ? gl!.getParameter(x.UNMASKED_RENDERER_WEBGL) : ''; } catch { return ''; } })();
+  const overlay = createPerfOverlay(() => `${app.backend} ${(app.renderer.info.render as any).drawCalls ?? app.renderer.info.render.calls} calls\n${pacing.label()} · ${qualityLabel()}`);
+  if (showStats || qs.get('hud') === '1') overlay.setVisible(true);
+  const bench = benchKind ? createBench(benchKind, { ctl, canvas,
+    start: (walk) => { if (cust.open) setHangar(false); if (!robotMode) setRobotMode(true); dropIn(walk ? 1.5 : 40); },
+    interiorEntry: () => app.interiorEntry(ctl.pos.x, ctl.pos.z), teleport: (x, y, z, h) => ctl.spawn(x, y, z, h),
+    info: () => ({ backend: app.backend, adapter, area: app.areaId, budgetMs: budget.ms }) }) : null;
+  if (bench) { overlay.setVisible(true); w.__benchRun = bench; }
+
   const fixedDt = +(qs.get('fixeddt') ?? 0); // capture hook: step the sim a fixed dt per rendered frame (slow renderers)
-  app.renderer.setAnimationLoop(() => {
-    timer.update(); const rdt = fixedDt ? ((w as any).__steps === undefined || (w as any).__steps-- > 0 ? fixedDt : 1e-6) : timer.getDelta(); t += rdt;
+  let frames = 0, last = performance.now(), t = 0, cpuMs = 0, heap0 = 0;
+  const mem = (performance as any).memory;
+  const sec = (name: string, t: number) => { const n = performance.now(); diag.section(name, n - t); return n; };
+  app.renderer.setAnimationLoop((now0: number) => {
+    const frameMs = pacing.tick(now0); if (frameMs === null) return; // capped: skip this rAF (alternate frames at 120 Hz)
+    const t0 = performance.now();
+    const rec = diag.take(), heap = mem ? mem.usedJSHeapSize : 0;
+    bench?.frame({ dt: frameMs, work: cpuMs, rec, compiles: gpu.compiles, texCalls: gpu.texCalls, texBytes: gpu.texBytes, geoBytes: gpu.geoBytes, heap }); heap0 = heap;
+    overlay.frame(frameMs, cpuMs); resetGpuFrame(); budget.begin();
+    if (dynres(frameMs, pacing.targetMs, setPR)) diag.event(`dynres -> ${quality.scale}`);
+    // real rAF delta (never assumes 60 Hz); clamped so a stall doesn't fast-forward the world (physics also caps catch-up steps)
+    const rdt = fixedDt ? ((w as any).__steps === undefined || (w as any).__steps-- > 0 ? fixedDt : 1e-6) : Math.min(frameMs, 100) / 1000; t += rdt;
     const dt = rdt * (slowT > 0 ? 0.3 + 0.7 * (1 - Math.sin((slowT / 0.55) * Math.PI)) : 1);
+    let ts = t0;
     if (cust.open) {
       updateHangar(rdt); cust.tick();
       if (repairT >= 0) { // repair: scan band sweeps up each part while damage drains
@@ -213,19 +251,26 @@ createScene(canvas, areaId).then(async (app) => {
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); audioFrame(dt); hud.update(dt, ctl); stepFx(); }
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); ts = sec('physics+ground', ts); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); audioFrame(dt); hud.update(dt, ctl); stepFx(); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
-    app.update(dt, t); rain.update(t, app.camera.position); snow.update(t, app.camera.position);
-    app.renderer.render(app.scene, app.camera);
+    ts = sec('fx', ts);
+    app.update(dt, t); const wm = app.weatherMix;
+    rain.mesh.visible = wm.rain > 0.01; rain.setIntensity(wm.rain); snow.mesh.visible = wm.snow > 0.01; snow.setIntensity(wm.snow);
+    rain.update(t, app.camera.position); snow.update(t, app.camera.position);
+    ts = sec('world update (trees/grass/interiors)', ts);
+    budget.run(); ts = sec('queued jobs', ts);
+    app.renderer.render(app.scene, app.camera); sec('render submit', ts);
+    cpuMs = performance.now() - t0;
     frames++;
     const now = performance.now();
     if (now - last > 1000) {
       const fps = (frames * 1000) / (now - last); frames = 0; last = now;
       const r = app.renderer.info.render;
       if (showStats) statsEl.textContent = `${fps.toFixed(0)} fps · ${r.drawCalls ?? r.calls} calls · ${(r.triangles / 1e3).toFixed(0)}k tris · ${app.backend}`;
-      w.__city = { fps, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, hangar: cust.open, damage: +damage.toFixed(2), slowmo: slowT > 0, robot: robotMode && !cust.open ? { mode: ctl.mode, anim: ctl.anim, pos: ctl.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(ctl.vel.length() * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2), charge: +fx.charge.toFixed(2) } : null, ready: true };
+      w.__city = { fps, quality: qualityLabel(), pacing: pacing.label(), heap0, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, hangar: cust.open, damage: +damage.toFixed(2), slowmo: slowT > 0, robot: robotMode && !cust.open ? { mode: ctl.mode, anim: ctl.anim, pos: ctl.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(ctl.vel.length() * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2), charge: +fx.charge.toFixed(2) } : null, ready: true };
+      w.__scene = app.scene;
     }
   });
 }).catch((e) => {

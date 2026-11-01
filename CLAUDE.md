@@ -1,5 +1,5 @@
 # CLAUDE.md (City)
-Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one.
+Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Jonn's bots: `knowledge/JONN-DIRECTIONS.md`. Order: world, robot, zombies, multiplayer.
 
 ## Scripts
 - `npm ci` install (lockfile)
