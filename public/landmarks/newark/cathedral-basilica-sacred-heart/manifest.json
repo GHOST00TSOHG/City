@@ -1,0 +1,52 @@
+{
+  "id": "cathedral-basilica-sacred-heart",
+  "name": "Cathedral Basilica of the Sacred Heart",
+  "area": "newark",
+  "file": "cathedral-basilica-sacred-heart.glb",
+  "lat": 40.75489715,
+  "lon": -74.17846736,
+  "headingDeg": 201.7,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [16727, 7932, 1464], "switchM": [150, 600] },
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "footprint",
+      "source": "https://www.openstreetmap.org/relation/5506232",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "plan dimensions (365 ft by 165 ft, towers, roses, roof peak)",
+      "source": "https://npgallery.nps.gov/NRHP/GetAsset/b5fa0ed7-4a53-4132-acfe-a572de0d7a57",
+      "author": "National Register of Historic Places nomination, Cathedral of the Sacred Heart (ref. 76001151)",
+      "license": "public domain"
+    },
+    {
+      "what": "overall height 79 m and tower height 71 m",
+      "source": "https://structurae.net/en/structures/cathedral-basilica-of-the-sacred-heart",
+      "author": "Structurae",
+      "license": "published dimensions; tower figure matches the nomination's 232 ft"
+    },
+    {
+      "what": "west front, aerial, and flank reference photos",
+      "source": "https://commons.wikimedia.org/wiki/File:Cathedral_Basilica_of_the_Sacred_Heart_(Newark)_-_front.jpg",
+      "author": "Arttin497",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "what": "facade, flank, and fleche reference photos",
+      "source": "https://commons.wikimedia.org/wiki/File:Facade_of_Sacred_Heart_Cathedral,_Newark.jpg",
+      "author": "Bestbudbrian",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "what": "southwest context photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Sacred_Heart_SW_jeh.jpg",
+      "author": "Jim.henderson",
+      "license": "CC0"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}
