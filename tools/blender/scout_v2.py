@@ -34,6 +34,7 @@ SCREEN = mat('screen', (0.0, 0.02, 0.03), 0.15, 0.0, (0.1, 0.85, 1.0), 9)
 GLOW = mat('glow', (0.0, 0.0, 0.0), 0.3, 0.0, (1.0, 0.25, 0.05), 14)
 
 ARMOR, ALL = [], []
+PALM_SIDE = -1 if '--palm-flip' in sys.argv else 1
 
 def obj_from_bm(name, bm, m):
     me = bpy.data.meshes.new(name); bm.to_mesh(me); bm.free()
@@ -113,32 +114,50 @@ def mirror(objs):
     return out
 
 # ------------------------------------------------------------------ hands: wrist, palm, articulated fingers
-def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digit_m=None, thick=1.0):
-    """Wrist ball + faceted palm + `fingers` digits of 3 phalanges (thumb opposed). Segment names
-    hand_<side>_f<i>_<j> map 1:1 onto the rig's finger bones (Hand.<side>.F<i>.<j>)."""
+def _box(name, c, ax, half, m, bev=0.25):
+    """Oriented beveled box: centre c, local axes ax=(X,Y,Z) unit vectors, half extents."""
+    bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 0)); o = bpy.context.active_object; o.name = name
+    o.scale = half; bpy.ops.object.transform_apply(scale=True)
+    M = Matrix((ax[0], ax[1], ax[2])).transposed().to_4x4(); M.translation = c; o.matrix_world = M
+    bv = o.modifiers.new('bv', 'BEVEL'); bv.width = min(half) * bev; bv.segments = 2
+    o.data.materials.append(m); ALL.append(o); return o
+
+def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digit_m=None, thick=1.0, palm_dir=None, thumb_dir=None):
+    """Explicit hand frame: fwd = wrist->fingertips, palm_dir = palm normal (faces the thigh when
+    standing), thumb_dir = thumb side (forward). Back-of-hand armor faces -palm_dir (outward).
+    Segment names hand_<side>_f<i>_<j> map 1:1 onto rig finger bones Hand.<side>.F<i>.<j>."""
     V = Vector; k = size; out = []
-    lat = V((1, 0, 0)) - fwd * fwd.x; lat.normalize()
-    nrm = fwd.cross(lat).normalized()            # palm faces inward (-x for the left hand after the cross)
+    fwd = fwd.normalized()
+    xs = 1 if side in ('L', 'H') else -1
+    pn = (palm_dir or V((-xs, 0, 0))); pn = (pn - fwd * pn.dot(fwd)).normalized()
+    ts = (thumb_dir or V((0, -1, 0))); ts = (ts - fwd * ts.dot(fwd) - pn * ts.dot(pn)).normalized()
     armor_m = armor_m or WHITE; digit_m = digit_m or FRAME
-    out.append(cyl(f'wrist_{side}', wr - fwd * 0.012 * k, wr + fwd * 0.02 * k, 0.026 * k * thick, STEEL, n=16))
-    pa = wr + fwd * 0.02 * k
-    palm = loft(f'palm_{side}', [(0, 0, 0, 0.036 * k * thick, 0.02 * k), (0.045 * k, 0, 0, 0.044 * k * thick, 0.022 * k), (0.075 * k, 0, 0, 0.042 * k * thick, 0.018 * k)], digit_m, n=8, e=2.0)
-    place(palm, pa, pa + fwd); _roll_to(palm, lat); out.append(palm)
-    back = loft(f'handguard_{side}', [(0.005 * k, 0, 0, 0.04 * k * thick, 0.026 * k), (0.07 * k, 0, 0, 0.046 * k * thick, 0.024 * k)], armor_m, n=4, e=2.0, arc=(0.3, 2.84), thick=0.006 * k)
-    place(back, pa, pa + fwd); _roll_to(back, lat); out.append(back)
-    seg = [0.032, 0.024, 0.02]; rad = 0.0085 * thick
-    spread = [(-0.032, 0.0), (-0.011, 0.0), (0.011, 0.0), (0.032, 0.0)]
-    if fingers == 3: spread = [(-0.026, 0.0), (0.026, 0.0)]; seg = [0.04, 0.032, 0.028]; rad = 0.014 * thick
-    digits = [(pa + fwd * 0.075 * k + lat * dx * k * thick, fwd, 0) for dx, _ in spread]
-    # opposed thumb from the palm side
-    tb = pa + fwd * 0.025 * k + lat * (-0.04 * k * thick if fingers == 5 else 0) + nrm * 0.015 * k
-    digits.append((tb, (fwd * 0.5 + nrm * 0.75).normalized(), 1))
+    out.append(cyl(f'wrist_{side}', wr - fwd * 0.012 * k, wr + fwd * 0.022 * k, 0.024 * k * thick, STEEL, n=16))
+    W = 0.042 * k * thick; T = 0.016 * k; L = 0.075 * k
+    pc = wr + fwd * (0.02 * k + L / 2)
+    out.append(_box(f'palm_{side}', pc, (ts, pn, fwd), (W, T, L / 2), digit_m))
+    # back-of-hand armor + knuckle plate on the outer face, overlapping the finger bases
+    out.append(_box(f'handguard_{side}', pc - pn * (T + 0.004 * k) - fwd * 0.004 * k, (ts, pn, fwd), (W * 1.08, 0.006 * k, L * 0.46), armor_m))
+    kc = wr + fwd * (0.02 * k + L + 0.004 * k) - pn * (T * 0.4)
+    out.append(_box(f'knuckle_plate_{side}', kc - pn * 0.006 * k, (ts, pn, fwd), (W * 1.04, T * 0.9, 0.016 * k), armor_m))
+    if fingers == 3: offs = [-0.6, 0.6]; seg = [0.042, 0.034, 0.03]; rad = 0.015 * thick
+    else: offs = [-0.78, -0.26, 0.26, 0.78]; seg = [0.032, 0.025, 0.02]; rad = 0.0085 * thick
+    digits = [(wr + fwd * (0.02 * k + L) + ts * (-o_) * W * 0.95, fwd, False) for o_ in offs]   # index nearest thumb
+    # thenar mound on the palm's inner face at the thumb edge, thumb rising from it, opposed toward the palm
+    mc = pc - fwd * L * 0.18 + ts * W * 0.8 + pn * T * 0.7
+    mo = _box(f'thumb_mound_{side}', mc, (ts, pn, fwd), (W * 0.42, T * 0.75, L * 0.3), digit_m, bev=0.45)
+    out.append(mo)
+    tdir = (fwd * 0.55 + ts * 0.6 + pn * 0.35).normalized()
+    digits.append((mc + ts * W * 0.3 + fwd * L * 0.12, tdir, True))
     for i, (b, d, thumb) in enumerate(digits):
-        for j, L in enumerate(seg):
-            d = (Quaternion_axis(lat, -curl * (0.7 if thumb else 1.0)) @ d).normalized() if j or thumb else d
-            e2 = b + d * L * k
+        for j, Ls in enumerate(seg):
+            if j or thumb:
+                ax = d.cross(pn)
+                if ax.length > 1e-4: d = (Quaternion_axis(ax.normalized(), -curl * (0.6 if thumb else 1.0)) @ d).normalized()
+            Lj = Ls * k * (0.85 if thumb else 1.0)
+            e2 = b + d * Lj
             out.append(cyl(f'hand_{side}_f{i}_{j}', b, e2, rad * k * (1 - 0.12 * j), digit_m if j < 2 else armor_m, n=8))
-            bpy.ops.mesh.primitive_uv_sphere_add(radius=rad * k * 1.15, location=b, segments=10, ring_count=6)
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=rad * k * 1.12, location=b, segments=10, ring_count=6)
             kn = bpy.context.active_object; kn.name = f'knuckle_{side}_{i}_{j}'; kn.data.materials.append(STEEL); ALL.append(kn); out.append(kn)
             b = e2
     return out
@@ -381,6 +400,7 @@ def shoot(path, cam_az, cam_el, res, tgt, dist, lens):
     sc.render.filepath = path; bpy.ops.render.render(write_still=True); print('RENDERED', path, flush=True)
 
 def main():
+    if '--hand-test' in argv: yield from hand_test(); return
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
     yield from addon_pass()
@@ -388,7 +408,15 @@ def main():
     print('TRIS', tris, 'OBJECTS', len([o for o in bpy.data.objects if o.type == 'MESH']), flush=True)
     bpy.ops.wm.save_as_mainfile(filepath='/workspace/private/scout_v2.blend')
     render(OUT)
-    render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.1, 0.95), dist=2.0, lens=60, setup=False)
+    render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.12, 0.92), dist=1.6, lens=60, setup=False)
+
+def hand_test():
+    bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
+    wr = Vector((0, 0, 1.0)); build_hand('L', wr, Vector((0, 0, -1)), fingers=5, size=1.7, curl=0.35)
+    build_hand('H', Vector((0.4, 0, 1.0)), Vector((0, 0, -1)), fingers=3, size=2.2, curl=0.35)
+    yield 0.1
+    render(OUT, cam_az=-0.5, cam_el=0.15, res=(900, 700), tgt=(0.2, 0, 0.9), dist=1.6, lens=50)
+    render(OUT.replace('.png', '-b.png'), cam_az=1.57, cam_el=0.15, res=(900, 700), tgt=(0.2, 0, 0.9), dist=1.6, lens=50, setup=False)
 
 _gen = None
 def _run():
