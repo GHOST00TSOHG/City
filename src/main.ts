@@ -147,6 +147,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
+  w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__robot = { ctl, model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
