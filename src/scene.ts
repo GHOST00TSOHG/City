@@ -7,6 +7,7 @@ import { loadArea } from './area/data';
 import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
 import { buildBuildings } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
+import { loadMaterialTextures, styleFor, GROUND_GAIN, GROUND_SCALE } from './area/textures';
 import { buildLamps } from './area/lamps';
 import { buildTrees } from './area/trees';
 import { A6 } from './perf/frame';
@@ -18,7 +19,7 @@ import { createInteriors } from './area/interiors';
 import { createCollision } from './robot/collision';
 import { buildLandmarks, cullUnderLandmarks } from './area/landmarks';
 import areaDefs from '../tools/bake/areas.json';
-import { vertexColor, uniform as tslUniform } from 'three/tsl';
+import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import { createWeatherState, type WeatherKind } from './weather';
 
@@ -62,17 +63,18 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const scene = new THREE.Scene();
   const eye = new THREE.Vector3(); // reused per frame (A6: no per-frame allocations)
   scene.background = new THREE.Color(0x070c1a);
-  scene.fog = new THREE.FogExp2(0x0d1426, 0.00016);
+  scene.fog = new THREE.FogExp2(0x15171d, 0.00016);
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 40000);
 
   // Night lighting that keeps material colours honest: neutral moonlight key + soft sky/ground fill.
   const moonDir = new THREE.Vector3(0.45, 0.62, 0.35).normalize();
-  const moon = new THREE.DirectionalLight(0xe4e9f5, 1.25); moon.position.copy(moonDir).multiplyScalar(1000);
+  const moon = new THREE.DirectionalLight(0xeceef2, 1.25); moon.position.copy(moonDir).multiplyScalar(1000);
   scene.add(moon, moon.target);
-  scene.add(new THREE.HemisphereLight(0xb2b8c6, 0x50483c, 1.15));
+  scene.add(new THREE.HemisphereLight(0xbcbcc0, 0x4c4842, 1.15));
   const sky = createSky(moonDir); scene.add(sky.group);
 
-  const facade = createFacadeMaterial(); const lambert = facade.material;
+  const tex = await loadMaterialTextures(renderer);
+  const facade = createFacadeMaterial(tex); const lambert = facade.material;
   const groundMat = new THREE.MeshStandardNodeMaterial({ vertexColors: true, metalness: 0 });
   const roadMat = new THREE.MeshStandardNodeMaterial({ vertexColors: true, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   const uWet = tslUniform(0), uSnow = tslUniform(0), uSkyRefl = tslUniform(new THREE.Color(0x1a2438));
@@ -80,18 +82,25 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const p = positionWorld, above = smoothstep(0.02, 0.25, p.y);
     const puddleN = mx_fractal_noise_float(vec3(p.x.mul(0.09), p.z.mul(0.09), 3.1), 3).mul(0.5).add(0.5);
     const ripple = mx_noise_float(vec3(p.x.mul(2.2), p.z.mul(2.2), time.mul(3))).mul(0.06);
-    const mk = (puddleAt: number, dark: number, wetRough: number, snowAmt: number, gain: number) => {
+    // Ground albedo: CC0 texture layers blended by the per-vertex `gmat` weights; a low-frequency second grass sample
+    // breaks up tiling. Under water (weights 0) the vertex colour (seabed) is used as before.
+    const gw = attribute('gmat', 'vec4'), gws = gw.x.add(gw.y).add(gw.z).add(gw.w);
+    const L = (i: number) => tslTexture(tex.ground, p.xz.div(GROUND_SCALE[i])).depth(float(i)).rgb.mul(GROUND_GAIN[i]).mul(i === 0 ? vec3(0.72, 1.0, 1.9) : vec3(1)); // grass: shift the yellow CC0 grass to a natural green
+    const macro = tslTexture(tex.ground, p.xz.div(41)).depth(float(2)).rgb.mul(1.6).add(0.45).clamp(0.6, 1.25);
+    const texMix = L(0).mul(gw.x).add(L(1).mul(gw.y)).add(L(2).mul(gw.z)).add(L(3).mul(gw.w)).div(gws.max(0.001)).mul(macro);
+    const groundAlbedo = mix(vertexColor(), texMix.mul(vertexColor()), gws.clamp(0, 1));
+    const mk = (puddleAt: number, dark: number, wetRough: number, snowAmt: number, gain: number, albedo: any = vertexColor()) => {
       const puddle = smoothstep(puddleAt, puddleAt + 0.08, puddleN).mul(uWet).mul(above);
       const V = normalize(cameraPosition.sub(p)), fres = pow(float(1).sub(max(V.y, 0)), 4);
       const snowK = uSnow.mul(snowAmt).mul(above).mul(smoothstep(0.25, 0.55, puddleN.add(uSnow.mul(0.6))));
-      const base = vertexColor().mul(gain).mul(float(1).sub(uWet.mul(dark))).mul(float(1).sub(puddle.mul(0.35)));
+      const base = albedo.mul(gain).mul(float(1).sub(uWet.mul(dark))).mul(float(1).sub(puddle.mul(0.35)));
       return {
         color: mix(base, vec3(0.95, 0.96, 1), snowK),
         rough: mix(mix(float(0.95), float(wetRough), uWet), float(0.04), puddle).add(ripple.mul(puddle)).mul(float(1).sub(snowK.mul(0.1))),
         emissive: uSkyRefl.mul(fres.mul(1.6).add(0.35)).mul(puddle.add(uWet.mul(0.18))).mul(float(1).sub(snowK)).add(vec3(0.075, 0.08, 0.095).mul(snowK)), // snow glows faintly: it reflects the skyglow
       };
     };
-    const g = mk(0.62, 0.3, 0.55, 1, 1.15), r = mk(0.52, 0.5, 0.3, 0.75, 1.5); // gain: Standard is darker than the old Lambert
+    const g = mk(0.62, 0.3, 0.55, 1, 1.0, groundAlbedo), r = mk(0.52, 0.5, 0.3, 0.75, 1.5); // gain: Standard is darker than the old Lambert
     groundMat.colorNode = g.color; groundMat.roughnessNode = g.rough; groundMat.emissiveNode = g.emissive;
     roadMat.colorNode = r.color; roadMat.roughnessNode = r.rough; roadMat.emissiveNode = r.emissive;
   }
@@ -111,12 +120,12 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [] } : await buildLandmarks(id, origin, terrain, renderer);
     const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
-    const blds = buildBuildings(buildings, terrain, lambert);
+    const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
     const trees = await buildTrees(area.trees as number[], terrain);
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
-    group.add(buildTerrain(terrain, groundMat), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
+    group.add(buildTerrain(terrain, groundMat, style), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group);
     const interiors = createInteriors(buildings, terrain); group.add(interiors.group);
@@ -174,7 +183,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const applyWeather = () => {
     const { ocean, trees, grass, lamps } = cur; const { rain, snow, fog, wet, snowCover } = wx.mix;
     const f = scene.fog as THREE.FogExp2;
-    f.color.set(0x0d1426).lerp(cTmp.set(0x30374a), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3b4352), Math.min(1, fog));
+    f.color.set(0x15171d).lerp(cTmp.set(0x34373e), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3e4148), Math.min(1, fog));
     f.density = 0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016;
     const cover = Math.min(1, rain + snow + fog * 0.9); sky.setOvercast(cover);
     sky.setClouds(0.22 + cover * 0.78, cRain.set(0x26334a).lerp(cTmp.set(0x2a303c), snow).lerp(cTmp.set(0x2a3140), Math.min(1, fog)));
