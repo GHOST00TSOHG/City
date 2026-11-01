@@ -1,16 +1,21 @@
 import * as THREE from 'three/webgpu';
 import type { AreaData, Terrain } from './data';
 import { Soup, ringPts, flatPoly } from './geom';
+import { type AreaStyle, styleFor } from './textures';
+
+// Landcover class -> ground texture layer weights [grass, sand, soil, concrete] and a tint (texture colour is kept true).
+const CLASS_W: number[][] = [[0.35, 0, 0.65, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 0.1, 0.9], [0.75, 0, 0.25, 0], [0.55, 0, 0.45, 0], [1, 0, 0, 0]];
+const CLASS_TINT = [1, 1, 1, 1, 0.72, 0.78, 1.08];
 
 // Landcover codes from the bake: land0 grass1 sand2 paved3 wood4 wetland5 pitch6
 const COVER = [0x8a8470, 0x5d7444, 0xd8cba4, 0x7c7a74, 0x46603a, 0x5a6646, 0x5a8a44].map((h) => new THREE.Color(h));
 const SEABED = new THREE.Color(0xb9b08a), DEEP = new THREE.Color(0x2c6a70);
 
 /** Terrain grid as one indexed mesh with per-vertex landcover colour; under-water cells tint toward a sandy-teal seabed. */
-export function buildTerrain(t: Terrain, material: THREE.Material) {
+export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaStyle = styleFor('')) {
   const { nx, nz, cell, x0, z0, h, cover } = t;
-  const pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3);
-  const c = new THREE.Color();
+  const pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), gw = new Float32Array(nx * nz * 4);
+  const c = new THREE.Color(), tint = new THREE.Color(style.groundTint);
   for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
     const i = iz * nx + ix, y = h[i];
     pos.set([x0 + ix * cell, y, z0 + iz * cell], i * 3);
@@ -24,6 +29,16 @@ export function buildTerrain(t: Terrain, material: THREE.Material) {
       }
       c.setRGB(r / n, g / n, b / n);
       if (y < 0.6) c.lerp(COVER[2], 0.25); // beach edge
+      // texture weights over the same 3x3 neighbourhood; sand creeps up near the shoreline (more in sandy areas)
+      const w = [0, 0, 0, 0]; let tk = 0, m = 0;
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
+        const jx = ix + dx, jz = iz + dz; if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
+        const k = cover[jz * nx + jx], cw = CLASS_W[k] ?? CLASS_W[0]; for (let q = 0; q < 4; q++) w[q] += cw[q]; tk += CLASS_TINT[k] ?? 1; m++;
+      }
+      const beach = Math.max(0, Math.min(1, (1.2 + style.sandBias * 4 - y) / 1.2)) * (w[3] / m < 0.5 ? 1 : 0);
+      for (let q = 0; q < 4; q++) gw[i * 4 + q] = (w[q] / m) * (1 - beach) + (q === 1 ? beach : 0);
+      // land: the vertex colour becomes a tint (≈1) over the true texture colour
+      const tt = tk / m; c.setRGB(tint.r * tt, tint.g * tt, tint.b * tt);
     }
     col.set([c.r, c.g, c.b], i * 3);
   }
@@ -35,6 +50,7 @@ export function buildTerrain(t: Terrain, material: THREE.Material) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  g.setAttribute('gmat', new THREE.BufferAttribute(gw, 4));
   g.setIndex(new THREE.BufferAttribute(idx, 1));
   g.computeVertexNormals(); g.computeBoundingSphere();
   const m = new THREE.Mesh(g, material); m.name = 'terrain';
