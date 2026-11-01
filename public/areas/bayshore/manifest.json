@@ -42,5 +42,14 @@
       "bytes": 316851,
       "gzip": 79256
     }
+  },
+  "clean": {
+    "in": 120,
+    "inWater": 0,
+    "duplicatesDropped": 0,
+    "holed": 0,
+    "trimmed": 0,
+    "droppedAfterTrim": 0,
+    "out": 120
   }
 }

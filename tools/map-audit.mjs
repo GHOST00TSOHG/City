@@ -14,7 +14,7 @@ import * as THREE from 'three';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'tools/map-audit.out');
 const label = process.argv[2] ?? 'run';
-const only = process.argv.slice(3);
+const ALL = process.argv.includes('--all'), only = process.argv.slice(3).filter((a) => a !== '--all');
 const T = { // thresholds (metres)
   floatBase: 0.15,      // wall bottom above terrain at a footprint sample
   buriedWall: 1.0,      // terrain above the floor line by more than this at a boundary sample
@@ -202,7 +202,7 @@ for (const id of ids) {
   const style = S.styleFor(id), dummy = new THREE.MeshBasicMaterial();
   const C = { buildings: bl.length, landmarks: lm.list.length };
   const cls = { a_floating: 0, b_sunk: 0, c_road_floating: 0, c_road_sunk: 0, d_in_water: 0, e_overlap_buildings: 0, f_shore_steps: 0, f_waterline_flat_tris: 0, f_pier_floating: 0, f_pier_sunk: 0, f_edge_steps: 0, g_void_rays: 0, h_nonsolid_buildings: 0 };
-  const ex = {}; const note = (k, v) => { (ex[k] ??= []).length < 8 && ex[k].push(v); };
+  const ex = {}; const note = (k, v) => { (ex[k] ??= []).length < (ALL ? 1e6 : 8) && ex[k].push(v); };
 
   // ---- buildings: a, b, d, h, and collect volumes for e
   const vol = [];
