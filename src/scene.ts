@@ -1,3 +1,5 @@
+import { quality } from './perf/quality';
+import { diag } from './perf/diag';
 import * as THREE from 'three/webgpu';
 import { createSky } from './sky';
 import { createFlyControls } from './flyControls';
@@ -7,6 +9,8 @@ import { buildBuildings } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
 import { buildLamps } from './area/lamps';
 import { buildTrees } from './area/trees';
+import { A6 } from './perf/frame';
+import { prewarm } from './perf/prewarm';
 import { buildOcean } from './area/water';
 import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
@@ -45,8 +49,8 @@ export const VIEWS: Record<string, View[]> = {
 
 export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const qs = new URLSearchParams(location.search);
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: qs.get('gl') === '1', powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: qs.get('gl') === '1' || qs.get('backend') === 'webgl2', powerPreference: 'high-performance' });
+  renderer.setPixelRatio(quality.basePR()); // tier pixel ratio (Air 1.25); the canvas is CSS-sized, so this upscales
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.toneMapping = THREE.NeutralToneMapping; // keeps hues true at low light (ACES shifted night colours toward grey-orange)
   renderer.toneMappingExposure = 1.0;
@@ -54,6 +58,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const backend = (renderer.backend as any).isWebGPUBackend ? 'webgpu' : 'webgl2';
 
   const scene = new THREE.Scene();
+  const eye = new THREE.Vector3(); // reused per frame (A6: no per-frame allocations)
   scene.background = new THREE.Color(0x070c1a);
   scene.fog = new THREE.FogExp2(0x0d1426, 0.00016);
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 40000);
@@ -118,7 +123,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       skirt.position.y = y; skirt.name = 'skirt'; group.add(skirt);
     }
     return { id, area, terrain, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
-      dispose() { group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
+      dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   let cur = await buildContent(areaId);
   scene.add(cur.group);
@@ -180,20 +185,22 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     get areaId() { return cur.id; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
     get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, lamps: a.lamps.length, chunks: cur.blds.group.children.length, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
     /** Warm the fetch cache for an area (data only; cheap, run when idle). */
+    interiorEntry(x: number, z: number) { return cur.interiors.entry(x, z); },
     preload(id: string) { return loadArea(id).then(() => undefined, () => undefined); },
     /** Build the next area off-scene, compile its shaders, then swap in one frame and drop the old one. */
     async switchArea(id: string, viewName?: string) {
       if (id === cur.id) return;
-      const next = await buildContent(id);
+      const tb = performance.now(); const next = await buildContent(id); diag.event('area build', performance.now() - tb);
       next.group.visible = true;
       const tmp = new THREE.Scene(); tmp.add(next.group);
-      try { await renderer.compileAsync(tmp, camera); } catch { /* compile is a warm-up only */ }
+      if (A6) await prewarm(renderer, tmp, camera, scene); // includes hidden/empty meshes, and the real scene's lights
+      else try { await renderer.compileAsync(tmp, camera); } catch { /* compile is a warm-up only */ }
       const old = cur; scene.remove(old.group); scene.add(next.group); cur = next;
       const vs = viewsOf(id); setView(vs.find((v) => v.name === viewName) ?? vs[0]);
       this.setWeather(...weather);
       old.dispose();
     },
-    update(dt: number, t = 0) { if (!focus) controls.update(dt); const f = focus ?? camera.position; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(focus ? new THREE.Vector3(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
+    update(dt: number, t = 0) { if (!focus) controls.update(dt); const f = focus ?? camera.position; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(focus ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
     /** Stand outside (or inside) a generated interior near the area origin; loads it immediately. */
     enterBuilding(inside = false) { const e = cur.interiors.entry(); if (!e) return null; e.show(); const p = inside ? e.in : e.out; camera.position.set(p[0], p[1] + 1.7, p[2]); camera.lookAt(...e.look); if (inside) { const d = new THREE.Vector3(...e.look).sub(camera.position).setY(0).normalize(); camera.lookAt(camera.position.x + d.x, camera.position.y, camera.position.z + d.z); } controls.syncAngles(); controls.setWalk(true); return e.i; },
     /** One place that sets every weather-driven uniform. k = intensity 0..1. */

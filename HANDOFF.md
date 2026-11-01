@@ -26,6 +26,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 6: procedural interiors | bot/websmith-rebuild-p6-interiors | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Jonn directions for the rebuild | bot/websmith-jonn-directions | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-10-31 |
@@ -117,3 +118,62 @@ Built on Grok Bot (no Claude). Estimate for v01 streets: medium.
 - Seam pattern is in part-local space, so seam spacing differs slightly per part.
 - Slow-mo and FX timing were tuned in stepped headless runs; check feel and cost at 60 fps on the Air M4.
 - Damage only comes from `K` for now.
+
+## A6 — smoothness pass
+Goal: no frame over 33 ms and a steady 60 fps while flying on the MacBook Air M4. `?a6=0` turns all of it off (legacy path) for A/B runs.
+- **Perf overlay (src/perf/overlay.ts):** `P` or `` ` `` toggles, `?perf=1` opens it at load. 240-frame graph with 16.7/33 ms lines and a CPU trace; fps, avg, p99, worst, frames over 33 / 20 ms, CPU ms, GPU upload kB (now/max), shader compiles, queued jobs. Reset button.
+- **Flight benchmark (src/perf/bench.ts):** `?bench=flight` (add `&area=keywest` etc.). Skips the garage, drops the robot in, warms up 3.5 s, then flies 5 scripted phases (low-fast burst, climb-cruise, sharp turns, dive + zoom, long straight; ~52 s). Panel shows per-phase and overall fps, p50/p99/worst, long-frame counts, CPU, max upload, compiles; PASS = no frame >33 ms and p99 ≤ 20 ms. Copy JSON button; also `console.log('[City bench]', …)` and `window.__bench`. Run again with `__benchRun()`.
+- **Frame budget (src/perf/frame.ts):** per-frame job queue (~3 ms, `?budget=`) and a 4 MB upload cap; tree refreshes and interior builds wait for room.
+- **GPU work hooks (src/perf/gpuHooks.ts):** count upload bytes/calls and pipeline compiles per frame on WebGPU and WebGL2.
+- **Workers:** area JSON fetch/parse + terrain decode (src/area/area.worker.ts); grass scatter (src/area/grass.worker.ts, ping-pong buffers, patch centred ~6 frames ahead).
+- **Trees:** far LOD bucket per species holds every tree, uploaded once; near LOD buckets refilled from a 64 m grid every 20 m with a velocity lead (~0.5 s prefetch), only the used range uploaded. A GPU distance band per LOD (instanced `tpos`) does the exact LOD cut, so nothing is re-sorted per frame. All instance buffers are StaticDraw: DynamicDraw made the WebGPU renderer re-upload every whole matrix buffer every frame (the main stutter source).
+- **Shader prewarm (src/perf/prewarm.ts):** `compileAsync` over everything (hidden objects and empty instance sets included) before the first frame and after area switches.
+- **Interiors:** LRU of 4 built interiors; no new builds above 25 m/s; deferred when the frame budget is low.
+- **Fixed-timestep flight (src/robot/controller.ts):** physics steps at a fixed 120 Hz (accumulator, max 8 steps); robot pose and chase camera are interpolated between the last two steps, so motion is even at any refresh rate or frame jitter. `?a6=0` keeps the old variable step.
+- **Allocations:** removed per-frame vectors in scene, controller and thrust; no `new`/`clone` left in our per-frame paths (remaining ~120 KB/frame heap churn is inside the three.js renderer).
+- **Crater fix:** decal raised to +0.22 m with polygon offset and renderOrder so it shows on roads.
+- Headless work counter: `node tools/perf/frame-work.mjs <dist> <area> <label>` (150 frames × 3 m, WebGL2/SwiftShader; counts uploads, compiles, JS time, heap growth, long tasks; headless fps is meaningless).
+
+### Before / after (main @7cf0033 vs this branch; `node tools/perf/frame-work.mjs`, headless, 150 frames over 450 m)
+Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 avg / 85 max in both. Console: only the two pre-existing 404s.
+| Metric | KW before | KW after | SH before | SH after |
+|---|---|---|---|---|
+| JS ms p50 | 2.7 | 2.8 | 2.8 | 3.3 |
+| JS ms p95 | 12.7 | 10.5 | 19.0 | 9.1 |
+| JS ms p99 | 23.1 | 15.5 | 2021 | 15.5 |
+| JS ms worst | 2619 | 17.2 | 3571 | 22.6 |
+| Frames JS >16.7 ms | 3 | 1 | 12 | 1 |
+| Long tasks | 1 | 0 | 2 | 0 |
+| Upload KB/frame (max) | 1944 (8115) | 147 (587) | 3045 (13946) | 541 (2519) |
+`tools/perf/flight-route.mjs` measures real rAF frame time with key input, but SwiftShader takes about 1.4 s per frame here, so its numbers are meaningless headless; run it (or `?bench=flight`) on the M4.
+
+### Earlier run (WIP, same tool)
+| Metric | Key West before | Key West after | Sandy Hook before | Sandy Hook after |
+|---|---|---|---|---|
+| GPU upload / frame | 2044 KB | 150 KB | 3125 KB | 494 KB |
+| Max upload in a frame | 8185 KB | 550 KB | 13946 KB | 2508 KB |
+| Frames uploading >256 KB | 65 | 40 | 62 | 49 |
+| Program links in flight | 2 | 0 | 2 | 0 |
+| JS ms p99 / max | 19.9 / 3288 | 12.6 / 14.1 | 46.5 / 5708 | 16.1 / 18.7 |
+| Frames JS >8 ms | 32 | 9 | 43 | 11 |
+| Heap growth / frame | 307 KB | 123 KB | 335 KB | 120 KB |
+| Long tasks (longest) | 1 (3293 ms) | 0 | 1 (5710 ms) | 0 |
+| Console errors | 2× 404 (pre-existing) | same | same | same |
+
+### Known issues (A6)
+- Real fps not measured here; run `?bench=flight` on the M4 (and `&a6=0` for the before run).
+- Far building LOD unchanged; the world is still built at load, not tile-streamed.
+- Far tree bucket draws every tree (GPU band cull discards out-of-band ones), so vertex work is higher than strictly needed.
+- Grass refresh uploads up to ~0.5 MB per refresh.
+- Prewarm temporarily shows hidden objects; a toggle during the async compile could be restored wrong.
+- Two 404s on load existed before A6 (optional files).
+
+## A6b — diagnostics bench, Safari pacing, Air quality tier
+- **Bench (src/perf/bench.ts):** `?bench=walk` (street walk, run with turns, walk into/out of an interior, dense run), `?bench=flight`, `?bench=all` (walk then flight, separate sections). Results panel with a big **Copy results** button (compact JSON; textarea fallback if the clipboard is refused). Shows backend + adapter, UA, measured refresh Hz, pacing/fps mode, quality tier/scale, per-phase p50/p95/p99/worst and counts >16.7/33/50 ms, 10 worst frames (t, ms, work ms, causes), long-frame cause tally, sustained 5 s avg/p95 (throttling). `?benchscale=0.1` shortens phases for smoke tests (`node tools/perf/bench-smoke.mjs chromium "bench=all&benchscale=0.06"`).
+- **Causes (src/perf/diag.ts + gpuHooks):** pipeline compiles, texture uploads (count/kB, incl. copyExternalImageToTexture), geometry upload kB, area build, tree refresh, interior build, grass refresh, worker onmessage time, loop sections (physics+ground, fx, world update, queued jobs, render submit), heap drops (performance.memory, Chrome only), else `pacing` (little work, ≤2.5 intervals) or `unattributed (likely GC/compositor)`.
+- **Pacing (src/perf/pacing.ts):** refresh measured from rAF in the first second; sim uses the real rAF delta (clamped 100 ms; physics fixed 120 Hz, max 8 steps). `?fps=60` caps by skipping alternate rAFs on >90 Hz displays, `?fps=120` never caps, auto (default) caps to 60 when >15 % of frames miss the 120 Hz deadline over 2 s.
+- **Backend:** `?backend=webgl2` forces WebGL2 (same as `?gl=1`).
+- **Quality (src/perf/quality.ts):** `?quality=air|high|auto`. Air: pixel ratio ≤1.25 (CSS upscale), grass radius 30 m (was 40), tree near/mid LOD distances ×0.75, interiors load at 14 m (was 18), 56 FX particles (was 90). Auto = Air unless ≥12 cores and a clean warm-up at PR 2 (then High PR only). Dynamic resolution (`?dynres=0` off): −0.1 scale (min 0.7) when smoothed frame time >1.08× target for 20 frames; +0.05 after a clean stretch (4 s, doubling after each re-drop, 1–1.5 s cooldowns). There is no shadow map, bloom or SSAO in City, so nothing to cut there.
+- **Safari:** interior pipeline is now prewarmed (a hidden pre-built interior) — walking into the first building compiled a pipeline mid-walk; tree textures decode via createImageBitmap (ImageBitmapLoader) instead of <img> decode on upload; no KTX2 in the project; GLTFLoader already uses ImageBitmap.
+- `?hud=1` opens the live frame-time graph (same as `?perf=1`), now with Hz/fps mode and quality/scale.
+- Not verified: WebKit headless (Playwright WebKit libs could not install: apt mirror 500), real GPU timings.

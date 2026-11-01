@@ -1,3 +1,4 @@
+import { quality } from '../perf/quality';
 import * as THREE from 'three/webgpu';
 import { uniform, uv, positionLocal, normalView, positionView, dot, abs, pow, float, vec3, smoothstep, sin, time, length, mix, mx_noise_float, attribute } from 'three/tsl';
 
@@ -37,17 +38,17 @@ export function createRobotFx(scene: THREE.Scene, camera: THREE.PerspectiveCamer
   const hist: { p: THREE.Vector3; q: THREE.Quaternion }[] = Array.from({ length: GH * 3 }, () => ({ p: new THREE.Vector3(), q: new THREE.Quaternion() })); let hi = 0;
 
   // Crater decal (stays for a while) with a scorched rim.
-  const crMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 });
+  const crMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
   const uCr = uniform(0);
   { const r = length(uv().sub(0.5)).mul(2); const cracks = smoothstep(0.75, 0.8, mx_noise_float(uv().mul(18)).mul(0.5).add(0.5).add(r.mul(0.15)));
     const heat = uniform(0); crMat.userData.heat = heat;
     const glowCr = smoothstep(0.62, 0.66, mx_noise_float(uv().mul(9)).mul(0.5).add(0.5).add(float(0.25).sub(r.mul(0.3)))).mul(smoothstep(0.95, 0.4, r));
     crMat.colorNode = mix(vec3(0.05, 0.045, 0.04), vec3(0.22, 0.19, 0.15), smoothstep(0.3, 0.85, r)).add(vec3(1.0, 0.45, 0.12).mul(glowCr).mul(heat).mul(3));
     crMat.opacityNode = smoothstep(1.0, 0.7, r).mul(float(0.9).sub(cracks.mul(0.3))).mul(uCr); }
-  const crater = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), crMat); crater.visible = false; scene.add(crater); let crT = 99;
+  const crater = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), crMat); crater.visible = false; crater.renderOrder = 5; scene.add(crater); let crT = 99;
 
   // Particles: charge debris (rises), sparks (fall, bright). One instanced pool, per-instance colour.
-  const N = 90, pGeo = new THREE.IcosahedronGeometry(1, 0), pMat = new THREE.MeshBasicNodeMaterial({ fog: false });
+  const N = quality.fxParticles, pGeo = new THREE.IcosahedronGeometry(1, 0), pMat = new THREE.MeshBasicNodeMaterial({ fog: false });
   const parts = new THREE.InstancedMesh(pGeo, pMat, N); parts.frustumCulled = false; scene.add(parts);
   const P = Array.from({ length: N }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1, s: 0.05, g: 0, spin: 0 }));
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), c = new THREE.Color(), e = new THREE.Euler();
@@ -70,7 +71,7 @@ export function createRobotFx(scene: THREE.Scene, camera: THREE.PerspectiveCamer
     setColor(hex: string) { uAuraCol.value.set(hex); },
     /** Hero landing: crater, dust ring, shake. */
     impact(pos: THREE.Vector3, strength = 1) {
-      crater.position.set(pos.x, pos.y + 0.09, pos.z); crater.scale.setScalar(4.5 * strength); crater.visible = true; crT = 0;
+      crater.position.set(pos.x, pos.y + 0.22, pos.z); // above the lifted road decks (ground.ts LIFT up to 0.16 m) crater.scale.setScalar(4.5 * strength); crater.visible = true; crT = 0;
       fire(dust, tmp.set(pos.x, pos.y + 0.15, pos.z), up, 16 * strength, 0.9); fire(shock, tmp.set(pos.x, pos.y + 0.3, pos.z), up, 9 * strength, 0.45);
       for (let i = 0; i < 26; i++) { const a = Math.random() * Math.PI * 2, s = 4 + Math.random() * 6; emit(tmp.set(pos.x, pos.y + 0.1, pos.z), tv.set(Math.cos(a) * s, 3 + Math.random() * 5, Math.sin(a) * s), 0.9, 0.04 + Math.random() * 0.05, -14, 0x6b6152); }
       if (!reduced()) shake = Math.max(shake, 0.9 * strength);
