@@ -1,12 +1,12 @@
 {
- "generated": "2026-11-01T09:27:57.487Z",
+ "generated": "2026-11-01T10:02:45.889Z",
  "renderer": "chromium headless, SwiftShader WebGL2 (fps not representative)",
  "views": [
   {
    "area": "keywest",
    "view": "aerial",
    "drawCalls": 46,
-   "triangles": 4180606,
+   "triangles": 4186514,
    "seaLevelY": [
     0,
     0
@@ -19,7 +19,7 @@
    "area": "keywest",
    "view": "duval",
    "drawCalls": 29,
-   "triangles": 4052581,
+   "triangles": 4055551,
    "seaLevelY": [
     0,
     0
@@ -32,7 +32,7 @@
    "area": "keywest",
    "view": "docks",
    "drawCalls": 28,
-   "triangles": 3996987,
+   "triangles": 3997491,
    "seaLevelY": [
     0,
     0
@@ -45,7 +45,7 @@
    "area": "keywest",
    "view": "bridge",
    "drawCalls": 48,
-   "triangles": 4211698,
+   "triangles": 4218346,
    "seaLevelY": [
     0,
     0
@@ -58,7 +58,7 @@
    "area": "keywest",
    "view": "under",
    "drawCalls": 28,
-   "triangles": 4045699,
+   "triangles": 4052919,
    "seaLevelY": [
     0,
     0
@@ -77,7 +77,7 @@
    "area": "keywest",
    "view": "overpass",
    "drawCalls": 30,
-   "triangles": 4041521,
+   "triangles": 4043774,
    "seaLevelY": [
     0,
     0
@@ -90,7 +90,7 @@
    "area": "keywest",
    "view": "seawall",
    "drawCalls": 35,
-   "triangles": 4107349,
+   "triangles": 4109972,
    "seaLevelY": [
     0,
     0
@@ -103,7 +103,7 @@
    "area": "bayshore",
    "view": "aerial",
    "drawCalls": 37,
-   "triangles": 2649595,
+   "triangles": 2661594,
    "seaLevelY": [
     0,
     0
@@ -116,7 +116,7 @@
    "area": "bayshore",
    "view": "street",
    "drawCalls": 29,
-   "triangles": 2644780,
+   "triangles": 2648381,
    "seaLevelY": [
     0,
     0
@@ -129,7 +129,7 @@
    "area": "bayshore",
    "view": "docks",
    "drawCalls": 37,
-   "triangles": 2649595,
+   "triangles": 2661594,
    "seaLevelY": [
     0,
     0
@@ -142,7 +142,7 @@
    "area": "bayshore",
    "view": "bridge",
    "drawCalls": 37,
-   "triangles": 2649595,
+   "triangles": 2661594,
    "seaLevelY": [
     0,
     0
@@ -155,7 +155,7 @@
    "area": "bayshore",
    "view": "under",
    "drawCalls": 32,
-   "triangles": 3004784,
+   "triangles": 2927279,
    "seaLevelY": [
     0,
     0
@@ -173,8 +173,8 @@
   {
    "area": "bayshore",
    "view": "seawall",
-   "drawCalls": 29,
-   "triangles": 2642193,
+   "drawCalls": 30,
+   "triangles": 2650293,
    "seaLevelY": [
     0,
     0
@@ -187,7 +187,7 @@
    "area": "sandyhook",
    "view": "aerial",
    "drawCalls": 30,
-   "triangles": 3520258,
+   "triangles": 3524713,
    "seaLevelY": [
     0,
     0
@@ -200,7 +200,7 @@
    "area": "sandyhook",
    "view": "street",
    "drawCalls": 29,
-   "triangles": 3520075,
+   "triangles": 3524530,
    "seaLevelY": [
     0,
     0
@@ -213,7 +213,7 @@
    "area": "sandyhook",
    "view": "docks",
    "drawCalls": 23,
-   "triangles": 3515677,
+   "triangles": 3515297,
    "seaLevelY": [
     0,
     0
@@ -226,7 +226,7 @@
    "area": "sandyhook",
    "view": "bridge",
    "drawCalls": 26,
-   "triangles": 3518623,
+   "triangles": 3521674,
    "seaLevelY": [
     0,
     0
@@ -239,7 +239,7 @@
    "area": "sandyhook",
    "view": "under",
    "drawCalls": 33,
-   "triangles": 5924409,
+   "triangles": 6580090,
    "seaLevelY": [
     0,
     0
@@ -258,7 +258,7 @@
    "area": "sandyhook",
    "view": "seawall",
    "drawCalls": 31,
-   "triangles": 3520137,
+   "triangles": 3524592,
    "seaLevelY": [
     0,
     0
@@ -271,7 +271,7 @@
    "area": "newark",
    "view": "aerial",
    "drawCalls": 31,
-   "triangles": 2003314,
+   "triangles": 2040920,
    "seaLevelY": [
     0,
     0
@@ -284,7 +284,7 @@
    "area": "newark",
    "view": "street",
    "drawCalls": 34,
-   "triangles": 2039959,
+   "triangles": 2128561,
    "seaLevelY": [
     0,
     0
@@ -297,7 +297,7 @@
    "area": "newark",
    "view": "bridge",
    "drawCalls": 31,
-   "triangles": 1997700,
+   "triangles": 2035048,
    "seaLevelY": [
     0,
     0
@@ -310,7 +310,7 @@
    "area": "newark",
    "view": "under",
    "drawCalls": 31,
-   "triangles": 5962863,
+   "triangles": 5994122,
    "seaLevelY": [
     0,
     0
@@ -329,7 +329,7 @@
    "area": "newark",
    "view": "overpass",
    "drawCalls": 38,
-   "triangles": 4586302,
+   "triangles": 4593335,
    "seaLevelY": [
     0,
     0
@@ -341,8 +341,8 @@
   {
    "area": "newark",
    "view": "seawall",
-   "drawCalls": 31,
-   "triangles": 2079184,
+   "drawCalls": 28,
+   "triangles": 2167316,
    "seaLevelY": [
     0,
     0
@@ -355,7 +355,7 @@
    "area": "passaic",
    "view": "aerial",
    "drawCalls": 43,
-   "triangles": 1223312,
+   "triangles": 1290576,
    "seaLevelY": [
     0,
     0
@@ -368,7 +368,7 @@
    "area": "passaic",
    "view": "dock",
    "drawCalls": 36,
-   "triangles": 1193314,
+   "triangles": 1218988,
    "seaLevelY": [
     0,
     0
@@ -381,7 +381,7 @@
    "area": "passaic",
    "view": "docks",
    "drawCalls": 42,
-   "triangles": 4181115,
+   "triangles": 4229848,
    "seaLevelY": [
     0,
     0
@@ -394,7 +394,7 @@
    "area": "passaic",
    "view": "bridge",
    "drawCalls": 29,
-   "triangles": 1093847,
+   "triangles": 1124548,
    "seaLevelY": [
     0,
     0
@@ -407,7 +407,7 @@
    "area": "passaic",
    "view": "under",
    "drawCalls": 37,
-   "triangles": 4612985,
+   "triangles": 4604294,
    "seaLevelY": [
     0,
     0
@@ -426,7 +426,7 @@
    "area": "passaic",
    "view": "overpass",
    "drawCalls": 38,
-   "triangles": 5430563,
+   "triangles": 5433952,
    "seaLevelY": [
     0,
     0
@@ -438,8 +438,8 @@
   {
    "area": "passaic",
    "view": "seawall",
-   "drawCalls": 31,
-   "triangles": 1120494,
+   "drawCalls": 32,
+   "triangles": 1152053,
    "seaLevelY": [
     0,
     0

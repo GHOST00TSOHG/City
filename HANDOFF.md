@@ -35,7 +35,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Jonn directions for the rebuild | bot/websmith-jonn-directions | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-10-31 |
-| Map cleanup: grounding, docks, shorelines | bot/websmith-map-cleanup | Grok Bot (Websmith) | draft PR | 2026-11-01 |
+| Map cleanup: grounding, docks, shorelines (round 3: steep lots, solid + lit deck undersides) | bot/websmith-map-cleanup | Grok Bot (Websmith) | draft PR | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
@@ -238,7 +238,7 @@ BEFORE = the previous AFTER (PR #31 first run). `tools/world/audit-prev.json` re
 | bayshore | docks | 37 | 0 |
 | bayshore | bridge | 37 | 0 |
 | bayshore | under | 32 | 0 |
-| bayshore | seawall | 29 | 0 |
+| bayshore | seawall | 30 | 0 |
 | sandyhook | aerial | 30 | 0 |
 | sandyhook | street | 29 | 0 |
 | sandyhook | docks | 23 | 0 |
@@ -250,19 +250,35 @@ BEFORE = the previous AFTER (PR #31 first run). `tools/world/audit-prev.json` re
 | newark | bridge | 31 | 0 |
 | newark | under | 31 | 0 |
 | newark | overpass | 38 | 0 |
-| newark | seawall | 31 | 0 |
+| newark | seawall | 28 | 0 |
 | passaic | aerial | 43 | 0 |
 | passaic | dock | 36 | 0 |
 | passaic | docks | 42 | 0 |
 | passaic | bridge | 29 | 0 |
 | passaic | under | 37 | 0 |
 | passaic | overpass | 38 | 0 |
-| passaic | seawall | 31 | 0 |
+| passaic | seawall | 32 | 0 |
 
-Max draw calls 48; console errors 0 in every view. Budget is 150.
+Max draw calls 48; console errors 0 in every view (round 3 re-run). Budget is 150.
+
+### Round 3 (steep lots, solid deck undersides, lit undersides)
+- **(1) Deck undersides are solid for the robot.** `RoadSurface.soffitAbove(x, z, y)` (cleanup.ts) returns the underside (`deck - DECK_T`, 0.65 m, shared with waterfront.ts) of the lowest *elevated* road segment whose top is above `y + STEP`; `world.ceilingAt` (scene.ts) exposes it and `controller.ts` uses it twice: the body (`BODY_H` 1.45 m) is clamped under the soffit and `vel.y` zeroed (no passing up through a deck from below), and horizontal moves into a gap lower than the body are blocked like a wall unless already inside one. Walking, flying and boating under a bridge (needs >= 1.45 m clearance; the audit's `bridgeNoClearance` keeps >= 1.8 m at the span) and standing/walking on decks are unchanged: a deck within `STEP` of the feet counts as floor, not ceiling. Node check on the longest Key West bridge: under the deck the ceiling is 1.95 and the floor 0 (water), on the deck the ceiling is Infinity and the floor 2.60, 60 m off to the side Infinity. Not driven with a live robot in the browser (headless is < 2 fps); the browser `under` probe still reads floor under the deck vs on it.
+- **(2) Undersides lit.** Bridges, overpasses, pier caps and seawalls moved from the shared road material to `concreteMat` (scene.ts): same single draw (the waterfront mesh was already its own draw), 0 extra lights. Colour x1.5 like the roads, plus an emissive ambient floor (0.2) and a ground-bounce term for down-facing normals (0.4, warm tint) times the vertex colour. Soffits were pure black before (`r3-before-keywest-bridge-under.png`).
+- **(3) Steep lots.** `cleanArea` pass A2 grades the ground against the walls: a lawn bank (`GRADE_SLOPE` 0.2 = 1:5, `GRADE_REACH` 14 m, meeting the wall `GRADE_LIP` 0.35 m under the floor) on the downhill side, never over roads, water, causeways or other buildings. It only edits the 8 m terrain grid, so it is coarse; a steeper bank raised neighbours' ground and *increased* exposure, so 1:5 is the tuned value. What is left is clad by `stoneBase` (buildings.ts): any building with more than `PLINTH_MIN` (0.6 m) of bare wall gets a stepped concrete-block plinth, up to 4 tiers of 1.1 m, each stepped 0.35 m further out with a cap ledge, following the terrain along every edge (mitred rings, a vertex per 3 m); the facade (windows, floors) now starts at the floor instead of at the foundation. No extra draw calls (same chunk meshes).
+- **Audit metric:** `foundationExposed` = a building whose wall below the floor (floor minus ground along the outline, `exposedHeight`) is over `T.EXPOSED` = 1.2 m; totals carry `maxExposedFoundation`, `meanExposedFoundation`, `exposedOver3m`. It is measured on the ground after grading and still counts walls that now have the plinth, so it is the real height of the visible retaining wall, not only bare wall.
+- **Shots:** `tools/world/steep.mjs` freezes the worst 3 steep lots for newark and passaic (`previews/map-cleanup/r3-cameras.json`); `node tools/world/shots-r3.mjs <before|after>` writes `previews/map-cleanup/r3-before-*.png` / `r3-after-*.png` (steep1..3 per area and the Key West bridge underside). After-run cameras are lifted over any new fill so they stay above ground. Newark steep1 (16.3 m before, 6.0 m after, four tiers) is framed close to the new bank.
+- Known: the concrete texture on the plinth aliases to a speckle at grazing distance (see `r3-after-newark-steep1.png`); the 8 m terrain grid caps what grading can do (Passaic max only 7.2 -> 6.7 m); there is no AO under decks, so pier cap faces are only dimly lit; check the look on a real GPU.
+
+### BEFORE -> AFTER (round 3)
+| Issue | keywest | bayshore | sandyhook | newark | passaic | total |
+|---|---|---|---|---|---|---|
+| foundationExposed (> 1.2 m) | 3 -> 2 | 35 -> 19 | 8 -> 8 | 220 -> 84 | 54 -> 51 | **320 -> 164** |
+| exposed over 3 m | 0 -> 0 | 12 -> 8 | 5 -> 5 | 20 -> 13 | 16 -> 14 | **53 -> 40** |
+| max exposed (m) | 1.53 -> 1.53 | 8.24 -> 6.09 | 11.59 -> 11.58 | 16.31 -> 6.03 | 7.23 -> 6.69 | |
+| every other check (17) | 0 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 | 0 -> 0 | **0 -> 0** |
 
 ### Follow-up (this run) and known issues
-- **Sunk/floating (0 now):** pools are levelled *before* buildings are fitted (they used to lower terrain under a finished foundation, floating two Key West houses); the floor `pad` is never more than 0.45 m under the highest ground, so steep lots get a tall foundation (`fy` reaches the lowest ground) instead of sinking. The old 1.2 m plinth cap is gone. Check Newark/Passaic hillside houses by eye on a real GPU: foundations can show several metres of wall on the downhill side.
+- **Sunk/floating (0 now):** pools are levelled *before* buildings are fitted (they used to lower terrain under a finished foundation, floating two Key West houses); the floor `pad` is never more than 0.45 m under the highest ground, so steep lots get a tall foundation (`fy` reaches the lowest ground) instead of sinking. The old 1.2 m plinth cap is gone. (Round 3 below grades the ground and clads the rest in a stepped stone plinth.)
 - **Docks:** pilings now stop inside the deck slab (`deck - 0.12`, underside is `deck - 0.32`), edge ones are inset 0.32 m and verified to lie inside the deck outline, shared corners deduped, interior bents stay on the 5 m grid. Audit: `pilingThroughDeck` (top above the deck surface) and `pilingMisplaced` (outside every deck or not reaching the seabed). `pierUnsupported` now needs min(2, wet samples) pilings.
 - **Open under bridges:** `createSurface(...).surfaceAt(x, z, y)` (cleanup.ts, used by ground.ts) returns the highest surface not above `y + 0.9`; without `y` it keeps the old highest-surface behaviour. `scene.ground` / `world.floorAt` / fly controls pass the query height, so a deck is floor only when you are on it, and the terrain / sea beneath is floor under it. Water-bridge decks are now 3.0 m (roads) / 2.6 m (paths) so there is ≥1.9 m of headroom for a robot or a small boat. Audit: `bridgeNoClearance`, `bridgeSolidBelow`. Not done: the deck does not block flight from below (`blocked` only knows roofs), so a flying robot can pass up through a deck.
 - **Overpasses:** the bake already stores `b` (OSM bridge=yes) and `l` (layer>0) on roads, so no re-fetch was needed (`Road.b/l` typed in data.ts). `planOverpasses` (cleanup.ts) takes every elevated way that is not over water, finds where it crosses a ground road, and raises the deck to 5.2 m over it (3.0 m over open ground when nothing modelled crosses; footpaths without a crossing stay on the ground; ways <8 m are skipped) with smoothstep ramps from the way's ends, plus bents every ~10 m nudged off the road underneath. Same `Bridge` record (`kind: 'overpass'`), so waterfront.ts draws deck, parapets and bents. Newark 28, Passaic 15, Key West 1. Audit: `overpassMissing` (elevated road crosses a ground road but was not raised) and `bridgeUnsupported` with a 22 m bent spacing for overpasses.
