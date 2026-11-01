@@ -35,6 +35,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Jonn directions for the rebuild | bot/websmith-jonn-directions | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-10-31 |
+| Map cleanup: grounding, docks, shorelines | bot/websmith-map-cleanup | Grok Bot (Websmith) | draft PR | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
@@ -197,3 +198,66 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 - Height fix: `buildRoads(...).surface.surfaceAt(x,z)` (segment spatial hash) returns the asphalt/sidewalk top; `ground()` and `world.floorAt` use it, so the robot/camera stand on the road instead of the terrain under it. `__ground(x,z)` for tests; `tests/roads.spec.ts`.
 ## Palms (bot/websmith-no-nj-palms)
 - Bug: bake scatter gave wood/wetland cells a 25% palm chance even with `palmShare: 0`. Fixed in `tools/bake/bake.mjs`; runtime guard `buildTrees(..., palms = id === 'keywest')` turns any baked palm in NJ into broadleaf (no re-bake needed). `stats.palms` / `__stats()`; `tests/palms.spec.ts`.
+
+## Map cleanup (bot/websmith-map-cleanup)
+Automatic world audit plus load-time fixes (no per-object hand edits; the bake data is untouched).
+- **Audit:** `node tools/world/audit.mjs [--after] [--out f.json] [area…]` runs the *runtime* code under node type-stripping and writes `tools/world/audit-before.json` / `audit-after.json`. Issues: building in water / floating / sunk / overlapping buildings / on a road, road floating over water, unsupported bridge, tree and prop badly placed, shoreline gap, non-flat water, pier without pilings.
+- **Shared pure modules** (no runtime imports, so node can load them): `src/area/terrainCore.ts` (terrain decode/sample, re-exported by data.ts), `src/area/cleanup.ts` (`cleanArea`, `auditWorld`, thresholds `T`), `src/area/dockPlan.ts`.
+- **`cleanArea(area, terrain)`** (called in `scene.ts buildContent`, idempotent): clips roads outside the baked terrain grid (Sandy Hook had ~900 road pieces and 171 buildings hanging in the void), builds causeways (ground + grass shoulders, `cover` set) under short wet road runs, plans bridges for long ones (deck + ramps via `RoadPlan.y`, pier bents to the seabed), drops buildings ≥35% in water / on roads / overlapping a bigger building, fills small wet corners, terraces a floor `pad` and a foundation `fy` per building (buildings.ts, interiors.ts, collision.ts use them), raises pools on a skirt, culls trees/lamps in water, inside buildings or on road cores, builds seawall segments (marching squares on the 0 m contour where the bank is ≥1 m or a road is within 5 m) and sand beaches elsewhere.
+- **Meshes:** `src/area/waterfront.ts` (bridges, parapets, bents, seawalls: 1 draw), `src/area/docks.ts` (procedural docks from every pier/boardwalk polygon: plank-shader decking that follows the ground on land, timber pilings to the seabed, cleats, rubber bumpers, ladders, moored boats with bobbing: instanced, 7 draws). Roads accept `RoadPlan`s (`buildRoads(..., plans)`), `surfaceAt` returns deck height on bridges. `pools+piers` mesh is now `buildPools` only.
+- Test hook: `__setCam(pos, look)`; `tools/world/shots.mjs` (needs `npm run build && npm run preview`) writes `previews/map-cleanup/*.png` + `results.json`.
+
+### BEFORE → AFTER (issues per area)
+| Issue | keywest | bayshore | sandyhook | newark | passaic | total |
+|---|---|---|---|---|---|---|
+| buildingInWater | 37 → 0 | 0 → 0 | 171 → 0 | 0 → 0 | 2 → 0 | **210 → 0** |
+| buildingFloating | 0 → 2 | 0 → 0 | 0 → 0 | 9 → 0 | 29 → 0 | **38 → 2** |
+| buildingSunk | 430 → 1 | 79 → 28 | 27 → 6 | 4258 → 152 | 1544 → 32 | **6338 → 219** |
+| buildingOverlap | 3 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 4 → 0 | **7 → 0** |
+| buildingOnRoad | 25 → 0 | 0 → 0 | 0 → 0 | 8 → 0 | 11 → 0 | **44 → 0** |
+| roadFloating | 79 → 0 | 13 → 0 | 818 → 0 | 0 → 0 | 12 → 0 | **922 → 0** |
+| bridgeUnsupported | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | **0 → 0** |
+| treeBadlyPlaced | 887 → 0 | 46 → 0 | 143 → 0 | 32 → 0 | 32 → 0 | **1140 → 0** |
+| propBadlyPlaced | 1 → 0 | 4 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | **5 → 0** |
+| shorelineGap | 729 → 0 | 451 → 0 | 768 → 0 | 457 → 0 | 429 → 0 | **2834 → 0** |
+| nonFlatWater | 39 → 0 | 0 → 0 | 0 → 0 | 2 → 0 | 1 → 0 | **42 → 0** |
+| pierUnsupported | 213 → 0 | 78 → 0 | 58 → 0 | 0 → 0 | 6 → 0 | **355 → 0** |
+
+### Browser check (Chromium + SwiftShader WebGL2, `?mode=free`; fps not representative)
+| Area | View | Draw calls | Console errors |
+|---|---|---|---|
+| keywest | aerial | 46 | 0 |
+| keywest | duval | 30 | 0 |
+| keywest | docks | 28 | 0 |
+| keywest | bridge | 48 | 0 |
+| keywest | seawall | 35 | 0 |
+| bayshore | aerial | 37 | 0 |
+| bayshore | street | 29 | 0 |
+| bayshore | docks | 37 | 0 |
+| bayshore | bridge | 37 | 0 |
+| bayshore | seawall | 29 | 0 |
+| sandyhook | aerial | 30 | 0 |
+| sandyhook | street | 29 | 0 |
+| sandyhook | docks | 23 | 0 |
+| sandyhook | bridge | 26 | 0 |
+| sandyhook | seawall | 31 | 0 |
+| newark | aerial | 31 | 0 |
+| newark | street | 34 | 0 |
+| newark | seawall | 30 | 0 |
+| passaic | aerial | 43 | 0 |
+| passaic | dock | 36 | 0 |
+| passaic | docks | 42 | 0 |
+| passaic | bridge | 41 | 0 |
+| passaic | seawall | 31 | 0 |
+
+Max draw calls 48 in free-cam views (86–91 in the earlier robot-mode run); budget is 150. 0 console errors in every view.
+
+### Known issues / next steps
+- Audit caveats: shoreline, bridge-support and pier-support checks verify that the fix is *applied* (walls/bents/pilings exist), not how it looks. Real islands are not special-cased: a building is only flagged when ≥35% of its footprint samples are under water, so island buildings pass.
+- Remaining after: 219 buildings sunk >0.5 m (steep Newark/Passaic lots, plinth capped at 1.2 m) and 2 Key West buildings floating 0.1–0.2 m; tune `T`/pad rules in cleanup.ts.
+- No layer data in the bake, so overpasses (road over road) are not detected; add `bridge`/`layer` tags to `tools/bake` and plan them like water bridges.
+- Bridge deck is also the walk/flight floor (`surfaceAt` has no height argument), so you cannot walk or fly under a bridge; add a y argument.
+- Cleanup runs on the main thread at area build (a few hundred ms); could move into `area.worker.ts`.
+- Seawall tops are a fixed 0.5–1.3 m; the bank behind can be higher (Newark). Bake-side fix (carve/level banks in `tools/bake`) would look better than the runtime wall.
+- Existing Playwright specs (`npm run test:smoke`) time out at their 60 s `__city.ready` wait on this machine; area load takes ~40 s headless both on `main` and on this branch (measured), so it is not a regression. Run them on a faster box or raise the timeout.
+- gitleaks is not installed on this machine; run it before merge.

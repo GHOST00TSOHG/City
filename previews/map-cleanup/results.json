@@ -1,0 +1,307 @@
+{
+ "generated": "2026-11-01T08:44:35.418Z",
+ "renderer": "chromium headless, SwiftShader WebGL2 (fps not representative)",
+ "views": [
+  {
+   "area": "keywest",
+   "view": "aerial",
+   "drawCalls": 46,
+   "triangles": 4213702,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-aerial.png"
+  },
+  {
+   "area": "keywest",
+   "view": "duval",
+   "drawCalls": 30,
+   "triangles": 4086199,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-duval.png"
+  },
+  {
+   "area": "keywest",
+   "view": "docks",
+   "drawCalls": 28,
+   "triangles": 4030899,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-docks.png"
+  },
+  {
+   "area": "keywest",
+   "view": "bridge",
+   "drawCalls": 48,
+   "triangles": 4244794,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-bridge.png"
+  },
+  {
+   "area": "keywest",
+   "view": "seawall",
+   "drawCalls": 35,
+   "triangles": 4140445,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-seawall.png"
+  },
+  {
+   "area": "bayshore",
+   "view": "aerial",
+   "drawCalls": 37,
+   "triangles": 2661755,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/bayshore-aerial.png"
+  },
+  {
+   "area": "bayshore",
+   "view": "street",
+   "drawCalls": 29,
+   "triangles": 2656940,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/bayshore-street.png"
+  },
+  {
+   "area": "bayshore",
+   "view": "docks",
+   "drawCalls": 37,
+   "triangles": 2661755,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/bayshore-docks.png"
+  },
+  {
+   "area": "bayshore",
+   "view": "bridge",
+   "drawCalls": 37,
+   "triangles": 2661755,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/bayshore-bridge.png"
+  },
+  {
+   "area": "bayshore",
+   "view": "seawall",
+   "drawCalls": 29,
+   "triangles": 2654353,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/bayshore-seawall.png"
+  },
+  {
+   "area": "sandyhook",
+   "view": "aerial",
+   "drawCalls": 30,
+   "triangles": 3533826,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/sandyhook-aerial.png"
+  },
+  {
+   "area": "sandyhook",
+   "view": "street",
+   "drawCalls": 29,
+   "triangles": 3533643,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/sandyhook-street.png"
+  },
+  {
+   "area": "sandyhook",
+   "view": "docks",
+   "drawCalls": 23,
+   "triangles": 3529245,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/sandyhook-docks.png"
+  },
+  {
+   "area": "sandyhook",
+   "view": "bridge",
+   "drawCalls": 26,
+   "triangles": 3532191,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/sandyhook-bridge.png"
+  },
+  {
+   "area": "sandyhook",
+   "view": "seawall",
+   "drawCalls": 31,
+   "triangles": 3533705,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/sandyhook-seawall.png"
+  },
+  {
+   "area": "newark",
+   "view": "aerial",
+   "drawCalls": 31,
+   "triangles": 1993402,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/newark-aerial.png"
+  },
+  {
+   "area": "newark",
+   "view": "street",
+   "drawCalls": 34,
+   "triangles": 2030047,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/newark-street.png"
+  },
+  {
+   "area": "newark",
+   "view": "seawall",
+   "drawCalls": 30,
+   "triangles": 1975562,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/newark-seawall.png"
+  },
+  {
+   "area": "passaic",
+   "view": "aerial",
+   "drawCalls": 43,
+   "triangles": 1218524,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-aerial.png"
+  },
+  {
+   "area": "passaic",
+   "view": "dock",
+   "drawCalls": 36,
+   "triangles": 1188526,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-dock.png"
+  },
+  {
+   "area": "passaic",
+   "view": "docks",
+   "drawCalls": 42,
+   "triangles": 4129845,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-docks.png"
+  },
+  {
+   "area": "passaic",
+   "view": "bridge",
+   "drawCalls": 41,
+   "triangles": 1163863,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-bridge.png"
+  },
+  {
+   "area": "passaic",
+   "view": "seawall",
+   "drawCalls": 31,
+   "triangles": 1097026,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-seawall.png"
+  }
+ ],
+ "maxDrawCalls": 48,
+ "totalConsoleErrors": 0
+}
