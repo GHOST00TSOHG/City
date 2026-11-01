@@ -54,6 +54,21 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
   };
   rebuild();
   const pose = makePoser(R.bones, TYPES[type].motion, TYPES[type].flight.style);
+  // Foot ground clamp: the lowest sole vertices of each foot (from the kit's own foot geometry) must never go below the floor plane (the
+  // robot root). Heel-to-toe roll and knee bend used to push a big foot (Heavy) 3-4 cm into the ground, so it looked like the foot was missing.
+  const soleAnchors = (side: 'Left' | 'Right') => {
+    const pts: THREE.Vector3[] = []; let lo = 1e9;
+    for (const n of kit.nodes) if (n.slot === 'body' && n.bone === `${side}Foot`) for (const m of n.meshes) { const a = m.geo.attributes.position; for (let i = 0; i < a.count; i++) lo = Math.min(lo, a.getY(i)); }
+    for (const n of kit.nodes) if (n.slot === 'body' && n.bone === `${side}Foot`) for (const m of n.meshes) { const a = m.geo.attributes.position; for (let i = 0; i < a.count; i++) if (a.getY(i) < lo + 0.02) pts.push(new THREE.Vector3(a.getX(i), a.getY(i), a.getZ(i))); }
+    const step = Math.max(1, Math.floor(pts.length / 24)); return { pts: pts.filter((_, i) => i % step === 0), bone: R.by.get(`${side}Foot`)! };
+  };
+  const feet = [soleAnchors('Left'), soleAnchors('Right')], fv = new THREE.Vector3(), GROUND = new Set(['idle', 'walk', 'run', 'land']);
+  const clampFeet = (anim: string) => {
+    const hips = R.by.get('Hips')!; if (!GROUND.has(anim)) return;
+    R.root.updateMatrixWorld(true); const floor = R.root.matrixWorld.elements[13]; let low = 1e9;
+    for (const f of feet) for (const p of f.pts) low = Math.min(low, fv.copy(p).applyMatrix4(f.bone.matrixWorld).y - floor);
+    if (low < 0) { hips.position.y -= low; R.root.updateMatrixWorld(true); }
+  };
   const A = new THREE.Vector3(), B = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), inv = new THREE.Matrix4();
   const aimPistons = () => {
     R.root.updateMatrixWorld(true); inv.copy(R.root.matrixWorld).invert();
@@ -76,7 +91,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    animate(s: PoseInput, dt: number) { pose(s, dt); aimPistons(); },
+    animate(s: PoseInput, dt: number) { pose(s, dt); clampFeet(s.anim); aimPistons(); },
     dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); },
   };
   model.setLook({}); aimPistons();

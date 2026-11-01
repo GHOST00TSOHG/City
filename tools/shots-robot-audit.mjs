@@ -18,4 +18,11 @@ for (const t of TYPES) {
     await p.screenshot({ path: `test-results/audit-${t}-${name}.png`, clip: { x: 640, y: 150, width: 440, height: 640 } });
   }
 }
+// feet: low-angle close-up (camera 0.12 m above the floor, 2.2 m away, looking at the ankles) from the front-left, with the robot standing still
+for (const t of TYPES) {
+  await p.evaluate((t) => window.__robot.setType(t), t); await p.waitForFunction((t) => window.__robot.model.type === t, t, { timeout: 60000 }); await p.waitForTimeout(1500);
+  await p.evaluate(() => { const hs = window.__robot.hangarState; hs.spin = 0; hs.yaw = hs.h + 0.5; hs.shot = { d: 2.4, y: 0.25, ty: 0.2, fov: 40 }; }); await p.waitForTimeout(900);
+  await p.screenshot({ path: `test-results/audit-${t}-feet.png`, clip: { x: 340, y: 250, width: 800, height: 520 } });
+}
+await p.evaluate(() => { window.__robot.hangarState.shot = null; });
 console.log('warnings/errors', errs.length, errs.slice(0, 8)); await b.close();

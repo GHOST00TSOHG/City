@@ -100,7 +100,7 @@ createScene(canvas, areaId).then(async (app) => {
     if (!on) { app.camera.fov = 55; app.camera.updateProjectionMatrix(); app.controls.syncAngles(); hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 5000); }
   };
   // Hangar (join screen): robot stands on the street start on a turntable; pick a look, then Drop in.
-  const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0 };
+  const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0, shot: null as null | { d: number; y: number; ty: number; fov: number; pan?: number } }; // shot = test camera override (audit close-ups)
   const placeHangar = () => { const s = app.spawnPoint(); hangar.x = s.x; hangar.z = s.z; hangar.h = s.heading; hangar.y = app.world.floorAt(s.x, s.z, s.ground + 1.5).y; hangar.yaw = s.heading + Math.PI * 0.85; ctl.pos.set(s.x, hangar.y, s.z); };
   const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
     (t) => switchType(t), () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
@@ -122,6 +122,8 @@ createScene(canvas, areaId).then(async (app) => {
     cam.position.set(hangar.x + fx * d, hangar.y + 0.62 * H, hangar.z + fz * d);
     if (cam.fov !== 40) { cam.fov = 40; cam.updateProjectionMatrix(); }
     cam.lookAt(hangar.x - fz * 0.5 * H, hangar.y + 0.5 * H, hangar.z + fx * 0.5 * H);
+    const sh = hangar.shot; // low close-up: orbit (yaw) camera at distance d, height y above the floor, looking at ty
+    if (sh) { const a = hangar.yaw; cam.position.set(hangar.x + Math.sin(a) * sh.d, hangar.y + sh.y, hangar.z + Math.cos(a) * sh.d); if (cam.fov !== sh.fov) { cam.fov = sh.fov; cam.updateProjectionMatrix(); } cam.lookAt(hangar.x, hangar.y + sh.ty, hangar.z); }
   };
   const joinScreen = robotMode && qs.get('join') !== '0';
   setRobotMode(robotMode);

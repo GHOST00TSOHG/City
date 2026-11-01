@@ -44,7 +44,7 @@ export const TYPES: Record<RobotType, TypeDef> = {
     tune: { walk: 1.15, run: 1.2, cruise: 1.15, burst: 1.2, jump: 1.12, turn: 1.3, accel: 1.3 },
   },
   heavy: {
-    label: 'Heavy', blurb: 'Siege frame. Slow, tanky, hydraulic pistons. Ground-pound (Q).', height: 2.6, sole: -0.32, soleZ: 0.08, tris: 30_000,
+    label: 'Heavy', blurb: 'Siege frame. Slow, tanky, hydraulic pistons. Ground-pound (Q).', height: 2.6, sole: -0.24, soleZ: 0.12, tris: 30_000,
     motion: { mass: 2.2, bob: 1.6, sway: 1.5, stride: 0.8, arms: 0.7, limp: 0, hunch: 0.12, curl: 0.45, special: 'groundpound' }, specialDur: 1.2,
     flight: { style: 'heavy', flame: 1.45, width: 2.5, core: '#f2f6ff', hot: '#a8c8ff', mid: '#ff9a28', edge: '#e83a0a', pulse: 0, dust: 2.8, launch: 0.5, bob: 0.1, smoke: 1.9, soft: 1 },
     slots: { helmet: ['dome', 'slit', 'periscope'], arms: ['piledriver', 'shield', 'gatling'], bionics: ['reactor', 'plate', 'missiles'], legs: ['piston', 'reverse', 'armored'], thrusters: ['booster', 'cans', 'vectored'], boots: ['tank', 'claw', 'stomper'] },
