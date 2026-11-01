@@ -70,7 +70,7 @@ createScene(canvas, areaId).then(async (app) => {
   const fx = createRobotFx(app.scene, app.camera); fx.setColor(look.visor);
   let joints: THREE.Object3D[] = robot.joints;
   let damage = save.robot.damage, repairT = -1;
-  const setDamage = (d: number) => { damage = Math.min(1, Math.max(0, d)); parts.uniforms.damage.value = damage; save.robot.damage = damage; writeSave(save); };
+  const setDamage = (d: number) => { if (d > damage + 0.01) sfx.hit(); damage = Math.min(1, Math.max(0, d)); parts.uniforms.damage.value = damage; save.robot.damage = damage; writeSave(save); };
   setDamage(damage);
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
@@ -87,24 +87,48 @@ createScene(canvas, areaId).then(async (app) => {
   const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
   const heroDrop = () => { const s = app.spawnPoint(); ctl.heroDrop(s.x, s.ground + 160, s.z, s.heading); };
   void loadClips();
-  ctl.onImpact = (p, k) => { fx.impact(p, k); sfx.hit(); };
+  ctl.onImpact = (p, k) => { fx.impact(p, k); };
   // landings scaled by fall speed (s 0..1): Heavy slam = crack decal + dust ring + shockwave + shake, Scout = thruster puff (controller), Worker = steam + hiss hook, Glitch = violet reform pulse
   ctl.onLandFx = (kind, p, s) => {
     sfx.land(s);
     if (kind === 'slam') { fx.impact(p, 0.4 + 1.0 * s); fx.kick(0.35 + 0.9 * s); }
     else if (kind === 'knee') { fx.impact(p, 0.18 + 0.3 * s); }
-    else if (kind === 'quad') { thrust.steam(p, s); fx.kick(0.15 + 0.3 * s); sfx.steam(); }
+    else if (kind === 'quad') { thrust.steam(p, s); fx.kick(0.15 + 0.3 * s); }
     else if (kind === 'voxel') { fx.impact(p, 0.25 + 0.3 * s); }
   };
   ctl.onScrape = (p, v, k) => thrust.scrape(p, v, k);
-  ctl.onBall = (ph) => { if (ph === 'fold') sfx.transform('fold'); else if (ph === 'unfold') sfx.transform('unfold'); fx.kick(ph === 'closed' ? 0.5 : ph === 'open' ? 0.35 : 0.14); }; // snap-lock shake at 'closed' // clunks as the armour starts folding, locks shut, starts unfolding, locks open
+  ctl.onLaunch = (d) => sfx.charge(d);
+  let bumpAt = -9; ctl.onBump = () => { const n = performance.now() / 1000; if (n - bumpAt > 0.45) { bumpAt = n; sfx.bump(); fx.kick(0.15); } };
+  ctl.onSlide = () => sfx.stopSkid(performance.now() / 1000);
+  ctl.onBall = (ph) => { if (ph === 'fold') sfx.transform('fold'); else if (ph === 'unfold') sfx.transform('unfold'); else if (ph === 'open' && save.robot.type === 'worker') sfx.steamVent(); fx.kick(ph === 'closed' ? 0.5 : ph === 'open' ? 0.35 : 0.14); }; // snap-lock shake at 'closed' // clunks as the armour starts folding, locks shut, starts unfolding, locks open
 
   ctl.onSpecial = (kind, phase) => { if (phase === 'start') sfx.special(kind); if (phase === 'hit') fx.kick(kind === 'groundpound' ? 1 : 0.35); };
   let lastStep = 0, lastBurst = 0, wasCloud = false;
   const stepFx = () => { // footfalls every half gait cycle; heavier types shake the camera
     const n = Math.floor(ctl.phase / Math.PI), a = ctl.anim;
-    if (n !== lastStep && (a === 'walk' || a === 'run') && ctl.mode === 'GROUND' && ctl.form < 0.5 && ctl.cloud < 0.5) { sfx.step(); const m = TYPES[save.robot.type].motion.mass; if (m > 1.5) fx.kick(0.12 * m); }
+    if (n !== lastStep && (a === 'walk' || a === 'run') && ctl.mode === 'GROUND' && ctl.form < 0.5 && ctl.cloud < 0.5) { sfx.step(ctl.anim === 'run' && (save.robot.type === 'scout' || save.robot.type === 'worker') ? 'run' : 'walk'); const m = TYPES[save.robot.type].motion.mass; if (m > 1.5) fx.kick(0.12 * m); }
     lastStep = n; if (ctl.burstOn > 0.5 && lastBurst <= 0.5) sfx.boost(); lastBurst = ctl.burstOn;
+  };
+  // ---- per-frame robot audio (docs/AUDIO-SLOTS.md): thrusters, roll / tread / hover loops, Glitch snaps, skids, servos, hydraulics, spatial flyby
+  let peakV = 0, prevHead = 0, servoAt = 0, sparkAt = 0, snapT = 0, wasCharging = false, flyAt = -99, prevTca = 99; const camPrev = new THREE.Vector3(), camV = new THREE.Vector3(), rel = new THREE.Vector3(), rv = new THREE.Vector3(), camF = new THREE.Vector3();
+  const audioFrame = (dt: number) => {
+    const T = save.robot.type, v = Math.hypot(ctl.vel.x, ctl.vel.z), ground = ctl.mode === 'GROUND', fl = ctl.mode === 'ROCKETS', now = performance.now() / 1000;
+    sfx.thrusters(fl, ctl.thrust, dt, ctl.pos.y - ctl.floor.y, ctl.floor.water);
+    sfx.roll(T === 'heavy' && ground && ctl.form >= 0.97 ? v : null);
+    sfx.tread(T === 'worker' && ground && ctl.form >= 0.97 ? v / Math.max(1, ctl.tuning.run) : null);
+    sfx.hover(T === 'scout' && ground && ctl.form >= 0.97, v / Math.max(1, ctl.tuning.run));
+    const cloud = T === 'glitch' && ctl.cloud > 0.5; if (cloud !== wasCloud) { wasCloud = cloud; sfx.glitch(cloud ? 'dissolve' : 'reform'); snapT = 0.3; }
+    if (cloud && v > 3) { snapT -= dt; if (snapT < 0) { snapT = 0.62; sfx.snap(); } } // Luis's pick: teleport snaps (one per 0.62 s) while Glitch runs as a cloud
+    peakV = Math.max(v, peakV - 14 * dt); if (ground && v < 1.2 && peakV > 5.5 && ctl.anim !== 'land') { sfx.stopSkid(now); peakV = 0; }
+    const dh = Math.atan2(Math.sin(ctl.heading - prevHead), Math.cos(ctl.heading - prevHead)) / Math.max(dt, 1e-3); prevHead = ctl.heading;
+    if (ground && Math.abs(dh) > 5 && now - servoAt > 0.7) { servoAt = now; sfx.turnServo(); }
+    if (T === 'worker' && ground && ctl.form >= 0.97 && v > 3 && Math.abs(dh) > 1.6 && now - sparkAt > 1) { sparkAt = now; sfx.treadSparks(); }
+    if (ctl.charging !== wasCharging) { wasCharging = ctl.charging; sfx.hydraulic(ctl.charging ? 'push' : 'release'); }
+    // spatial flyby: when the robot will pass the camera 1.3 s from now (relative speed > 25 m/s, closest approach under 60 m)
+    camV.copy(app.camera.position).sub(camPrev).divideScalar(Math.max(dt, 1e-3)); camPrev.copy(app.camera.position); rel.copy(ctl.pos).sub(app.camera.position); rv.copy(ctl.vel).sub(camV);
+    const sp2 = rv.lengthSq(), tca = sp2 > 625 ? -rel.dot(rv) / sp2 : 99;
+    if (fl && tca <= 1.3 && prevTca > 1.3 && tca > 0 && rel.clone().addScaledVector(rv, tca).length() < 60 && now - flyAt > 6) { flyAt = now; sfx.flyby(ctl.pos); }
+    prevTca = tca; app.camera.getWorldDirection(camF); sfx.updateSpatial(app.camera.position, camF, ctl.pos);
   };
   let robotMode = qs.get('mode') !== 'free';
   const setRobotMode = (on: boolean) => {
@@ -118,7 +142,7 @@ createScene(canvas, areaId).then(async (app) => {
   const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
     (t) => switchType(t), () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
   const setHangar = (on: boolean) => {
-    cust.setOpen(on); if (!on) sfx.powerUp(); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
+    cust.setOpen(on); if (!on) sfx.powerUp(); else if (robotMode) sfx.powerDown(); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
     if (on) { placeHangar(); robot.root.visible = true; robot.root.quaternion.identity(); app.setFocus(ctl.pos); } else if (robotMode) heroDrop();
   };
   let hdrag = false, hx = 0;
@@ -172,7 +196,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__cityCam = app.camera; w.__cityControls = app.controls;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
-  w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
+  w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
   let frames = 0, last = performance.now(), t = 0;
@@ -188,7 +212,7 @@ createScene(canvas, areaId).then(async (app) => {
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); { const fl = ctl.mode === 'ROCKETS'; sfx.thrusters(fl, ctl.thrust, dt); sfx.roll(save.robot.type === 'heavy' && ctl.form >= 0.97 && ctl.mode === 'GROUND', Math.hypot(ctl.vel.x, ctl.vel.z) / Math.max(1, ctl.tuning.run)); sfx.tread(save.robot.type === 'worker' && ctl.form >= 0.97 && ctl.mode === 'GROUND', Math.hypot(ctl.vel.x, ctl.vel.z) / Math.max(1, ctl.tuning.run)); sfx.cloud(ctl.cloud > 0.5); if (ctl.cloud > 0.5 !== wasCloud) { wasCloud = ctl.cloud > 0.5; sfx.glitch(wasCloud ? 'dissolve' : 'reform'); } } hud.update(dt, ctl); stepFx(); }
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); audioFrame(dt); hud.update(dt, ctl); stepFx(); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;

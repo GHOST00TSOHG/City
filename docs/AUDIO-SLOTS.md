@@ -1,59 +1,74 @@
-# Robot audio slots
+# Robot audio slots (Echo v3)
 
-Files: `public/audio/robots/<type>/<type>_<slot>.{ogg,m4a}` (both formats). The game reads `public/audio/robots/manifest.json` (`node tools/audio-manifest.mjs` regenerates it) and only fetches slots listed there, so **a missing file is silent: no request, no 404, no console error**. Add a file, run the manifest tool, commit. Code: `src/robot/audio.ts`. All clips play at gain 1.0 (level is mastered in the file), one master gain. Robots are **silent standing still**: the old idle loop slot is gone (files deleted).
+Files: `public/audio/robots/<type>/<type>-<slot>.{ogg,m4a}` (docs/audio-robots-v3/README.md). Code: `src/robot/audio.ts`, wiring in `src/main.ts` (`audioFrame`) and `src/robot/controller.ts`. Test: `BROWSER=webkit node tools/test-robot-audio.mjs`.
 
-Timings below are exact for the current code at **60 fps (1 frame = 16.67 ms)**. "t = 0" is the event named in the trigger column.
+Rules in force: **no idle sound** (robots are silent standing still); **every loop plays from the .ogg** (sample-seamless 4.00 s); one-shots use .ogg and fall back to .m4a only if the ogg cannot be decoded; a slot missing from `public/audio/robots/manifest.json` (`node tools/audio-manifest.mjs`) is never requested, so **a missing file is silent with no 404 and no console error**; all clips play at gain 1.0 unless a map below says otherwise (levels are mastered in the files); `flyby-mono` is positional (HRTF panner).
 
-## Slots (all four robots unless a column says otherwise)
+**Frames are at 60 fps (1 frame = 16.67 ms).** "t = 0" is the trigger event. The four robots share every slot except where a row says otherwise.
 
-| slot | type | trigger | timing | present today |
-|---|---|---|---|---|
-| `footstep_01..03` | one-shot, round-robin | every half gait cycle while on foot (not while folded as a ball or while Glitch is a cloud) | see step-rate table | all four |
-| `power_up` | one-shot | robot spawns, is selected in the garage, or the garage closes (Enter world) | t = 0 at the event; no repeat inside the same frame | none (Echo) |
-| `boost` | one-shot, the big surge + roar | the super-fast rocket kick: Shift BURST starts while flying | burst smoothing is 1 - e^(-8 dt): 50% at 5 frames (0.09 s) after the key; play at the key press | all four |
-| `hit` | one-shot | wall bonk / non-landing impact (damage) | t = 0 at impact | all four |
-| `land_light` / `land_heavy` | one-shots | touchdown after a fall; strength s = clamp((fall speed - 6) / 34, 0, 1); **s < 0.5 plays `_light`, s >= 0.5 plays `_heavy`** (0.5 = 23 m/s, about a 12 m fall; the hero drop is s = 1) | impact at landing frame 0; typed landings last (0.75 to 0.85) + 0.55 s (+ 0.55 x s) (see below) | none (Echo) |
-| `transform` / `unfold` | one-shots | Heavy, Scout: fold starts / unfold starts (the clip carries the clunks and the final lock). **Worker uses `tread_transform` / `tread_unfold` instead** | see transform table | none (Echo) |
-| `thruster_ignite` | one-shot | rockets light (take-off kick: mode becomes ROCKETS; Heavy waits out its 0.5 s crouch, Scout 0.12 s, Worker 0.2 s) | t = 0 on the frame the rockets light; throttle reaches 63% 6 frames (0.1 s) later | none (Echo) |
-| `thruster_burn_loop` | loop | while flying; gain = 0.3 + 0.7 x throttle (throttle 0.35 hover .. 1 climb / burst) | starts at ignite, follows throttle every frame | none (Echo) |
-| `thruster_cutoff` | one-shot | rockets stop (auto-land set-down, or the touchdown) | t = 0 on the frame flight ends | none (Echo) |
-| `special_groundpound` (Heavy) | one-shot | Z special | impact at 0.47 s = frame 28 after the key | heavy |
-| `special_blinkdash` (Glitch) | one-shot | Z special | dissolve 0 to 0.12 s (frames 0 to 7), reform burst at 0.42 s = frame 25 | glitch |
-| `roll_loop` (Heavy) | loop | ball closed (form >= 0.97) and on the ground; gain = min(1, 0.3 + v/run); playback rate 0.8 + 0.4 x min(1.2, v/run) | starts at the lock frame, stops when the unfold starts; speed range **0 to 5.85 m/s** (rate 0.8 to 1.2) | none (Echo) |
-| `tread_transform` (Worker) | one-shot | tread mode starts: ground speed passes **5.0 m/s** while running (Shift+W) | t = 0 on that frame (about 3 frames, 0.05 s, after Shift when walking at 3.4 m/s); the clip should carry the plate clunks and the snap lock at **frame 48** (0.80 s) | none (Echo) |
-| `tread_unfold` (Worker) | one-shot | ground speed falls below **3.6 m/s** while in tread mode (hysteresis band 1.4 m/s, so it cannot flicker) | t = 0 on that frame (about 11 frames, 0.18 s, after the keys are released at full speed: tread mode brakes like a tank, speed x e^(-4 t)); snap lock at **frame 42** (0.70 s) | none (Echo) |
-| `tread_growl` (Worker) | loop (diesel) | treads out and locked (form >= 0.97) and on the ground; **gain = 0.35 + 0.65 x v, playback rate = 0.75 + 0.5 x v**, v = ground speed / 7.5 m/s | starts at the lock frame (frame 48 after the fold began), stops when the unfold starts; range 3.6 to 7.5 m/s means v 0.48 to 1.0: gain 0.66 to 1.0, rate 0.99 to 1.25 | none (Echo) |
-| `tread_clatter` (Worker) | loop (track) | same condition; **gain = 0.3 + 0.7 x v, playback rate = 0.6 + 0.9 x v** | same start / stop; range: gain 0.64 to 1.0, rate 1.03 to 1.5 | none (Echo) |
-| `land_hiss` (Worker) | one-shot | four-limb landing steam burst | t = 0 at touchdown (with the steam puffs); strength does not change the file | none (Echo) |
-| `thrust_hum` (Glitch) | loop | **only while flying** (mode ROCKETS); gain = max(0.15, throttle) | starts on ignite frame, stops on the frame flight ends | none (Echo) |
-| `thrust_crackle` (Glitch) | one-shots | while flying and throttle > 0.05, every 0.15 to 0.55 s at random | random | none (Echo) |
-| `dissolve` (Glitch) | one-shot | running starts: cloud blends in (cloud weight 1 - e^(-3.2 dt)) | t = 0 when the cloud passes 0.5 (about 13 frames, 0.22 s, after Shift+W) | none (Echo) |
-| `cloud_loop` (Glitch) | loop | while the cloud weight is above 0.5 (calm drift) | from the dissolve frame until the re-form frame | none (Echo) |
-| `reform` (Glitch) | one-shot | he stops: cloud weight falls below 0.5 (rate 4.5 /s, about 9 frames, 0.15 s after the keys are released), soft burst at the same frame | t = 0 at that frame; solid again about 0.5 s later (30 frames) | none (Echo) |
+## One-shots
 
-## Transformations (on foot only; no transform while flying; Glitch does not transform)
+| slot | trigger | exact timing |
+|---|---|---|
+| `power-up` | robot spawns (game start / Enter world) or is selected in the garage | t = 0 on that frame |
+| `power-down` | the garage is opened from the world (robot shuts down) | t = 0 |
+| `switch`, `footstep-grass/wood/metal_*` | **not wired**: no robot-switch event distinct from garage select, and the world has no surface types yet | |
+| `footstep_01..03` | walking and jog plants, random, never the same file twice in a row | one plant every pi / (v x 2.6) s: **scout** 3.91 m/s = 0.309 s (18.5 frames), **heavy** 2.72 = 0.444 s (26.7), **worker** 3.40 = 0.355 s (21.3), **glitch** 3.57 = 0.338 s (20.3) |
+| `run-step_01..03` | run plants while not transformed (Scout, Worker, first 0.4 s of a run before the plates move far enough: form < 0.5) | one plant every pi / (v x 1.5) s: scout 9.0 m/s = 0.233 s (14.0 frames), worker 7.5 = 0.279 s (16.8). Heavy (ball), Worker (tread) and Glitch (cloud) are silent on foot at speed: their loops / snaps take over |
+| `turn-servo` | yaw rate above 5 rad/s on the ground, 0.7 s (42 frames) cooldown | t = 0 on the first frame above the rate |
+| `stop-skid` | ground speed was above 5.5 m/s and falls under 1.2 m/s, or Scout's slide starts; 0.8 s (48 frames) cooldown | t = 0 on that frame |
+| `hydraulic-push` / `hydraulic-release` | hold X (power-up crouch) starts / ends | t = 0 |
+| `bump-clang` | running or flying into a wall (building / pole), 0.45 s (27 frames) cooldown | t = 0 on the contact frame |
+| `hit` | damage taken (K debug key until zombies exist) | t = 0 |
+| `land-slam` (Heavy), `land-knee` (Scout), `land-hiss` (Worker), `land-reform` (Glitch) `_light` / `_heavy` | touchdown after a fall. strength s = clamp((fall speed - 6) / 34, 0, 1): **s < 0.5 plays `_light`, s >= 0.5 plays `_heavy`** (0.5 = 23 m/s down, about a 12 m fall; the hero drop is s = 1). Plain landings use the same variants | impact = landing frame 0 (the clip's impact is at its frame 0). Landing animation lasts (0.75 / 0.85 / 0.80 / 0.70 s) + 0.55 x s |
+| `special` Heavy ground pound | Z: plays `land-slam_heavy` | impact 0.47 s = frame 28 after the key |
+| `teleport-snap_01..03` (Glitch special) | Z blink-dash | dissolve 0 to 0.12 s (frames 0 to 7), reform burst 0.42 s = frame 25 |
+| `takeoff-charge` (1.5 s clip) | F on the ground: crouch / spool-up. The take-off crouch is shorter than the clip, so the clip starts that far into itself and **its end meets the ignite** | crouch (= audible part of the charge): Heavy 0.50 s (30 frames), Worker 0.20 s (12), Scout 0.12 s (7), Glitch 0.10 s (6); ignite at the same frame the crouch ends |
+| `thrust-ignite` (1.3 s clip) | the rockets light (end of the crouch, or F / Space again in the air) | t = 0. Burn loop enters at +0.95 s (frame 57), fades in over 0.3 s (18 frames): full level at +1.25 s (frame 75) |
+| `boost` (2.0 s clip) | the super-fast rocket kick: Shift BURST starts while flying; layers over the burn loop | the burst weight reaches 50% 0.087 s (5 frames) after the key: t = 0 there; clip ends 120 frames later |
+| `thrust-cutoff` | the rockets stop (landing set-down, F, touchdown) | t = 0; the burn loop fades out over 0.15 s (9 frames) |
+| `thrust-crackle` (Glitch) | while flying and throttle > 0.05, random every 0.15 to 0.55 s (9 to 33 frames) | random |
+| `flyby-mono` (2.6 s, positional) | flying, the robot will pass the camera: closest approach predicted 1.3 s ahead, relative speed above 25 m/s, miss distance under 60 m, 6 s (360 frames) cooldown. The panner follows the robot, the camera is the listener | clip starts 1.3 s (78 frames) before the pass; peak at 78 frames. (`flyby` stereo is not used) |
+| `tread-transform` (Worker) | tread mode starts: ground speed passes **5.0 m/s** while running | clip starts 0.05 s (3 frames) late so its **lock snap at 0.75 s lands at the game lock, frame 48 (0.80 s)** |
+| `transform` (Heavy, Scout) | fold starts (Shift+W on the ground) | same: 3 frames late, lock at frame 48 |
+| `tread-unfold`, `unfold` | unfold starts (Heavy / Scout: keys released, Scout after its slide; Worker: speed below **3.6 m/s**) | t = 0; unfold ends at frame 48 (0.8 s) |
+| `steam-vent` (Worker) | tread unfold finished | frame 48 after the unfold started |
+| `tread-turn-sparks` (Worker) | treads out, speed above 3 m/s, yaw rate above 1.6 rad/s, 1.0 s (60 frames) cooldown | t = 0 |
+| `dissolve` (Glitch) | running starts: the cloud weight (1 - e^(-3.2 t)) passes 0.5 | 0.217 s (13 frames) after Shift+W |
+| `teleport-snap_01..03` (Glitch on foot, **Luis's pick**) | while running as a cloud at over 3 m/s: first snap 0.3 s (18 frames) after the dissolve, then every 0.62 s (37 frames); random, no immediate repeat | |
+| `reform` (Glitch) | he stops: cloud weight (rate 4.5 /s) falls below 0.5 | 0.154 s (9 frames) after the keys are released; solid about 0.5 s (30 frames) later |
+| `cloud` loop file | **not used** (Luis chose the teleport snaps for the on-foot run) | |
 
-| robot | form | fold | unfold | lock frame (snap + camera shake) | plate wave |
-|---|---|---|---|---|---|
-| Heavy | armoured ball (rolls) | 0.80 s = **48 frames** | 0.70 s = **42 frames**, after the roll eases upright (up to about 20 frames) | fold lock at frame 48 (`closed`, shake 0.5); open lock at frame 42 (`open`, shake 0.35) | plates start between frame 0 and 22, each lasts 26 frames; gears spin up mid-fold (peak about frame 24) |
-| Scout | low hover-sprint | 0.60 s = **36 frames** | 0.50 s = **30 frames** (waits through the slide, 0.85 s) | frame 36 / frame 30 | starts 0 to 17, 19 frames each |
-| Worker | **tread mode**: legs fold up, tank treads drop from the shins | 0.80 s = **48 frames** | 0.70 s = **42 frames** | frame 48 / frame 42 | plates start between frame 0 and 22, 26 frames each; left tread drops between frames 12 and 41, right between frames 16 and 45 (staggered); on unfold the right tread lifts first (frames 3 to 28) then the left (frames 6 to 32) |
+## Loops (always .ogg)
 
-Worker's fold starts when ground speed passes 5.0 m/s while running and ends below 3.6 m/s (the other two start with Shift+W and end when the keys are released); the unfold starts when the keys are released. Fold-phase events: `fold` at frame 0, `closed` at the lock frame; unfold: `unfold` at frame 0, `open` at the lock frame. Only `fold` / `unfold` play a file (`transform` / `unfold`); the lock (snap) is a moment inside that clip at the times above.
+| slot | plays while | gain / rate map | start / stop |
+|---|---|---|---|
+| `thrust-burn` (Glitch: `thrust-hum`, **only while flying**) | flying (rockets on) | rate = 0.9 + 0.25 x throttle (throttle 0.35 hover to 1.0 climb or burst: rate 0.99 to 1.15); gain = (0.6 + 0.4 x throttle) x (1 - 0.6 x skim) | enters 0.95 s (frame 57) after the ignite with a 0.3 s (18 frame) fade-in; stops with a 0.15 s (9 frame) fade at the cutoff. Glitch's hum is silent on the ground |
+| `water-skim` | flying within 8 m of the water surface: skim = 1 - altitude / 8 | gain = skim (fade 0.2 s = 12 frames), crossfaded against the burn loop | |
+| `roll` (Heavy) | ball closed (form >= 0.97) on the ground. **README map: rate = 0.8 + 0.4 x clamp((v - 16) / 9, 0, 1) over 16 to 25 m/s; gain = -4 dB at 16 m/s rising to 0 dB at 25 m/s** (-4 dB / rate 0.8 below 16). The closed ball now accelerates to **25 m/s** (`BALL_TOP`) so the whole range is used | rate 0.8 to 1.2, gain 0.63 to 1.0 | starts at the lock (frame 47 after the fold began, speed about 5.9 m/s), reaches 16 m/s 0.22 s (13 frames) later and 24 m/s after 0.85 s (51 frames); stops when the unfold starts (0.15 s fade) |
+| `tread-growl` (Worker) | treads out and locked (form >= 0.97) | u = speed / 7.5 m/s (clamped 0..1). **rate = 0.85 + 0.5 x u**; gain = -12 dB x (1 - u): -12 dB at crawl to 0 dB at 7.5 m/s. In tread mode speed runs 3.6 to 7.5 m/s: u 0.48 to 1.0, rate 1.09 to 1.35, gain 0.49 to 1.0 | starts at the lock (frame 47 after the fold began), stops at the unfold |
+| `tread-clatter` (Worker) | same | **rate = 0.6 + 0.9 x u**, same gain map: rate 1.03 to 1.5 | same |
+| `hover-sprint` (Scout) | the low hover-sprint form is locked (form >= 0.97, includes the slide) | gain = 0.55 + 0.45 x speed / 9 m/s (0.55 standing in form, 1.0 at 9 m/s), rate 1 | starts at the lock (frame 47), stops at the unfold |
 
-## Landings (typed, by fall speed)
+## Transformations (on foot only; flying never transforms; Glitch does not transform)
 
-Duration = base + 0.55 x s: Heavy slam 0.75, Scout one-knee 0.85, Worker quad 0.80, Glitch voxel 0.70 (s = 0.25 to 1 gives 0.89 to 1.30 s for Heavy = 53 to 78 frames). Impact is landing frame 0 (dust ring, crack decal, shake, steam happen at frame 0). Pose is deepest at 16% (frames 9 to 12) and the rise starts at 60%. Scout springs up at 62% to 80% of the duration. Glitch: dissolve starts when the feet are under 1.7 m and falling faster than 3 m/s (0.06 to 0.5 s before touchdown), voxels rain until frame 0, **reform + violet pulse at frame 11 (0.18 s) after touchdown**.
+All three: **fold 0.80 s = 48 frames, unfold 0.80 s = 48 frames** (matches Echo's clips). Plate waves start between frame 0 and 22 and last 26 frames each; gears peak around frame 24. Lock snap + camera shake at frame 48 (fold) and frame 48 (unfold).
 
-## Step rate per gait (footstep slots)
+| robot | form | starts when | unfold when |
+|---|---|---|---|
+| Heavy | armoured ball (rolls) | Shift+W on the ground | keys released; the roll eases upright first (up to about 20 frames) |
+| Scout | low hover-sprint | Shift+W on the ground | keys released and the 0.85 s (51 frames) slide is over |
+| Worker | tread mode | running and ground speed above **5.0 m/s** (about 3 frames after Shift while walking at 3.4 m/s) | speed below **3.6 m/s** (hysteresis band 1.4 m/s; tread mode brakes with momentum, so about 11 frames after the keys are released at full speed) |
 
-A step plays every half gait cycle: steps/s = ground speed x k / pi with k = 2.6 below 5 m/s and 1.5 above.
+## Speed ranges at a glance
 
-| robot | walk speed | walk step rate | run speed | run step rate |
-|---|---|---|---|---|
-| scout | 3.91 m/s | 3.24/s (18.5 frames) | 9.00 m/s | 4.30/s (14.0 frames) |
-| heavy | 2.72 m/s | 2.25/s (26.7 frames) | 5.85 m/s | 2.79/s (21.5 frames) |
-| worker | 3.40 m/s | 2.81/s (21.3 frames) | 7.50 m/s | 3.58/s (16.8 frames) |
-| glitch | 3.57 m/s | 2.95/s (20.3 frames) | 8.10 m/s | 3.87/s (15.5 frames) |
+| robot | walk | run / form speed | loop in that form |
+|---|---|---|---|
+| Scout | 3.91 m/s | 9.0 m/s | `hover-sprint`, gain 0.55 to 1.0 |
+| Heavy | 2.72 m/s | ball 5.9 m/s at the lock, up to 25 m/s | `roll`, 16 to 25 m/s mapped to rate 0.8 to 1.2, gain -4 to 0 dB |
+| Worker | 3.40 m/s | tread mode 3.6 to 7.5 m/s | `tread-growl` rate 1.09 to 1.35, `tread-clatter` rate 1.03 to 1.5, gain -6 to 0 dB |
+| Glitch | 3.57 m/s | cloud 8.1 m/s | none: `dissolve`, snaps every 0.62 s, `reform` |
 
-Heavy has no run footsteps (he is a ball: `roll_loop`), Glitch has none while a cloud, Scout slides silently (add a `slide` slot later if wanted), Worker has no run footsteps in tread mode (`tread_growl` / `tread_clatter` instead); below 5.0 m/s he stays upright and uses the footsteps (walk and jog).
+## Landing strength at a glance
+
+Strength 0.5 = 23 m/s downward. A 30 m drop is s = 0.83 (`_heavy`); a 2.2 m drop is s = 0.25 floor (`_light`).
