@@ -4,7 +4,10 @@ import * as THREE from 'three/webgpu';
 import { createSky } from './sky';
 import { createFlyControls } from './flyControls';
 import { loadArea } from './area/data';
-import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
+import { buildTerrain, buildRoads, buildPools } from './area/ground';
+import { cleanArea } from './area/cleanup';
+import { buildWaterfront } from './area/waterfront';
+import { buildDocks } from './area/docks';
 import { buildBuildings } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
 import { loadMaterialTextures, styleFor, GROUND_GAIN, GROUND_SCALE } from './area/textures';
@@ -114,7 +117,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
   /** Builds one area's meshes into a group (not yet in the scene). Data comes from the preload cache when warm. */
   async function buildContent(id: string) {
-    const { area, terrain, mask } = await loadArea(id);
+    const loaded = await loadArea(id), terrain = loaded.terrain, mask = loaded.mask;
+    const cleaned = cleanArea(loaded.area, terrain), area = cleaned.area; // grounded buildings, ground under roads, bridges, seawalls, culled props (src/area/cleanup.ts)
     const group = new THREE.Group(); group.name = 'area:' + id;
     // Landmarks first: their footprints decide which generated buildings are never built (once per area load).
     const origin = (areaDefs as Record<string, any>)[id]?.origin as { lat: number; lon: number } | undefined;
@@ -126,8 +130,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const trees = await buildTrees(area.trees as number[], terrain, id === 'keywest'); // palms only in Key West
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
-    const roads = buildRoads(area, terrain, roadMat);
-    group.add(buildTerrain(terrain, groundMat, style), roads, buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
+    const roads = buildRoads(area, terrain, roadMat, cleaned.plans), docks = buildDocks(area.piers, terrain), front = buildWaterfront(cleaned.bridges, cleaned.plans, cleaned.walls, terrain, roadMat);
+    group.add(buildTerrain(terrain, groundMat, style), roads, buildPools(area, terrain, roadMat), front, docks.group, blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group);
     const interiors = createInteriors(buildings, terrain); group.add(interiors.group);

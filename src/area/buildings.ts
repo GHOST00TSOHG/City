@@ -31,8 +31,8 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     else roof.setRGB(1, 1, 1).multiplyScalar(0.85 + h3 * 0.3); trim.copy(wall).multiplyScalar(0.82);
     const pack = wm * 4 + rm * 32;
     let gmin = Infinity; for (const [x, z] of outer) gmin = Math.min(gmin, terrain.heightAt(x, z));
-    gmin = Math.max(gmin, 0.2);
-    const base = b.m > 0 ? gmin + b.m : gmin - 0.4;
+    gmin = b.pad ?? Math.max(gmin, 0.2); // clean-up sets the floor level (pad) and a foundation (fy) down to the lowest ground
+    const base = b.m > 0 ? gmin + b.m : (b.fy ?? gmin - 0.4);
     const top = gmin + b.h;
     const pitched = b.s !== 'flat' && b.rh > 0.2;
     const eave = pitched ? top - b.rh : top;
