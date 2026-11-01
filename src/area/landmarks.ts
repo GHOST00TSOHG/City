@@ -60,11 +60,12 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       lod.scale.setScalar(m.scale ?? 1);
       const x = (m.lon - origin.lon) * k * c, z = -(m.lat - origin.lat) * k;
       lod.position.set(x, 0, z); lod.updateMatrixWorld(true);
-      // Sit on the lowest ground under the footprint (origin = lowest street-side point, spec §1).
       const box = new THREE.Box3().setFromObject(levels[0]);
-      let y = Infinity;
-      for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) y = Math.min(y, terrain.heightAt(sx, sz));
-      lod.position.y = m.elevationM ?? Math.max(y, 0); lod.updateMatrixWorld(true);
+      let groundY = Infinity;
+      for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) groundY = Math.min(groundY, terrain.heightAt(sx, sz));
+      const baseY = m.elevationM ?? Math.max(groundY, 0);
+      lod.position.y = baseY - box.min.y;
+      lod.updateMatrixWorld(true);
       group.add(lod);
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
       const pts: [number, number][] = m.footprint?.length! >= 3
@@ -75,7 +76,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       const boxPts = ([[local.min.x, local.min.z], [local.max.x, local.min.z], [local.max.x, local.max.z], [local.min.x, local.max.z]] as const)
         .map(([px, pz]) => { const v = new THREE.Vector3(px, 0, pz).applyMatrix4(lod.matrixWorld); return [v.x, v.z] as [number, number]; });
       const f = makeFootprint(m.id, pts, 0), fb = makeFootprint(m.id, boxPts, 0);
-      pads.push({ id: m.id, pts: boxPts, y: lod.position.y, minX: Math.min(f.minX, fb.minX), maxX: Math.max(f.maxX, fb.maxX), minZ: Math.min(f.minZ, fb.minZ), maxZ: Math.max(f.maxZ, fb.maxZ) });
+      pads.push({ id: m.id, pts: boxPts, y: baseY, minX: Math.min(f.minX, fb.minX), maxX: Math.max(f.maxX, fb.maxX), minZ: Math.min(f.minZ, fb.minZ), maxZ: Math.max(f.maxZ, fb.maxZ) });
       if (m.cullMarginM !== false) footprints.push(makeFootprint(m.id, pts, Math.max(0, m.cullMarginM ?? 4)));
     } catch (e) { console.warn('[City] landmark failed', areaId, slug, e); }
   }
