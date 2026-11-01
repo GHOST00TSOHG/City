@@ -47,7 +47,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Landmark: Branch Brook Park Octagon Shelter (`newark` / `branch-brook-park-octagon-shelter`) | jonn/newark-branch-brook-park-octagon-shelter | Grok Bot for Jonn (BlvckFish) | PR open | 2026-11-01 |
 | Landmark: clear vegetation + flatten terrain under footprints | bot/websmith-landmarks-terrain | Grok Bot (Websmith) | PR open | 2026-11-01 |
 | Landmark: Military Park, Wars of America + park pavilion (`newark` / `wars-of-america`, `military-park-pavilion`) | jonn/newark-military-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
-| Map cleanup: floating/sunk buildings and roads, water, overlaps, coast/docks, ground void, solid shells (all areas) | bot/websmith-map-cleanup | Claude (Websmith) | in progress, not pushed | 2026-11-01 |
+| Map cleanup: floating/sunk buildings and roads, water, overlaps, coast/docks, ground void, solid shells (all areas) | bot/websmith-map-cleanup | Claude (Websmith) | PR open (partial: shore/docks + ground void left) | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
@@ -224,3 +224,25 @@ Branch on top of main + Jonn's PR #35 model. Not pushed, deployed or merged.
 - **Tools added:** `tools/penn-views.py`, `tools/contact-sheet.py`, `tools/glb-info.py` (plus `orbit.py`, `close-lm.mjs` committed); `.blend` removed from the repo (`*.blend` is gitignored).
 - **Rebuild:** `python3 build_penn.py` (textures) then `blender -b --factory-startup --python build_penn.py`; check with `python3 audit_penn.py`.
 - **Known issues:** auto-LOD shots from street level are often blocked by neighbouring city buildings, so the 220/700 m crossing was verified with forced LODs plus a few auto views, not a clean walk-up. The city draws its own rail/road strips on the shed roof (not part of the model). Shed ends are brick with windows only. Eagles/columns are stylised masses, not copies of the carvings. gitleaks is not installed here, so it was not run.
+
+## Map cleanup (bot/websmith-map-cleanup, 2026-11-01, partial)
+Stopped early: Claude session reached 92% (rule: stop near 95%). Audit: `node tools/map-audit.mjs <label>` -> `tools/map-audit.out/<label>.json` (before.json = a3cd4bb, mid.json = this head). WebKit stills: `node tools/map-shots.mjs <port> <outdir>` (views in tools/map-views.json).
+
+| class (all 5 areas) | before | now |
+|---|---|---|
+| a floating buildings | 294 | 0 |
+| b sunk buildings | 7839 | 0 |
+| c road tris floating / sunk | 566469 / 37393 | 0 / 0 |
+| d buildings in water | 226 | 0 |
+| e overlapping buildings | 162 | 0 |
+| h non-solid buildings | 29016 | 0 |
+| f shore steps / edge steps | 5520 / 8482 | 5520 / 8482 (not fixed) |
+| f piers floating / sunk, flat waterline tris | 1 / 39, 1 | same (not fixed) |
+| g ground-void rays (Newark 43995, Passaic 44851) | 115678 | 115678 (not fixed; void past Penn still visible from max altitude) |
+
+Real-GPU WebKit (headless:false, 36 views): 59.9-60.1 fps median, min >= 59.9; draw calls 11-82 (max newark-penn-edge-low-W). Triangles rose (road draping: Newark ~3.7-5.0 M -> 5.4-6.7 M in view) with no fps loss. Console errors: 20 = the known 4 font 403s per area (node_modules symlink), nothing else.
+
+Remaining for this task (next session): f shoreline/coast-edge steps and dock seating; g fill/extend ground so no void from any reachable angle (Penn/Newark edge first; e.g. far low-detail ground ring + skirt + matched fog); re-run audit -> after.json; WebKit after set; npm run build + smoke.
+
+### Next after that: area connection build (not started)
+Short NJ road + Key West fly-over; profile trees first; ring streaming + flight-aware preload scaled by speed/altitude with simpler detail when high/fast; one world registry and one player-state object; fps/memory tested with all areas loaded.
