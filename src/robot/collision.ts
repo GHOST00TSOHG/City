@@ -12,7 +12,7 @@ export function createCollision(list: Building[], terrain: Terrain, landmarks: L
     let gmin = Infinity, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const [x, z] of pts) { gmin = Math.min(gmin, terrain.heightAt(x, z)); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
     // Pitched roofs: stand at the mean of eave and ridge (close enough for a 1.35 m robot; flat roofs exact).
-    const top = Math.max(gmin, 0.2) + b.h - (b.s !== 'flat' && b.rh > 0.2 ? b.rh * 0.5 : 0);
+    const top = (b.pad ?? Math.max(gmin, 0.2)) + b.h - (b.s !== 'flat' && b.rh > 0.2 ? b.rh * 0.5 : 0);
     const i = polys.push({ pts, top, minX, maxX, minZ, maxZ }) - 1;
     for (let ix = Math.floor(minX / CELL); ix <= Math.floor(maxX / CELL); ix++) for (let iz = Math.floor(minZ / CELL); iz <= Math.floor(maxZ / CELL); iz++) {
       const k = key(ix, iz); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(i);

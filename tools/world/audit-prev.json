@@ -1,0 +1,686 @@
+{
+ "mode": "prev",
+ "generated": "2026-11-01T09:18:46.631Z",
+ "areas": {
+  "keywest": {
+   "counts": {
+    "buildingInWater": 0,
+    "buildingFloating": 0,
+    "buildingSunk": 0,
+    "buildingOverlap": 0,
+    "buildingOnRoad": 0,
+    "roadFloating": 0,
+    "bridgeUnsupported": 0,
+    "treeBadlyPlaced": 0,
+    "propBadlyPlaced": 0,
+    "shorelineGap": 0,
+    "nonFlatWater": 0,
+    "pierUnsupported": 0,
+    "bridgeSolidBelow": 0,
+    "bridgeNoClearance": 31,
+    "overpassMissing": 1,
+    "pilingThroughDeck": 11062,
+    "pilingMisplaced": 818
+   },
+   "totals": {
+    "buildings": 7560,
+    "roads": 2859,
+    "trees": 24618,
+    "lamps": 2368,
+    "pools": 1103,
+    "piers": 213,
+    "bridges": 31,
+    "seawallSegments": 710,
+    "shoreSegments": 3682
+   },
+   "fixes": {
+    "roadsClipped": 11,
+    "causewaysBuilt": 39,
+    "bridgesBuilt": 31,
+    "bridgeMetres": 1685,
+    "pierBents": 215,
+    "overpassesBuilt": 0,
+    "causewayVerts": 179,
+    "poolsLevelled": 1103,
+    "buildingsRemovedInWater": 37,
+    "buildingsShoreFilled": 13,
+    "buildingsRemovedOnRoad": 25,
+    "buildingsRemovedOverlap": 3,
+    "buildingsSnapped": 7523,
+    "buildingsKept": 7560,
+    "buildingsRemoved": 65,
+    "treesRemovedWater": 849,
+    "treesRemovedBuilding": 31,
+    "treesRemovedRoad": 2,
+    "lampsRemovedBuilding": 1,
+    "seawallSegments": 710,
+    "seawallMetres": 4363,
+    "beachVerts": 2152,
+    "docks": {
+     "pilings": 11062,
+     "cleats": 2824,
+     "bumpers": 4869,
+     "ladders": 328,
+     "boats": 192
+    }
+   },
+   "examples": {
+    "bridgeNoClearance": [
+     {
+      "road": 139,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 471,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 533,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 867,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 891,
+      "kind": "water",
+      "headroom": 0.5
+     }
+    ],
+    "overpassMissing": [
+     {
+      "road": 99,
+      "x": -1163,
+      "z": -210
+     }
+    ],
+    "pilingThroughDeck": [
+     {
+      "x": -1229,
+      "z": 171,
+      "above": 0.45
+     },
+     {
+      "x": -1228,
+      "z": 169,
+      "above": 0.45
+     },
+     {
+      "x": -1226,
+      "z": 168,
+      "above": 0.45
+     },
+     {
+      "x": -1225,
+      "z": 166,
+      "above": 0.45
+     },
+     {
+      "x": -1225,
+      "z": 166,
+      "above": 0.45
+     }
+    ],
+    "pilingMisplaced": [
+     {
+      "x": -1499,
+      "z": 123
+     },
+     {
+      "x": -1499,
+      "z": 122
+     },
+     {
+      "x": -1248,
+      "z": -378
+     },
+     {
+      "x": -1245,
+      "z": -380
+     },
+     {
+      "x": -1246,
+      "z": -380
+     }
+    ]
+   }
+  },
+  "bayshore": {
+   "counts": {
+    "buildingInWater": 0,
+    "buildingFloating": 0,
+    "buildingSunk": 0,
+    "buildingOverlap": 0,
+    "buildingOnRoad": 0,
+    "roadFloating": 0,
+    "bridgeUnsupported": 0,
+    "treeBadlyPlaced": 0,
+    "propBadlyPlaced": 0,
+    "shorelineGap": 0,
+    "nonFlatWater": 0,
+    "pierUnsupported": 0,
+    "bridgeSolidBelow": 0,
+    "bridgeNoClearance": 6,
+    "overpassMissing": 0,
+    "pilingThroughDeck": 3566,
+    "pilingMisplaced": 399
+   },
+   "totals": {
+    "buildings": 120,
+    "roads": 703,
+    "trees": 28787,
+    "lamps": 915,
+    "pools": 0,
+    "piers": 81,
+    "bridges": 6,
+    "seawallSegments": 452,
+    "shoreSegments": 1425
+   },
+   "fixes": {
+    "roadsClipped": 4,
+    "causewaysBuilt": 0,
+    "bridgesBuilt": 6,
+    "bridgeMetres": 1267,
+    "pierBents": 135,
+    "overpassesBuilt": 0,
+    "causewayVerts": 0,
+    "buildingsSnapped": 118,
+    "buildingsKept": 120,
+    "buildingsRemoved": 0,
+    "treesRemovedWater": 44,
+    "treesRemovedRoad": 2,
+    "lampsRemovedWater": 4,
+    "seawallSegments": 452,
+    "seawallMetres": 2790,
+    "beachVerts": 668,
+    "docks": {
+     "pilings": 3566,
+     "cleats": 1025,
+     "bumpers": 1786,
+     "ladders": 103,
+     "boats": 65
+    }
+   },
+   "examples": {
+    "bridgeNoClearance": [
+     {
+      "road": 142,
+      "kind": "water",
+      "headroom": 1.05
+     },
+     {
+      "road": 147,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 148,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 152,
+      "kind": "water",
+      "headroom": 1.05
+     },
+     {
+      "road": 260,
+      "kind": "water",
+      "headroom": 1.05
+     }
+    ],
+    "pilingThroughDeck": [
+     {
+      "x": 420,
+      "z": 475,
+      "above": 0.45
+     },
+     {
+      "x": 422,
+      "z": 475,
+      "above": 0.45
+     },
+     {
+      "x": 425,
+      "z": 476,
+      "above": 0.45
+     },
+     {
+      "x": 427,
+      "z": 476,
+      "above": 0.45
+     },
+     {
+      "x": 429,
+      "z": 476,
+      "above": 0.45
+     }
+    ],
+    "pilingMisplaced": [
+     {
+      "x": 449,
+      "z": 481
+     },
+     {
+      "x": 449,
+      "z": 481
+     },
+     {
+      "x": 442,
+      "z": 494
+     },
+     {
+      "x": 442,
+      "z": 494
+     },
+     {
+      "x": 711,
+      "z": 502
+     }
+    ]
+   }
+  },
+  "sandyhook": {
+   "counts": {
+    "buildingInWater": 0,
+    "buildingFloating": 0,
+    "buildingSunk": 0,
+    "buildingOverlap": 0,
+    "buildingOnRoad": 0,
+    "roadFloating": 0,
+    "bridgeUnsupported": 0,
+    "treeBadlyPlaced": 0,
+    "propBadlyPlaced": 0,
+    "shorelineGap": 0,
+    "nonFlatWater": 0,
+    "pierUnsupported": 0,
+    "bridgeSolidBelow": 0,
+    "bridgeNoClearance": 3,
+    "overpassMissing": 0,
+    "pilingThroughDeck": 5462,
+    "pilingMisplaced": 268
+   },
+   "totals": {
+    "buildings": 70,
+    "roads": 566,
+    "trees": 33750,
+    "lamps": 553,
+    "pools": 0,
+    "piers": 95,
+    "bridges": 3,
+    "seawallSegments": 769,
+    "shoreSegments": 2773
+   },
+   "fixes": {
+    "roadsClipped": 923,
+    "causewaysBuilt": 2,
+    "bridgesBuilt": 3,
+    "bridgeMetres": 115,
+    "pierBents": 15,
+    "overpassesBuilt": 0,
+    "causewayVerts": 10,
+    "buildingsRemovedInWater": 171,
+    "buildingsShoreFilled": 2,
+    "buildingsSnapped": 63,
+    "buildingsKept": 70,
+    "buildingsRemoved": 171,
+    "treesRemovedWater": 142,
+    "treesRemovedBuilding": 1,
+    "seawallSegments": 769,
+    "seawallMetres": 6266,
+    "beachVerts": 1158,
+    "docks": {
+     "pilings": 5462,
+     "cleats": 1566,
+     "bumpers": 2665,
+     "ladders": 108,
+     "boats": 57
+    }
+   },
+   "examples": {
+    "bridgeNoClearance": [
+     {
+      "road": 228,
+      "kind": "water",
+      "headroom": 0.8
+     },
+     {
+      "road": 241,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 460,
+      "kind": "water",
+      "headroom": 0.5
+     }
+    ],
+    "pilingThroughDeck": [
+     {
+      "x": -1481,
+      "z": 4791,
+      "above": 0.45
+     },
+     {
+      "x": -1483,
+      "z": 4791,
+      "above": 0.45
+     },
+     {
+      "x": -1485,
+      "z": 4790,
+      "above": 0.45
+     },
+     {
+      "x": -1488,
+      "z": 4790,
+      "above": 0.45
+     },
+     {
+      "x": -1490,
+      "z": 4790,
+      "above": 0.45
+     }
+    ],
+    "pilingMisplaced": [
+     {
+      "x": -1481,
+      "z": 4791
+     },
+     {
+      "x": -2676,
+      "z": 4640
+     },
+     {
+      "x": -2676,
+      "z": 4640
+     },
+     {
+      "x": -2676,
+      "z": 4643
+     },
+     {
+      "x": -2676,
+      "z": 4643
+     }
+    ]
+   }
+  },
+  "newark": {
+   "counts": {
+    "buildingInWater": 0,
+    "buildingFloating": 0,
+    "buildingSunk": 0,
+    "buildingOverlap": 0,
+    "buildingOnRoad": 0,
+    "roadFloating": 0,
+    "bridgeUnsupported": 0,
+    "treeBadlyPlaced": 0,
+    "propBadlyPlaced": 0,
+    "shorelineGap": 0,
+    "nonFlatWater": 0,
+    "pierUnsupported": 0,
+    "bridgeSolidBelow": 0,
+    "bridgeNoClearance": 0,
+    "overpassMissing": 13,
+    "pilingThroughDeck": 0,
+    "pilingMisplaced": 0
+   },
+   "totals": {
+    "buildings": 10241,
+    "roads": 1807,
+    "trees": 17842,
+    "lamps": 2630,
+    "pools": 2,
+    "piers": 0,
+    "bridges": 0,
+    "seawallSegments": 457,
+    "shoreSegments": 493
+   },
+   "fixes": {
+    "roadsClipped": 53,
+    "causewaysBuilt": 0,
+    "bridgesBuilt": 0,
+    "bridgeMetres": 0,
+    "pierBents": 0,
+    "overpassesBuilt": 0,
+    "causewayVerts": 0,
+    "poolsLevelled": 2,
+    "buildingsRemovedOnRoad": 8,
+    "buildingsSnapped": 10240,
+    "buildingsKept": 10241,
+    "buildingsRemoved": 8,
+    "treesRemovedBuilding": 32,
+    "seawallSegments": 457,
+    "seawallMetres": 2959,
+    "beachVerts": 36,
+    "docks": {
+     "pilings": 0,
+     "cleats": 0,
+     "bumpers": 0,
+     "ladders": 0,
+     "boats": 0
+    }
+   },
+   "examples": {
+    "overpassMissing": [
+     {
+      "road": 6,
+      "x": -961,
+      "z": 1770
+     },
+     {
+      "road": 9,
+      "x": -726,
+      "z": 1905
+     },
+     {
+      "road": 24,
+      "x": -77,
+      "z": 2055
+     },
+     {
+      "road": 33,
+      "x": -831,
+      "z": 1841
+     },
+     {
+      "road": 34,
+      "x": -782,
+      "z": 1863
+     }
+    ]
+   }
+  },
+  "passaic": {
+   "counts": {
+    "buildingInWater": 0,
+    "buildingFloating": 0,
+    "buildingSunk": 0,
+    "buildingOverlap": 0,
+    "buildingOnRoad": 0,
+    "roadFloating": 0,
+    "bridgeUnsupported": 0,
+    "treeBadlyPlaced": 0,
+    "propBadlyPlaced": 0,
+    "shorelineGap": 0,
+    "nonFlatWater": 0,
+    "pierUnsupported": 0,
+    "bridgeSolidBelow": 0,
+    "bridgeNoClearance": 7,
+    "overpassMissing": 13,
+    "pilingThroughDeck": 542,
+    "pilingMisplaced": 32
+   },
+   "totals": {
+    "buildings": 5034,
+    "roads": 2297,
+    "trees": 7556,
+    "lamps": 1827,
+    "pools": 5,
+    "piers": 6,
+    "bridges": 7,
+    "seawallSegments": 429,
+    "shoreSegments": 724
+   },
+   "fixes": {
+    "roadsClipped": 59,
+    "causewaysBuilt": 1,
+    "bridgesBuilt": 7,
+    "bridgeMetres": 396,
+    "pierBents": 49,
+    "overpassesBuilt": 0,
+    "causewayVerts": 3,
+    "poolsLevelled": 5,
+    "buildingsRemovedInWater": 2,
+    "buildingsRemovedOnRoad": 11,
+    "buildingsRemovedOverlap": 4,
+    "buildingsSnapped": 5019,
+    "buildingsKept": 5034,
+    "buildingsRemoved": 17,
+    "treesRemovedRoad": 4,
+    "treesRemovedBuilding": 15,
+    "treesRemovedWater": 13,
+    "seawallSegments": 429,
+    "seawallMetres": 2933,
+    "beachVerts": 171,
+    "docks": {
+     "pilings": 542,
+     "cleats": 146,
+     "bumpers": 233,
+     "ladders": 10,
+     "boats": 5
+    }
+   },
+   "examples": {
+    "bridgeNoClearance": [
+     {
+      "road": 1846,
+      "kind": "water",
+      "headroom": 1.05
+     },
+     {
+      "road": 1861,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 1862,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 1921,
+      "kind": "water",
+      "headroom": 0.5
+     },
+     {
+      "road": 2046,
+      "kind": "water",
+      "headroom": 1.05
+     }
+    ],
+    "overpassMissing": [
+     {
+      "road": 1079,
+      "x": -517,
+      "z": -101
+     },
+     {
+      "road": 1300,
+      "x": -350,
+      "z": -133
+     },
+     {
+      "road": 1301,
+      "x": -247,
+      "z": -174
+     },
+     {
+      "road": 1302,
+      "x": -237,
+      "z": -186
+     },
+     {
+      "road": 1836,
+      "x": 551,
+      "z": 113
+     }
+    ],
+    "pilingThroughDeck": [
+     {
+      "x": 31,
+      "z": -221,
+      "above": 0.45
+     },
+     {
+      "x": 31,
+      "z": -224,
+      "above": 0.45
+     },
+     {
+      "x": 31,
+      "z": -227,
+      "above": 0.45
+     },
+     {
+      "x": 31,
+      "z": -227,
+      "above": 0.45
+     },
+     {
+      "x": 30,
+      "z": -229,
+      "above": 0.45
+     }
+    ],
+    "pilingMisplaced": [
+     {
+      "x": 31,
+      "z": -221
+     },
+     {
+      "x": -33,
+      "z": -301
+     },
+     {
+      "x": -33,
+      "z": -301
+     },
+     {
+      "x": -34,
+      "z": -298
+     },
+     {
+      "x": -34,
+      "z": -299
+     }
+    ]
+   }
+  }
+ },
+ "total": {
+  "buildingInWater": 0,
+  "buildingFloating": 0,
+  "buildingSunk": 0,
+  "buildingOverlap": 0,
+  "buildingOnRoad": 0,
+  "roadFloating": 0,
+  "bridgeUnsupported": 0,
+  "treeBadlyPlaced": 0,
+  "propBadlyPlaced": 0,
+  "shorelineGap": 0,
+  "nonFlatWater": 0,
+  "pierUnsupported": 0,
+  "bridgeSolidBelow": 0,
+  "bridgeNoClearance": 47,
+  "overpassMissing": 27,
+  "pilingThroughDeck": 20632,
+  "pilingMisplaced": 1517
+ }
+}
