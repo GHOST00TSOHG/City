@@ -17,7 +17,7 @@ import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
 import { createCollision } from './robot/collision';
-import { buildLandmarks, cullUnderLandmarks } from './area/landmarks';
+import { buildLandmarks, cullUnderLandmarks, cullTreesUnderLandmarks } from './area/landmarks';
 import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
@@ -123,7 +123,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
-    const trees = await buildTrees(area.trees as number[], terrain, id === 'keywest'); // palms only in Key West
+    const trees = await buildTrees(cullTreesUnderLandmarks(area.trees as number[], landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     const roads = buildRoads(area, terrain, roadMat);

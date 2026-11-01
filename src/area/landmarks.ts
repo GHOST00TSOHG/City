@@ -63,6 +63,8 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       let y = Infinity;
       for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) y = Math.min(y, terrain.heightAt(sx, sz));
       lod.position.y = m.elevationM ?? Math.max(y, 0); lod.updateMatrixWorld(true);
+      tuneLandmarkMaterials(lod, m.id);
+      if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
       group.add(lod);
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
       if (m.cullMarginM !== false) {
@@ -75,6 +77,54 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
     } catch (e) { console.warn('[City] landmark failed', areaId, slug, e); }
   }
   return { group, colliders, footprints };
+}
+
+/** Night readability tweaks for landmark glTF materials (emissive-* slots). */
+function tuneLandmarkMaterials(root: THREE.Object3D, id: string) {
+  const lampBoost = id === 'newark-schools-stadium' ? 1.2 : 1 // glb lamp emission is already doubled (f7c3be6);
+  root.traverse((n) => {
+    const mesh = n as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      const m = mat as THREE.MeshStandardMaterial;
+      if (!m?.emissive) continue;
+      const name = m.name ?? '';
+      if (name === 'emissive-lamp') {
+        m.emissiveIntensity = (m.emissiveIntensity || 1) * lampBoost;
+        m.emissive.multiplyScalar(1.15);
+      } else if (name === 'emissive-windows') m.emissiveIntensity = (m.emissiveIntensity || 1) * 1.1;
+    }
+  });
+}
+
+/** Flood banks: lamp-head vertices of LOD0 (above 12 m) clustered on a 30 m grid, one point light per cluster
+ *  (max 6), parented to the LOD object itself so the lights never pop when the mesh level switches. */
+function attachStadiumFloodLights(lod: THREE.Object3D) {
+  const lod0 = lod.children.find((c) => /_LOD0$/.test(c.name)) ?? lod;
+  lod.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(lod.matrixWorld).invert(), v = new THREE.Vector3();
+  const cells = new Map<string, { x: number; y: number; z: number; n: number }>();
+  lod0.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (!mats.some((m) => (m as THREE.Material).name === 'emissive-lamp')) return;
+    const pos = mesh.geometry.getAttribute('position'), m = new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld);
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m); if (v.y < 12) continue;
+      const k = Math.round(v.x / 30) + ',' + Math.round(v.z / 30), c = cells.get(k) ?? { x: 0, y: 0, z: 0, n: 0 };
+      c.x += v.x; c.y += v.y; c.z += v.z; c.n++; cells.set(k, c);
+    }
+  });
+  const banks = [...cells.values()].sort((a, b) => b.n - a.n).slice(0, 6);
+  if (!banks.length) return;
+  const g = new THREE.Group(); g.name = 'stadium-flood-lights';
+  for (const c of banks) {
+    const light = new THREE.PointLight(0xfff1dc, 900, 160, 1.6);
+    light.position.set(c.x / c.n, c.y / c.n - 1, c.z / c.n); g.add(light);
+  }
+  lod.add(g);
 }
 
 function toCollider(mesh: THREE.Mesh, parent: THREE.Matrix4): LandmarkCollider {
@@ -161,4 +211,17 @@ function polysTouch(a: P[], b: P[], margin: number) {
     }
   }
   return false;
+}
+
+/** Drops generated trees (flat stride-5 array, dm) standing inside any landmark footprint, so the city's tree
+ *  scatter never grows through a landmark's stands, roof or field. Runs once per area build. */
+export function cullTreesUnderLandmarks(trees: number[], fps: LandmarkFootprint[]) {
+  if (!fps.length) return trees;
+  const out: number[] = [];
+  for (let i = 0; i + 4 < trees.length; i += 5) {
+    const x = trees[i] / 10, z = trees[i + 1] / 10;
+    const hit = fps.some((f) => x >= f.minX && x <= f.maxX && z >= f.minZ && z <= f.maxZ && inPoly(f.pts, x, z));
+    if (!hit) out.push(trees[i], trees[i + 1], trees[i + 2], trees[i + 3], trees[i + 4]);
+  }
+  return out;
 }
