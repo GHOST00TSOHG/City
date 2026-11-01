@@ -28,15 +28,17 @@ def _wear(m, b, col, rough):
     edge = N.new('ShaderNodeMath'); edge.operation = 'SUBTRACT'; edge.inputs[0].default_value = 1; Lk(dot.outputs['Value'], edge.inputs[1])
     em = N.new('ShaderNodeMath'); em.operation = 'MULTIPLY'; Lk(edge.outputs[0], em.inputs[0]); Lk(nz.outputs['Fac'], em.inputs[1])
     ew = N.new('ShaderNodeMapRange'); ew.inputs['From Min'].default_value = 0.02; ew.inputs['From Max'].default_value = 0.06; Lk(em.outputs[0], ew.inputs['Value'])
-    sep = N.new('ShaderNodeSeparateXYZ'); Lk(tc.outputs['Object'], sep.inputs[0])
-    def _line(sock, sc):  # 0 on a thin straight groove every 1/sc metres, 1 elsewhere
-        mu = N.new('ShaderNodeMath'); mu.operation = 'MULTIPLY'; mu.inputs[1].default_value = sc; Lk(sock, mu.inputs[0])
-        fr = N.new('ShaderNodeMath'); fr.operation = 'FRACT'; Lk(mu.outputs[0], fr.inputs[0])
-        d = N.new('ShaderNodeMath'); d.operation = 'SUBTRACT'; d.inputs[1].default_value = 0.5; Lk(fr.outputs[0], d.inputs[0])
+    # purposeful seams: per-part (Generated = object bbox 0..1) so they follow each plate; a cross seam plus
+    # one lengthwise seam, positions jittered per object so neighbouring plates don't line up
+    sep = N.new('ShaderNodeSeparateXYZ'); Lk(tc.outputs['Generated'], sep.inputs[0])
+    oi = N.new('ShaderNodeObjectInfo')
+    def _seam(sock, base, jit):
+        j = N.new('ShaderNodeMath'); j.operation = 'MULTIPLY_ADD'; Lk(oi.outputs['Random'], j.inputs[0]); j.inputs[1].default_value = jit; j.inputs[2].default_value = base
+        d = N.new('ShaderNodeMath'); d.operation = 'SUBTRACT'; Lk(sock, d.inputs[0]); Lk(j.outputs[0], d.inputs[1])
         ab = N.new('ShaderNodeMath'); ab.operation = 'ABSOLUTE'; Lk(d.outputs[0], ab.inputs[0])
-        mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.49; mr.inputs['From Max'].default_value = 0.475; Lk(ab.outputs[0], mr.inputs['Value'])
+        mr = N.new('ShaderNodeMapRange'); mr.inputs['From Min'].default_value = 0.006; mr.inputs['From Max'].default_value = 0.012; Lk(ab.outputs[0], mr.inputs['Value'])
         return mr.outputs['Result']
-    pl = N.new('ShaderNodeMath'); pl.operation = 'MINIMUM'; Lk(_line(sep.outputs['Z'], 7.0), pl.inputs[0]); Lk(_line(sep.outputs['X'], 5.0), pl.inputs[1])
+    pl = N.new('ShaderNodeMath'); pl.operation = 'MINIMUM'; Lk(_seam(sep.outputs['Z'], 0.3, 0.25), pl.inputs[0]); Lk(_seam(sep.outputs['X'], 0.62, 0.1), pl.inputs[1])
     gr = N.new('ShaderNodeTexNoise'); gr.inputs['Scale'].default_value = 3; Lk(tc.outputs['Object'], gr.inputs['Vector'])
     base = N.new('ShaderNodeMix'); base.data_type = 'RGBA'; base.inputs['A'].default_value = (*col, 1); base.inputs['B'].default_value = (col[0] * 0.7, col[1] * 0.7, col[2] * 0.68, 1)
     Lk(gr.outputs['Fac'], base.inputs['Factor'])
@@ -61,6 +63,9 @@ RED = mat('armor_red', (0.36, 0.01, 0.012), 0.45, wear=True)
 YEL = mat('armor_yellow', (0.62, 0.34, 0.02), 0.45, wear=True)
 FRAME = mat('frame', (0.05, 0.055, 0.065), 0.45, 0.85)
 STEEL = mat('steel', (0.45, 0.46, 0.48), 0.22, 1.0)
+KNUCK = mat('knuckle_light', (0.66, 0.67, 0.69), 0.45, wear=True)
+VISOR = mat('visor_dark', (0.004, 0.004, 0.006), 0.12)
+SLIT = mat('visor_slit', (0.0, 0.0, 0.0), 0.3, 0.0, (1.0, 0.06, 0.02), 22)
 SCREEN = mat('screen', (0.0, 0.02, 0.03), 0.15, 0.0, (0.1, 0.85, 1.0), 9)
 GLOW = mat('glow', (0.0, 0.0, 0.0), 0.3, 0.0, (1.0, 0.25, 0.05), 14)
 
@@ -187,7 +192,7 @@ def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digi
     for g in (-0.35, 0.35):  # panel-line grooves across the back plate
         out.append(_box(f'handguard_groove_{side}_{g}', pc - pn * (T + 0.0102 * k) + fwd * L * g * 0.6, (ts, pn, fwd), (W * 0.9, 0.0012 * k, 0.0012 * k), FRAME, bev=0.1))
     kc = wr + fwd * (0.02 * k + L - 0.002 * k) - pn * (T * 0.55)
-    out.append(_box(f'knuckle_plate_{side}', kc, (ts, pn, fwd), (W * 1.02, T * 0.6, 0.011 * k), armor_m, bev=0.4))
+    out.append(_box(f'knuckle_plate_{side}', kc, (ts, pn, fwd), (W * 1.02, T * 0.6, 0.011 * k), KNUCK, bev=0.4))
     if fingers == 3: offs = [-0.6, 0.6]; seg = [0.042, 0.034, 0.03]; fw = W * 0.34
     else: offs = [-0.75, -0.25, 0.25, 0.75]; seg = [0.034, 0.026, 0.021]; fw = W * 0.2
     fh = T * 0.72
@@ -211,7 +216,7 @@ def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digi
             last = j == (1 if thumb else 2)
             out.append(_box(f'hand_{side}_f{i}_{j}', c, (side_ax, up_, d), (w0 * tp, fh * tp, Lj / 2 * 0.93), armor_m if last else digit_m, bev=0.55 if last else 0.3))
             if not last:  # armoured knuckle plate on the back of each lower segment
-                out.append(_box(f'hand_{side}_kp{i}_{j}', c - up_ * fh * tp * 1.05 - d * Lj * 0.08, (side_ax, up_, d), (w0 * tp * 1.06, 0.0035 * k, Lj / 2 * 0.62), armor_m, bev=0.5))
+                out.append(_box(f'hand_{side}_kp{i}_{j}', c - up_ * fh * tp * 1.05 - d * Lj * 0.08, (side_ax, up_, d), (w0 * tp * 1.06, 0.0035 * k, Lj / 2 * 0.62), KNUCK, bev=0.5))
             out.append(cyl(f'hand_{side}_pin{i}_{j}', b - side_ax * w0 * tp * 1.02, b + side_ax * w0 * tp * 1.02, fh * tp * 0.62, STEEL, n=10))
             b = b + d * Lj
     bone(_b0)
@@ -277,7 +282,12 @@ def build():
     # head: small helmet, big glowing screen face, V-fin
     up.append(cyl('neck', V((0, 0.0, 1.64)), V((0, -0.01, 1.73)), 0.04, FRAME))
     up.append(loft('helmet', [(1.70, 0, 0.01, 0.085, 0.09), (1.78, 0, 0, 0.105, 0.105), (1.86, 0, 0.0, 0.09, 0.095), (1.90, 0, 0.01, 0.05, 0.06)], WHITE, e=2.6))
-    up.append(loft('face_screen', [(1.725, 0, -0.06, 0.08, 0.06), (1.78, 0, -0.07, 0.095, 0.065), (1.845, 0, -0.06, 0.08, 0.06)], SCREEN, arc=(-2.55, -0.59), thick=0.012, armor=False))
+    up.append(loft('face_screen', [(1.725, 0, -0.06, 0.08, 0.06), (1.78, 0, -0.07, 0.095, 0.065), (1.845, 0, -0.06, 0.08, 0.06)], VISOR, arc=(-2.55, -0.59), thick=0.012, armor=False))
+    # glowing slit + small sensor array, all flush with the dark visor glass (nothing protrudes)
+    up.append(loft('visor_slit', [(1.785, 0, -0.072, 0.097, 0.0665), (1.797, 0, -0.072, 0.097, 0.0665)], SLIT, arc=(-2.35, -0.79), thick=0.004, armor=False))
+    for i, a_ in enumerate((-1.95, -1.75, -1.39, -1.19)):
+        p_ = V((0.096 * math.cos(a_), 0.066 * math.sin(a_) - 0.072, 1.765))
+        up.append(cyl(f'visor_eye_{i}', p_, p_ + V((math.cos(a_), math.sin(a_), 0)) * 0.004, 0.0045, SLIT, n=10))
     up.append(loft('visor_frame', [(1.715, 0, -0.06, 0.088, 0.07), (1.73, 0, -0.065, 0.095, 0.072)], RED, arc=(-2.7, -0.44), thick=0.014))
     up.append(loft('brow', [(1.84, 0, -0.06, 0.09, 0.065), (1.87, 0, -0.05, 0.075, 0.06)], BLUE, arc=(-2.8, -0.34), thick=0.016))
     for s in (1, -1):  # V-fin
@@ -364,7 +374,7 @@ def scout_variants():
         for sx, B in ((1, 'Left'), (-1, 'Right')): fn(sx, B)
     bone('Head')
     slot('helmet', 'crt'); _vbox('h_crt', H + V((0, 0.06, 0.2)), (0.05, 0.05, 0.03), FRAME)
-    slot('helmet', 'visor'); _vbox('h_visor', H + V((0, -0.13, 0.11)), (0.1, 0.01, 0.025), GLOW)
+    slot('helmet', 'visor'); _vbox('h_visor', H + V((0, -0.11, 0.135)), (0.09, 0.006, 0.006), SLIT)
     slot('helmet', 'twin')
     for sx in (1, -1): cyl(f'h_twin_{sx}', H + V((0.05 * sx, -0.1, 0.16)), H + V((0.05 * sx, -0.16, 0.16)), 0.018, STEEL)
     bone('Spine')
@@ -487,7 +497,7 @@ def addon_pass():
 def render(path, cam_az=-0.72, cam_el=0.12, res=(1200, 1500), tgt=(0, 0, 1.0), dist=4.9, lens=70, setup=True):
     sc = bpy.context.scene
     if not setup: return shoot(path, cam_az, cam_el, res, tgt, dist, lens)
-    for o in bpy.data.objects: o.hide_set(False); o.hide_render = o.name.startswith(('Cutter', '_bc')) or bool(o.get('_hide'))
+    for o in bpy.data.objects: o.hide_set(False); o.hide_render = o.name.startswith(('Cutter', '_bc')) or bool(o.get('_hide')) or o.get('opt', 'base') != 'base'
     bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0)); fl = bpy.context.active_object
     fm = mat('floor', (0.012, 0.013, 0.016), 0.62); fm.node_tree.nodes['Principled BSDF'].inputs['Specular IOR Level'].default_value = 0.15; fl.data.materials.append(fm)
     world = sc.world or bpy.data.worlds.new('w'); sc.world = world; world.use_nodes = True
