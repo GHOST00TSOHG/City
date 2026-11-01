@@ -20,7 +20,7 @@ import { buildLandmarks, cullUnderLandmarks } from './area/landmarks';
 import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
-import type { WeatherKind } from './weather';
+import { createWeatherState, type WeatherKind } from './weather';
 
 export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
 /** Start views per area (public places only). Key West origin = Southernmost Point Buoy. */
@@ -168,7 +168,21 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   }
   const viewsOf = (id: string) => VIEWS[id] ?? [{ name: 'aerial', pos: [0, 400, 600], look: [0, 0, 0] }];
   setView(viewsOf(areaId).find((v) => v.name === qs.get('view')) ?? viewsOf(areaId)[0]);
-  let weather: [WeatherKind, number] = ['clear', 0.6];
+  const wx = createWeatherState();
+  const cRain = new THREE.Color(), cTmp = new THREE.Color();
+  /** One place that writes every weather-driven uniform from the eased mix. */
+  const applyWeather = () => {
+    const { ocean, trees, grass, lamps } = cur; const { rain, snow, fog, wet, snowCover } = wx.mix;
+    const f = scene.fog as THREE.FogExp2;
+    f.color.set(0x0d1426).lerp(cTmp.set(0x30374a), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3b4352), Math.min(1, fog));
+    f.density = 0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016;
+    const cover = Math.min(1, rain + snow + fog * 0.9); sky.setOvercast(cover);
+    sky.setClouds(0.22 + cover * 0.78, cRain.set(0x26334a).lerp(cTmp.set(0x2a303c), snow).lerp(cTmp.set(0x2a3140), Math.min(1, fog)));
+    ocean.uRough.value = rain + snow * 0.4; uSkyRefl.value.set(0x1a2438).lerp(cTmp.set(0x2e3c58), Math.min(1, rain * 1.5)); ocean.uSky.value.set(0x1a2438).lerp(cTmp.set(0x141a24), Math.min(1, cover * 1.5));
+    trees.uWind.value = 1 + rain * 1.8 + snow * 0.6 - fog * 0.6; grass.uWind.value = 1 + rain * 1.5 + snow * 0.4 - fog * 0.6;
+    grass.uWet.value = wet; grass.uSnow.value = snowCover; uWet.value = wet; uSnow.value = snowCover;
+    lamps.uWet.value = wet; lamps.uFog.value = fog;
+  };
 
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); });
   addEventListener('keydown', (e) => { if (e.code === 'KeyG' && controls.enabled) controls.setWalk(!controls.walk); });
@@ -205,25 +219,15 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       else try { await renderer.compileAsync(tmp, camera); } catch { /* compile is a warm-up only */ }
       const old = cur; scene.remove(old.group); scene.add(next.group); cur = next;
       const vs = viewsOf(id); setView(vs.find((v) => v.name === viewName) ?? vs[0]);
-      this.setWeather(...weather);
+      applyWeather();
       old.dispose();
     },
-    update(dt: number, t = 0) { if (!focus) controls.update(dt); const f = focus ?? camera.position; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(focus ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
+    update(dt: number, t = 0) { if (wx.tick(Math.min(dt, 0.1))) applyWeather(); if (!focus) controls.update(dt); const f = focus ?? camera.position; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(focus ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
     /** Stand outside (or inside) a generated interior near the area origin; loads it immediately. */
     enterBuilding(inside = false) { const e = cur.interiors.entry(); if (!e) return null; e.show(); const p = inside ? e.in : e.out; camera.position.set(p[0], p[1] + 1.7, p[2]); camera.lookAt(...e.look); if (inside) { const d = new THREE.Vector3(...e.look).sub(camera.position).setY(0).normalize(); camera.lookAt(camera.position.x + d.x, camera.position.y, camera.position.z + d.z); } controls.syncAngles(); controls.setWalk(true); return e.i; },
-    /** One place that sets every weather-driven uniform. k = intensity 0..1. */
-    setWeather(kind: WeatherKind, k: number) {
-      weather = [kind, k]; const { ocean, trees, grass, lamps } = cur;
-      const rain = kind === 'rain' ? k : 0, snow = kind === 'snow' ? k : 0, fog = kind === 'fog' ? k : 0;
-      const fogCol = new THREE.Color(kind === 'fog' ? 0x3b4352 : kind === 'snow' ? 0x30374a : 0x0d1426);
-      const f = scene.fog as THREE.FogExp2; f.color.copy(fogCol);
-      f.density = 0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016;
-      sky.setOvercast(Math.min(1, rain + snow + fog * 0.9));
-      sky.setClouds(kind === 'clear' ? 0.22 : 0.55 + 0.45 * k, kind === 'fog' ? 0x2a3140 : kind === 'snow' ? 0x2a303c : 0x26334a);
-      ocean.uRough.value = rain + snow * 0.4; uSkyRefl.value.set(kind === 'rain' ? 0x2e3c58 : 0x1a2438); ocean.uSky.value.set(kind === 'clear' ? 0x1a2438 : 0x141a24);
-      trees.uWind.value = 1 + rain * 1.8 + snow * 0.6 - fog * 0.6; grass.uWind.value = 1 + rain * 1.5 + snow * 0.4 - fog * 0.6;
-      grass.uWet.value = rain; grass.uSnow.value = snow; uWet.value = rain; uSnow.value = snow;
-      lamps.uWet.value = rain; lamps.uFog.value = fog;
-    },
+    /** Set the weather target; the live mix eases toward it in update() (see WeatherState). */
+    setWeather(kind: WeatherKind, k: number, instant = false) { wx.set(kind, k); if (instant) wx.snap(); applyWeather(); },
+    /** Live eased weather weights (rain/snow particles read these so they fade with the sky). */
+    get weatherMix() { return wx.mix; },
   };
 }

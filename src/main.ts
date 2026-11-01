@@ -19,7 +19,7 @@ import { diag } from './perf/diag';
 import { pacing } from './perf/pacing';
 import { quality, warmupTier, dynres, qualityLabel } from './perf/quality';
 import { prewarm } from './perf/prewarm';
-import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
+import { createSnow, createRain, createWeatherUI, WEATHER_PRESETS, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
 const canvas = document.getElementById('city') as HTMLCanvasElement;
@@ -39,9 +39,7 @@ createScene(canvas, areaId).then(async (app) => {
   installGpuHooks((app.renderer as any).backend); // per-frame upload bytes + pipeline compiles for the perf overlay / bench
   const rain = createRain(), snow = createSnow(); app.scene.add(rain.mesh, snow.mesh);
   const setWeather = (kind: WeatherKind, intensity = 0.6) => {
-    rain.mesh.visible = kind === 'rain'; rain.setIntensity(intensity);
-    snow.mesh.visible = kind === 'snow'; snow.setIntensity(intensity);
-    app.setWeather(kind, intensity);
+    app.setWeather(kind, intensity); // particles follow the eased mix in the frame loop, so they fade in/out with the sky
   };
   const weatherUI = createWeatherUI(setWeather);
   // Area switcher: fade to dark, build + compile the next area off-scene, swap, fade back in. No pop-in.
@@ -144,6 +142,8 @@ createScene(canvas, areaId).then(async (app) => {
   statsEl.hidden = !showStats;
   const w = window as any;
   w.__setWeather = (k: WeatherKind, i = 0.6) => weatherUI.set(k, i);
+  { const qw = new URLSearchParams(location.search).get('weather') as WeatherKind | null; if (qw && qw in WEATHER_PRESETS) { weatherUI.set(qw, 0.8); app.setWeather(qw, 0.8, true); } }
+  w.__weather = () => ({ ...app.weatherMix });
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
@@ -192,7 +192,9 @@ createScene(canvas, areaId).then(async (app) => {
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     if (parts) parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     ts = sec('fx', ts);
-    app.update(dt, t); rain.update(t, app.camera.position); snow.update(t, app.camera.position);
+    app.update(dt, t); const wm = app.weatherMix;
+    rain.mesh.visible = wm.rain > 0.01; rain.setIntensity(wm.rain); snow.mesh.visible = wm.snow > 0.01; snow.setIntensity(wm.snow);
+    rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     ts = sec('world update (trees/grass/interiors)', ts);
     budget.run(); ts = sec('queued jobs', ts);
     app.renderer.render(app.scene, app.camera); sec('render submit', ts);
