@@ -44,7 +44,9 @@ for (const t of ['scout', 'heavy', 'worker', 'glitch']) {
   // flight: charge -> ignite -> burn loop (hum for glitch) -> boost -> cutoff; hum only while flying
   await p.evaluate(() => { const r = window.__robot; r.dropIn(0); for (let i = 0; i < 60; i++) r.ctl.update(1 / 30); }); await p.waitForTimeout(1200);
   const LB = await log(), burn = t === 'glitch' ? 'thrust-hum' : 'thrust-burn'; const before = await loops(); check(!before[burn], `${t} no ${burn} on the ground`);
-  await press('KeyF', true); await press('KeyF', false); await p.waitForTimeout(1500); await press('Space', true); await p.waitForTimeout(2300); await press('Space', false);
+  await press('KeyF', true); await press('KeyF', false); await p.waitForTimeout(250);
+  const LC0 = await log(); check(n(LC0, `${t}-takeoff-charge`) > n(LB, `${t}-takeoff-charge`) && n(LC0, `${t}-thrust-ignite`) === n(LB, `${t}-thrust-ignite`), `${t} takeoff-charge starts with the crouch (whole 1.5 s clip), ignite not yet`);
+  await p.waitForTimeout(1900); await press('Space', true); await p.waitForTimeout(2300); await press('Space', false);
   const LC = await log(), LF = await loops(); check(n(LC, `${t}-takeoff-charge`) > n(LB, `${t}-takeoff-charge`) && n(LC, `${t}-thrust-ignite`) > n(LB, `${t}-thrust-ignite`) && !!LF[burn], `${t} flight: takeoff-charge + thrust-ignite + ${burn} loop ${JSON.stringify(LF)}`);
   await press('ShiftLeft', true); await press('KeyW', true); await p.waitForTimeout(1500); const LD = await log(); check(n(LD, `${t}-boost`) > n(LC, `${t}-boost`), `${t} boost one-shot on the BURST kick`);
   if (t === 'scout') { await p.evaluate(() => { const r = window.__robot; r.sfxFly = 1; }); }
@@ -53,6 +55,10 @@ for (const t of ['scout', 'heavy', 'worker', 'glitch']) {
   check(n(LE, `${t}-thrust-cutoff`) > n(LD, `${t}-thrust-cutoff`) && !LG[burn], `${t} thrust-cutoff plays and ${burn} stops`);
   await fps();
 }
+// Glitch teleport snaps: at most 2 overlapping voices
+await p.evaluate(() => window.__robot.setType('glitch')); await p.waitForFunction(() => window.__robot.model.type === 'glitch'); await p.waitForTimeout(800);
+{ const b0 = await log(); const c0 = ['01', '02', '03'].reduce((a, i) => a + n(b0, `glitch-teleport-snap_${i}`), 0); await p.evaluate(() => { for (let i = 0; i < 6; i++) window.__sfx.snap(); }); await p.waitForTimeout(400);
+  const b1 = await log(), c1 = ['01', '02', '03'].reduce((a, i) => a + n(b1, `glitch-teleport-snap_${i}`), 0); check(c1 - c0 <= 2 && c1 - c0 >= 1, `6 snaps in one frame start ${c1 - c0} voices (cap 2)`); }
 // spatial flyby
 await p.evaluate(() => { const r = window.__robot, c = r.ctl; window.__sfx.flyby({ x: c.pos.x + 20, y: c.pos.y + 5, z: c.pos.z }); }); await p.waitForTimeout(300);
 check(await p.evaluate(() => window.__sfx.flybyActive), 'flyby-mono plays through a positional (HRTF) panner');

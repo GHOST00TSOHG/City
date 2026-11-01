@@ -9,11 +9,13 @@ import type { RobotType } from './types';
  *  - flyby-mono is spatialised with a PannerNode (HRTF) driven by the robot position and the camera as listener.
  * Lazy: nothing is fetched until the first user gesture unlocks audio.
  */
-const LOOPS = new Set(['thrust-burn', 'thrust-hum', 'hover-sprint', 'roll', 'tread-growl', 'tread-clatter', 'water-skim']);
+const LOOPS = new Set(['moto-engine', 'thrust-burn', 'thrust-hum', 'hover-sprint', 'roll', 'tread-growl', 'tread-clatter', 'water-skim']);
 const LAND: Record<RobotType, string> = { heavy: 'land-slam', scout: 'land-knee', worker: 'land-hiss', glitch: 'land-reform' };
 /** The landing strength (0..1) at or above which the _heavy variant plays (below: _light). */
 export const LAND_HEAVY_AT = 0.5;
 /** Timings from the files (README): transform 0.8 s with its lock snap at 0.75 s (the fold clip is started 0.05 s late so the snap lands on the game's lock at 0.80 s), takeoff-charge 1.5 s, thrust-ignite 1.3 s, burn loop enters 0.95 s into the ignite with a 0.3 s fade-in, cutoff fades the burn over 0.15 s, flyby 2.6 s with the closest approach at 1.3 s. */
+/** Glitch teleport snaps: at most this many overlapping voices (a new snap is dropped while 2 are still sounding). */
+export const SNAP_VOICES = 2;
 export const AUDIO_TIMING = { transform: 0.8, lock: 0.75, charge: 1.5, ignite: 1.3, burnDelay: 0.95, burnFade: 0.3, cutoffFade: 0.15, flyby: 2.6, flybyPeak: 1.3 } as const;
 /** Heavy ball speed map (README): rate 0.8 + 0.4 x clamp((v - 16) / 9) over 16..25 m/s, gain -4 dB at 16 m/s up to 0 dB at 25 m/s. */
 export const ROLL = { lo: 16, hi: 25 } as const;
@@ -57,6 +59,7 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
   const stopLoops = () => { for (const n of [...loops.keys()]) loop(n, 0, 1, { out: 0.05 }); };
   const unlock = () => { if (ctx) { void ctx.resume(); return; } ctx = new AudioContext(); master = ctx.createGain(); master.gain.value = volume; master.connect(ctx.destination); };
   addEventListener('pointerdown', unlock, { once: false, passive: true }); addEventListener('keydown', unlock, { passive: true });
+  let snaps: { until: number }[] = [];
   let flying = false, fly: { panner: PannerNode; until: number } | null = null, coolSkid = 0;
   const P = (x: number, y: number, z: number, p: PannerNode) => { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; };
   return {
@@ -71,7 +74,10 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
     /** Landing by strength 0..1: _light below LAND_HEAVY_AT, _heavy at or above it (heavy-land-slam, scout-land-knee, worker-land-hiss, glitch-land-reform). */
     land(strength: number) { if (type) void play(`${LAND[type]}_${strength >= LAND_HEAVY_AT ? 'heavy' : 'light'}`); },
     /** Transformation: Heavy / Scout 'transform' + 'unfold'; Worker 'tread-transform' + 'tread-unfold'. */
-    transform(phase: 'fold' | 'unfold') { const w = type === 'worker'; void play(phase === 'fold' ? (w ? 'tread-transform' : 'transform') : w ? 'tread-unfold' : 'unfold', { delay: phase === 'fold' ? AUDIO_TIMING.transform - AUDIO_TIMING.lock : 0 }); },
+    transform(phase: 'fold' | 'unfold') {
+      const w = type === 'worker', moto = type === 'scout' && type !== null && exists('scout', phase === 'fold' ? 'moto-transform' : 'moto-unfold'); // Scout: motorcycle mode clips when Echo has delivered them, else the generic transform / unfold
+      void play(phase === 'fold' ? (moto ? 'moto-transform' : w ? 'tread-transform' : 'transform') : moto ? 'moto-unfold' : w ? 'tread-unfold' : 'unfold', { delay: phase === 'fold' ? AUDIO_TIMING.transform - AUDIO_TIMING.lock : 0 });
+    },
     /** Big surge + roar on the super-fast rocket kick (BURST start), layered over the burn loop. */
     boost() { void play('boost'); },
     /** Take-off charge-up (1.5 s clip). The take-off crouch is shorter, so the clip starts that far into itself and its end meets the ignite. */
@@ -98,13 +104,14 @@ export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots
       const k = Math.max(0, Math.min(1, u)), g = db(-12 * (1 - k)); loop('tread-growl', g, 0.85 + 0.5 * k, { fade: 0.15, out: 0.15 }); loop('tread-clatter', g, 0.6 + 0.9 * k, { fade: 0.15, out: 0.15 });
     },
     /** Scout hover-sprint form / thruster slide (loop `hover-sprint`), gain follows speed. */
-    hover(on: boolean, u: number) { loop('hover-sprint', on ? 0.55 + 0.45 * Math.min(1, u) : 0, 1, { fade: 0.15, out: 0.15 }); },
+    hover(on: boolean, u: number) { const k = Math.min(1, u); if (type && exists(type, 'moto-engine')) { loop('moto-engine', on ? 0.5 + 0.5 * k : 0, 0.8 + 0.6 * k, { fade: 0.15, out: 0.15 }); loop('hover-sprint', 0, 1, { out: 0.15 }); } else loop('hover-sprint', on ? 0.55 + 0.45 * k : 0, 1, { fade: 0.15, out: 0.15 }); },
     stopSkid(now: number) { if (now - coolSkid > 0.8) { coolSkid = now; void play('stop-skid'); } },
     turnServo() { void play('turn-servo'); }, treadSparks() { void play('tread-turn-sparks'); }, bump() { void play('bump-clang'); }, hit() { void play('hit'); }, steamVent() { void play('steam-vent'); },
     /** crouch / stand, arm lift, any piston move (X power-up hold). */
     hydraulic(phase: 'push' | 'release') { void play(phase === 'push' ? 'hydraulic-push' : 'hydraulic-release'); },
     /** Glitch on foot (Luis's pick): `teleport-snap_01..03` while running as a cloud, `dissolve` when it starts, `reform` when he re-forms. */
-    snap() { void play(pick('teleport-snap')); }, glitch(phase: 'dissolve' | 'reform') { void play(phase); },
+    snap() { const now = ctx?.currentTime ?? 0; snaps = snaps.filter((s) => s.until > now); if (snaps.length >= SNAP_VOICES) return; const v = { until: now + 0.6 }; snaps.push(v); void play(pick('teleport-snap')).then((src) => { if (src && ctx) v.until = ctx.currentTime + (src.buffer?.duration ?? 0.5); else v.until = 0; }); }, // reserves a voice synchronously: at most SNAP_VOICES (2) overlapping
+    glitch(phase: 'dissolve' | 'reform') { void play(phase); },
     /** Spatial flyby (mono file through an HRTF PannerNode; the clip peaks 1.3 s in = closest approach). Call updateSpatial every frame afterwards. */
     flyby(at: { x: number; y: number; z: number }) {
       if (!ctx || !master || !type || !exists(type, 'flyby-mono')) return; const c = ctx, p = c.createPanner(); p.panningModel = 'HRTF'; p.distanceModel = 'inverse'; p.refDistance = 12; p.rolloffFactor = 1; p.connect(master); P(at.x, at.y, at.z, p); fly = { panner: p, until: c.currentTime + AUDIO_TIMING.flyby + 0.2 };

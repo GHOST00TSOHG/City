@@ -224,16 +224,16 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
       ovr('LeftArm', -1.2, 0.5, 0.3, sA); ovr('RightArm', -1.2, -0.5, -0.3, sA); ovr('LeftForeArm', -1.7, 0, 0, sA); ovr('RightForeArm', -1.7, 0, 0, sA);
       ovr('LeftUpLeg', -2.0, 0, 0.1, sL); ovr('RightUpLeg', -2.0, 0, -0.1, sL); ovr('LeftLeg', 2.3, 0, 0, sL); ovr('RightLeg', 2.3, 0, 0, sL); ovr('LeftFoot', -1.6, 0, 0, sL); ovr('RightFoot', -1.6, 0, 0, sL);
       ovr('Spine', 0.75, 0, 0, sS); ovr('Head', 0.5, 0, 0, sHd);
-      fold('LeftArm', 0.22, 0.12, 0.3, 0.05, sInA); fold('RightArm', 0.22, -0.12, 0.3, 0.05, sInA); fold('LeftUpLeg', 0.3, 0.07, 0.2, 0.0, sInL); fold('RightUpLeg', 0.3, -0.07, 0.2, 0.0, sInL);
-      fold('Head', 0.65, 0, 0.3, 0, sHd); fold('Spine', 1, 0, -0.3, 0.02, sS); if (b.Hips) b.Hips.position.y -= 0.62 * sstep(bl, 0.3, 1); // the dome settles over the pelvis; the ball sits on the ground
+      fold('LeftArm', 0.07, 0, 0.5, 0.04, sInA); fold('RightArm', 0.07, 0, 0.5, 0.04, sInA); fold('LeftUpLeg', 0.07, 0, 0.36, 0.0, sInL); fold('RightUpLeg', 0.07, 0, 0.36, 0.0, sInL); // arms AND legs sink into the dome (centre of the sphere)
+      fold('Head', 0.1, 0, 0.5, 0, sHd); fold('Spine', 1, 0, -0.3, 0.02, sS); if (b.Hips) b.Hips.position.y -= 0.62 * sstep(bl, 0.3, 1); // the dome settles over the pelvis; the ball sits on the ground
     }
-    if (hv > 0) { // Scout: low hover-sprint form: legs fold back into the thruster pods, arms tuck, body flattens
-      const sA = sstep(hv, 0, 0.4), sL = sstep(hv, 0.15, 0.7), sS = sstep(hv, 0.3, 0.9);
-      ovr('LeftArm', 0.45, 0, 0.1, sA); ovr('RightArm', 0.45, 0, -0.1, sA); ovr('LeftForeArm', -0.15, 0, 0, sA); ovr('RightForeArm', -0.15, 0, 0, sA);
-      ovr('LeftUpLeg', 1.75, 0, 0.05, sL); ovr('RightUpLeg', 1.75, 0, -0.05, sL); ovr('LeftLeg', 2.45, 0, 0, sL); ovr('RightLeg', 2.45, 0, 0, sL); ovr('LeftFoot', 0.6, 0, 0, sL); ovr('RightFoot', 0.6, 0, 0, sL);
-      ovr('Spine', 1.15, 0, 0, sS); ovr('Head', -0.95, 0, 0, sS); ovr('Hips', 0.15, 0, 0, sS);
-      fold('LeftUpLeg', 0.72, 0.1, -0.02, 0.02, sL); fold('RightUpLeg', 0.72, -0.1, -0.02, 0.02, sL); fold('LeftArm', 0.88, 0.26, 0.34, -0.04, sA); fold('RightArm', 0.88, -0.26, 0.34, -0.04, sA);
-      if (b.Hips) b.Hips.position.y -= 0.5 * sS;
+    if (hv > 0) { // Scout MOTORCYCLE mode: torso is the bike body (horizontal), the head swells into the giant round headlight, the arms become the front forks, the legs become two tailpipes pointing straight back (flames trail behind)
+      const sA = sstep(hv, 0, 0.4), sL = sstep(hv, 0.15, 0.7), sS = sstep(hv, 0.25, 0.85), sH = sstep(hv, 0.3, 0.75);
+      ovr('Hips', 1.38, 0, 0, sS); ovr('Spine', 0.06, 0, 0, sS); ovr('Head', -1.35, 0, 0, sS);
+      ovr('LeftArm', -1.62, 0, 0.04, sA); ovr('RightArm', -1.62, 0, -0.04, sA); ovr('LeftForeArm', -0.12, 0, 0, sA); ovr('RightForeArm', -0.12, 0, 0, sA);
+      ovr('LeftUpLeg', 0.19, 0, 0.0, sL); ovr('RightUpLeg', 0.19, 0, 0.0, sL); ovr('LeftLeg', 0, 0, 0, sL); ovr('RightLeg', 0, 0, 0, sL); ovr('LeftFoot', 0, 0, 0, sL); ovr('RightFoot', 0, 0, 0, sL);
+      fold('LeftUpLeg', 0.95, 0.2, 0, 0.02, sL); fold('RightUpLeg', 0.95, -0.2, 0, 0.02, sL); fold('LeftArm', 1, 0.2, 0.34, -0.04, sA); fold('RightArm', 1, -0.2, 0.34, -0.04, sA); fold('Head', 2.3, 0, 0.6, 0.02, sH);
+      if (b.Hips) b.Hips.position.y -= 0.52 * sS;
     }
     if (sl > 0) { ovr('Spine', -0.32, 0, 0, sl * (1 - hv * 0.6)); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl * (1 - hv)); ovr('LeftLeg', 2.0, 0, 0, sl * (1 - hv)); ovr('RightUpLeg', -0.5, 0, -0.14, sl * (1 - hv)); ovr('RightLeg', 0.25, 0, 0, sl * (1 - hv));
       ovr('LeftFoot', -0.4, 0, 0, sl * (1 - hv)); ovr('RightFoot', 0.2, 0, 0, sl * (1 - hv)); ovr('LeftArm', 0.3, 0, 0.95, sl * (1 - hv)); ovr('RightArm', 0.3, 0, -0.95, sl * (1 - hv)); if (b.Hips) b.Hips.position.y -= 0.34 * sl * (1 - hv); } // Scout: thruster-assisted slide (rides on the hover form)
@@ -241,7 +241,7 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
       const sL = sstep(gl, 0.1, 0.6), sB = sstep(gl, 0.15, 0.8);
       ovr('LeftUpLeg', -1.9, 0, 0.12, sL); ovr('RightUpLeg', -1.9, 0, -0.12, sL); ovr('LeftLeg', 2.5, 0, 0, sL); ovr('RightLeg', 2.5, 0, 0, sL); ovr('LeftFoot', -0.8, 0, 0, sL); ovr('RightFoot', -0.8, 0, 0, sL);
       ovr('Spine', 0.2, 0, 0, sB); ovr('LeftArm', -0.55, 0, 0.3, sB); ovr('RightArm', -0.55, 0, -0.3, sB); ovr('LeftForeArm', -0.5, 0, 0, sB); ovr('RightForeArm', -0.5, 0, 0, sB);
-      fold('LeftUpLeg', 0.85, 0.16, 0.0, 0.0, sL); fold('RightUpLeg', 0.85, -0.16, 0.0, 0.0, sL); if (b.Hips) b.Hips.position.y -= 0.4 * sB;
+      fold('LeftUpLeg', 0.42, 0.14, 0.05, 0.06, sL); fold('RightUpLeg', 0.42, -0.14, 0.05, 0.06, sL); if (b.Hips) b.Hips.position.y -= 0.62 * sB; // legs tuck small under the hull, the body sits down on the treads
     }
     if (style === 'medic') { const rat = gl * 0.9 + (p.anim === 'run' ? 0.35 : 0); if (rat > 0.02) for (const n of ['LeftForeArm', 'RightForeArm', 'Spine'] as const) { const o = b[n]; if (o) { o.rotateX(Math.sin(p.t * 53 + n.length) * 0.05 * rat); o.rotateZ(Math.sin(p.t * 67 + n.length * 3) * 0.035 * rat); } } } // tools rattle
     // fingers: relaxed curl in idle/walk, fist on boost / special; thumb curls less
