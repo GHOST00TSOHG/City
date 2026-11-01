@@ -10,7 +10,7 @@ import addons as A
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 REGION = {'armor_white': 'shell', 'armor_blue': 'torso', 'armor_red': 'shorts', 'armor_yellow': 'backpack', 'frame': 'joints',
-          'steel': 'chrome', 'screen': 'screen', 'glow': 'visor', 'rubber': 'rubber', 'glass': 'glass'}
+          'steel': 'chrome', 'screen': 'screen', 'glow': 'visor', 'glow_m': 'decalColor', 'rubber': 'rubber', 'glass': 'glass'}
 ORDER = ['Hips', 'Spine', 'Head', 'LeftArm', 'LeftForeArm', 'LeftHand', 'LeftUpLeg', 'LeftLeg', 'LeftFoot']
 PARENT = {'Hips': None, 'Spine': 'Hips', 'Head': 'Spine', 'LeftArm': 'Spine', 'LeftForeArm': 'LeftArm', 'LeftHand': 'LeftForeArm',
           'LeftUpLeg': 'Hips', 'LeftLeg': 'LeftUpLeg', 'LeftFoot': 'LeftLeg'}
