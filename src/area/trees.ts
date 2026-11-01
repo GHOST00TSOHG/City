@@ -181,7 +181,8 @@ function builtinSpecies(uWind: any): TreeSpecies[] {
 /** Optional drop-in models (e.g. SpeedTree glTF exports). Missing manifest = none; never fatal. */
 async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
   let list: any[] = [];
-  try { const r = await fetch('/trees/species.json'); if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return []; list = await r.json(); } catch { return []; }
+  if (!import.meta.env.DEV && !__HAS_TREE_SPECIES__) return [];
+  try { const r = await fetch(`${import.meta.env.BASE_URL}trees/species.json`); if (!r.ok || !(r.headers.get('content-type') ?? '').includes('json')) return []; list = await r.json(); } catch { return []; }
   const loader = new GLTFLoader(), out: TreeSpecies[] = [];
   for (const sp of list) {
     try {

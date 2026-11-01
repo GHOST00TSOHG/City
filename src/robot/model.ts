@@ -197,6 +197,7 @@ export function createProceduralRobot(look: RobotLook = DEFAULT_LOOK): RobotMode
  * clips named after RobotAnim). Missing file → the procedural placeholder. Tint: materials named after a RobotLook key get recoloured.
  */
 export async function loadRobot(look: RobotLook, url = `${import.meta.env.BASE_URL}robot/robot.glb`): Promise<RobotModel> {
+  if (!import.meta.env.DEV && !__HAS_ROBOT_GLB__ && url.endsWith('robot/robot.glb')) return createProceduralRobot(look);
   try {
     const head = await fetch(url, { method: 'HEAD' });
     if (!head.ok || !(head.headers.get('content-type') ?? '').match(/gltf|octet|binary/)) return createProceduralRobot(look);
