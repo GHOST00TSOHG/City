@@ -192,3 +192,12 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Palette: olive/gunmetal kept; accent (shorts slot) #2f8a3e, heal glow on decalColor #3dff6e (emissive), visor red #ff3020. All 7 paint slots recolourable.
 - Renders: /workspace/robot-renders/worker-v4-34.png, worker-v4-closeup.png (rear 3/4, regen core). `worker_v2.py -- --preview [--closeup]`.
 - Kit: 25,684 tris exported (budget=25800), 24,124 visible in garage. TYPES=worker: all PASS incl. new garage colour check (each slot click → colour appears in robot material uniforms), 0 console errors, garage 50 / world 44 draw calls.
+
+## Glitch v5 faithful rebuild (2026-11-01)
+- Source: tools/blender/glitch_v5.py, modelled on robot-refs/4-special-floating-cubes.png (geometry only, the image is never used as a texture). Renders: robot-renders/glitch-v5-34.png and glitch-v5-closeup.png (profile, head and shoulders).
+- Look: pale sculpted face plate (nose, closed downcast eyes, lips) on a downcast head; white/light-grey voxel skin over dark glossy machinery (spine, ribs, pistons, neck cables, skull ribs). Missing patches are heaviest on the back of the head, neck, shoulders and arms. Hands have curled fingers with the palms toward the thighs.
+- Runtime (src/robot/glitch.ts): the voxel skin is 1 instanced BoxGeometry draw from shards.json (`shard: 'cube'`). The drifting cube cloud is 1 instanced draw of 320 cubes, GPU-only: it rises, drifts, shrinks and respawns from the `emit` points. The CPU burst pool keeps the blink-dash burst. That makes 3 draws plus the kit. The cyan/magenta ghosts and octa shards are gone.
+- Garage colours: shell = Skin, shorts = Skin shade, torso = Face, joints = Machinery, backpack = Cables, visor = Glow, decalColor = Particles. Labels come from the new per-type `TypeDef.colourLabels`. Uniforms live in material.userData, so the colour check sees them.
+- Tris: 26,460 for the cubes plus 3,731 for the kit, 30.2k in total. The test counts 36.7k because it includes the 320-cube cloud and the 256-slot burst capacity.
+- TYPES=glitch: all PASS, all 7 colours ok, 0 console errors, 49 draw calls in the garage and 43 in the world.
+- Fix: v2export now updates the view layer after creating each bone empty. Before this, freshly created empties had an identity matrix_world, so parts got world-space locals and floated off the body.
