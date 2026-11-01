@@ -73,7 +73,7 @@
     },
     "bbox": {
       "west": -74.198,
-      "south": 40.750,
+      "south": 40.75,
       "east": -74.172,
       "north": 40.779
     },
@@ -113,5 +113,61 @@
     "streetPalmShare": 0,
     "treeDensity": 0.5,
     "inland": true
+  },
+  "metro": {
+    "name": "Newark, NJ (Schools Stadium + Passaic waterfront, merged)",
+    "origin": {
+      "name": "Newark Schools Stadium",
+      "lat": 40.76979,
+      "lon": -74.18462
+    },
+    "bbox": {
+      "west": -74.198,
+      "south": 40.724,
+      "east": -74.148,
+      "north": 40.779
+    },
+    "gridM": 8,
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14,
+    "palette": "nj",
+    "palmShare": 0,
+    "streetPalmShare": 0,
+    "treeDensity": 0.5,
+    "inland": true,
+    "mergedFrom": [
+      "newark",
+      "passaic"
+    ],
+    "_note": "World plan 6a merged extent. Not shipped until the streamer lands; newark/passaic stay as they are."
+  },
+  "shore": {
+    "name": "Highlands + Sandy Hook, NJ (merged)",
+    "origin": {
+      "name": "Twin Lights",
+      "lat": 40.39666,
+      "lon": -73.98594
+    },
+    "bbox": {
+      "west": -74.02,
+      "south": 40.392,
+      "east": -73.965,
+      "north": 40.48
+    },
+    "gridM": 8,
+    "terrainZoom": 13,
+    "overtureRelease": "2026-10-21.0",
+    "openfreemapZoom": 14,
+    "palette": "nj",
+    "palmShare": 0,
+    "streetPalmShare": 0,
+    "treeDensity": 0.4,
+    "requiresMask": true,
+    "mergedFrom": [
+      "bayshore",
+      "sandyhook"
+    ],
+    "_note": "World plan 6a merged extent (Sandy Hook 10 m -> 8 m grid). Without config.private.json this bakes public-only. Not shipped yet."
   }
 }
