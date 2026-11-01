@@ -76,7 +76,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
   return model;
 }
 
-/** Glitch v4: a glossy mesh kit (like the other types) plus a small crisp shard overlay (glitch.ts) on the same rig. */
+/** Glitch v5: the dark machinery kit plus the voxel skin + drifting cube cloud (glitch.ts) on the same rig. */
 export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u: KitU): TypedRobot {
   const base = createKitRobot('glitch', kit, look, u);
   const list: THREE.Bone[] = []; base.root.traverse((o) => { if ((o as THREE.Bone).isBone) list.push(o as THREE.Bone); });
