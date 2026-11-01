@@ -102,7 +102,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     };
     const g = mk(0.62, 0.3, 0.55, 1, 1.0, groundAlbedo), r = mk(0.52, 0.5, 0.3, 0.75, 1.5); // gain: Standard is darker than the old Lambert
     groundMat.colorNode = g.color; groundMat.roughnessNode = g.rough; groundMat.emissiveNode = g.emissive;
-    roadMat.colorNode = r.color; roadMat.roughnessNode = r.rough; roadMat.emissiveNode = r.emissive;
+    roadMat.colorNode = r.color.mul(mx_noise_float(positionWorld.mul(2.7)).mul(0.12).add(mx_noise_float(positionWorld.mul(0.35)).mul(0.08)).add(1)); // asphalt grain + patching
+    roadMat.roughnessNode = r.rough; roadMat.emissiveNode = r.emissive;
   }
   { // snow settles on roofs and other up-facing building surfaces
     const fm = facade.material as any, base = fm.colorNode;
@@ -125,7 +126,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const trees = await buildTrees(area.trees as number[], terrain);
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
-    group.add(buildTerrain(terrain, groundMat, style), buildRoads(area, terrain, roadMat), buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
+    const roads = buildRoads(area, terrain, roadMat);
+    group.add(buildTerrain(terrain, groundMat, style), roads, buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group);
     const interiors = createInteriors(buildings, terrain); group.add(interiors.group);
@@ -139,13 +141,13 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const skirt = new THREE.Mesh(new THREE.ShapeGeometry(ring).rotateX(-Math.PI / 2), new THREE.MeshLambertNodeMaterial({ color: 0x2b2a22 }));
       skirt.position.y = y; skirt.name = 'skirt'; group.add(skirt);
     }
-    return { id, area, terrain, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
+    return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   let cur = await buildContent(areaId);
   scene.add(cur.group);
 
-  const ground = (x: number, z: number) => cur.interiors.floorAt(x, z) ?? Math.max(cur.terrain.heightAt(x, z), 0);
+  const ground = (x: number, z: number) => cur.interiors.floorAt(x, z) ?? Math.max(cur.roads.surfaceAt(x, z), 0); // road/sidewalk top, not the terrain under it
   const controls = createFlyControls(camera, canvas, ground);
   const setView = (v0: View) => {
     let v = v0.snap ? snapToStreet(v0) : v0;
@@ -200,7 +202,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   /** Robot world queries: walkable floor (interior slab, roof when above it, ground, sea level) and wall blocking. */
   const world = {
     floorAt(x: number, z: number, y: number) {
-      const fl = cur.interiors.floorAt(x, z), th = cur.terrain.heightAt(x, z), roof = cur.collision.roofAt(x, z);
+      const fl = cur.interiors.floorAt(x, z), th = cur.roads.surfaceAt(x, z), roof = cur.collision.roofAt(x, z);
       if (roof !== null && y >= roof) return { y: roof, water: false, roof: true };
       if (fl !== null) return { y: fl, water: false, roof: false };
       return { y: Math.max(th, 0), water: th < 0, roof: false };
