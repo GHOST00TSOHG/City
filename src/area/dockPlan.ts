@@ -29,7 +29,7 @@ function outline(line: P[], w: number): P[] {
   }
   return L.concat(R.reverse());
 }
-export function planDocks(piers: AreaData['piers'], t: Terrain, maxBoats = 400): DockPlan {
+export function planDocks(piers: AreaData['piers'], t: Terrain, maxBoats = 400, legacy = false): DockPlan {
   const plan: DockPlan = { decks: [], pilings: [], cleats: [], bumpers: [], ladders: [], boats: [], piers: [] };
   const polys: P[][] = piers.map((p) => (p.poly ? ring(p.poly) : p.line ? outline(ring(p.line), Math.max((p.w ?? 2) / 2, 0.8)) : []));
   const bbs = polys.map((o) => { let a = Infinity, b = Infinity, c = -Infinity, d = -Infinity; for (const p of o) { a = Math.min(a, p[0]); c = Math.max(c, p[0]); b = Math.min(b, p[1]); d = Math.max(d, p[1]); } return [a, b, c, d]; });
@@ -44,17 +44,22 @@ export function planDocks(piers: AreaData['piers'], t: Terrain, maxBoats = 400):
     let best = 0, dir = 0; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length], l = Math.hypot(q[0] - p[0], q[1] - p[1]); if (l > best) { best = l; dir = Math.atan2(q[1] - p[1], q[0] - p[0]); } }
     plan.decks.push({ pts, dir, line: !!piers[k].line });
     let boats = 0;
+    const seen = new Set<string>();
     const piling = (x: number, z: number) => {
       if (!wet(x, z, 0.4)) return;
+      if (!legacy) { const key = `${Math.round(x * 2)},${Math.round(z * 2)}`; if (seen.has(key)) return; seen.add(key); } // one timber per half metre
       const bot = Math.max(t.heightAt(x, z), -9) - DOCK.SEABED_EMBED;
-      plan.pilings.push(x, z, bot, deckAt(t, x, z) + DOCK.CAP); rec.pilings++;
+      // timber stops inside the deck slab (underside is deck - 0.32): it never shows above the walking surface
+      plan.pilings.push(x, z, bot, deckAt(t, x, z) + (legacy ? DOCK.CAP : -0.12)); rec.pilings++;
     };
     for (let i = 0; i < pts.length; i++) {
       const p = pts[i], q = pts[(i + 1) % pts.length], dx = q[0] - p[0], dz = q[1] - p[1], L = Math.hypot(dx, dz); if (L < 0.4) continue;
       const ux = dx / L, uz = dz / L, nx = uz * sgn, nz = -ux * sgn, head = Math.atan2(dz, dx);
       const n = Math.max(1, Math.round(L / 2.4));
       for (let s = 0; s <= n; s++) { // pilings along the edge, pulled in so they sit under the deck rim
-        const f = s / n, x = p[0] + dx * f - nx * 0.18, z = p[1] + dz * f - nz * 0.18;
+        const f = s / n; let x = 0, z = 0, ok = false;
+        for (const inset of legacy ? [0.18] : [0.32, 0.2, 0.1]) { x = p[0] + dx * f - nx * inset; z = p[1] + dz * f - nz * inset; if (legacy || inPoly(x, z, pts)) { ok = true; break; } } // under the deck rim, never outside it
+        if (!ok) continue;
         if (wet(x, z, 0.4)) rec.over++;
         piling(x, z);
       }
