@@ -1,35 +1,37 @@
 # Newark Schools Stadium
 
-Exterior only. Area `newark`. Standard triangle budget. Built 2026-11-01.
+Exterior only. Area `newark`. Standard triangle budget. Rebuilt 2026-11-01 for the enclosure review.
 
-The 2011 stadium at 450 Bloomfield Avenue: a 400 m track around a football pitch, metal home and away stands on the OSM bleacher footprints, a 30 ft arch wall on the Bloomfield side, a clock tower on the ticket-office footprint, a support building south of the bowl, two baseball diamonds, and four floodlight masts. The 5,000 sf community building is not a separate OSM footprint, so it is not a separate mass.
+Closed bowl: a continuous ring of seats around the 400 m track, including the end zones, with one grandstand wall on the outside of that ring. An outer facade follows the OSM stadium polygon, with gate openings and the Bloomfield Avenue arch wall. The clock tower sits on that front wall, not behind it. A perimeter fence, site pad, front plaza, concourse, and a parking edge sit inside and just outside the wall. Four floodlight banks, goal posts, and a scoreboard are included. No school name or logo.
 
 ## Numbers
 
 | LOD | Triangles | Materials |
 |---|---|---|
-| LOD0 | 2740 | 3 (`newark-schools-stadium-main`, `emissive-windows`, `emissive-lamp`) |
-| LOD1 | 1108 | 3, same textures |
-| LOD2 | 590 | 3, same textures |
+| LOD0 | 8670 | 4 (`newark-schools-stadium-main`, `emissive-windows`, `emissive-lamp`, `emissive-sign`) |
+| LOD1 | 5034 | 4, same textures, same heights |
+| LOD2 | 2572 | 4, same textures, same heights |
 
-`newark-schools-stadium_COL` sits under LOD0: 60 triangles, no material. Do not draw it.
+Stand top is 7.68 m on every LOD. Window bands stay at 1.55–3.35 m and 4.15–5.50 m. Arch crowns stay at 9.14 m. Light heads stay at 24 m. There is no second slab on the west stand deck.
 
-Textures: one 2048 atlas (baseColor, normal, ORM) plus one 1024 window image used as baseColor and emissive. LOD1 and LOD2 reuse them. KTX2 in the glb: ETC1S on the colour and window images, UASTC on the normal and on the ORM (occlusion in R, roughness in G, metal in B).
+`newark-schools-stadium_COL` sits under LOD0: 36 triangles, no material. Do not draw it.
 
-Files: `.glb` 0.16 MB (167 KB), `.blend` 0.18 MB (183 KB). Source PNGs are in `art/landmarks/newark/newark-schools-stadium/textures/`.
+Textures: one 2048 atlas (baseColor, normal, ORM) plus one 1024 window image used as baseColor and emissive. LOD1 and LOD2 reuse them. KTX2 in the glb: ETC1S on baseColor, ORM, and the window image. UASTC on the normal. ORM is occlusion in R, roughness in G, metal in B. No baked daylight or shadows.
 
-Nodes: `newark-schools-stadium_LOD0`, `_LOD1`, `_LOD2`. Children `body-lodN`, `windows-lodN`, `lamps-lodN`. Collision is `newark-schools-stadium_COL`.
+Files: `.glb` 0.76 MB (782 KB), `.blend` 0.37 MB (377 KB). Source PNGs are in `art/landmarks/newark/newark-schools-stadium/textures/`.
 
-Window and lamp emission strength in the glb is 0.45. Night glow is driven by the material names `emissive-windows` and `emissive-lamp`.
+Nodes: `newark-schools-stadium_LOD0`, `_LOD1`, `_LOD2`. Children `body-lodN`, `windows-lodN`, `lamps-lodN`, `scoreboard-lodN`. Collision is `newark-schools-stadium_COL`.
 
-`npx gltf-transform optimize` was run with `--flatten false --join false --simplify false` in addition to `--compress meshopt --texture-compress ktx2`. The default `join` step merges every mesh that shares a material, which would have folded the three LOD nodes into one. Triangle counts above are the glb after that command (`glPrimitives` in inspect).
+Window, lamp, and sign emission strength in the glb is 0.45.
+
+The glb is `uastc` on the normal slot, `etc1s` on baseColor, ORM, and emissive, then `meshopt`. `join` is not used, so the LOD nodes stay separate.
 
 ## Placement
 
 - lat `40.76998321`, lon `-74.18452951`
-- headingDeg `344.7` (Bloomfield Avenue front faces 15.3° west of north)
+- headingDeg `344.7` (Bloomfield Avenue front)
 
-Both come from OSM way 446152545. The lat/lon is the area centroid of that ring. headingDeg is the outward bearing of the north edge (vertices 1 to 2), rounded to 0.1°. The bake origin in `tools/bake/areas.json` is a nearby point, not this centroid. See `art/landmarks/newark/newark-schools-stadium/refs.md`.
+Both from OSM way 446152545. The lat/lon is the area centroid. headingDeg is the outward bearing of the north edge, rounded to 0.1°. Listed in `public/landmarks/index.json` under `newark`.
 
 ## Sources
 
@@ -43,11 +45,11 @@ Both come from OSM way 446152545. The lat/lon is the area centroid of that ring.
 
 ## Model notes
 
-Metres, origin at the footprint centre on the ground, Bloomfield front toward Blender +Y. Export is glTF +Y up, so the front is glTF -Z before `headingDeg` is applied.
+Metres, origin at the footprint centre on the ground, Bloomfield front toward Blender +Y. Export is glTF +Y up.
 
-Arch crowns are the published 30 ft. The semicircle springs from a 0.55 m plinth because a pier height was not published. The clock tower is 15.2 m plus a 1.7 m roof, an estimate so it clears the arches; OSM has no height. Floodlight masts are 24 m, a typical pole height, also untagged. The track is the standard 400 m oval aligned to the football pitch, not a trace of the rough OSM ring.
+The continuous seat ring and the outer wall are the enclosure Luis asked for on 1 Nov 2026. The west side of the ring is deeper. End-zone seats close the corners. The tower uses the OSM ticket footprint, shifted onto the front wall so it is part of the entrance.
 
-Rebuild from `build_stadium.py` with plain Blender (`--factory-startup`). No paid add-ons.
+Arch crowns are the published 30 ft. The tower shaft plus roof is 16.9 m, an estimate so it clears the arches. Floodlight masts are 24 m. Neither height is tagged in OSM.
 
 ## Licence
 
