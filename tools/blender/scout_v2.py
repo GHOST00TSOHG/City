@@ -144,7 +144,10 @@ def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digi
     pn = (palm_dir or V((-xs, 0, 0))); pn = (pn - fwd * pn.dot(fwd)).normalized()
     ts = (thumb_dir or V((0, -1, 0))); ts = (ts - fwd * ts.dot(fwd) - pn * ts.dot(pn)).normalized()
     armor_m = armor_m or WHITE; digit_m = digit_m or FRAME
-    out.append(cyl(f'wrist_{side}', wr - fwd * 0.012 * k, wr + fwd * 0.022 * k, 0.024 * k * thick, STEEL, n=16))
+    out.append(cyl(f'wrist_{side}', wr - fwd * 0.03 * k, wr + fwd * 0.024 * k, 0.026 * k * thick, STEEL, n=16))
+    # wrist guard: armoured cuff closing the forearm-to-hand gap, flared plate over the back of the wrist
+    out.append(cyl(f'wrist_guard_{side}', wr - fwd * 0.05 * k, wr + fwd * 0.004 * k, 0.036 * k * thick, armor_m, n=20))
+    out.append(_box(f'wrist_plate_{side}', wr + fwd * 0.012 * k - pn * 0.03 * k * thick, (ts, pn, fwd), (0.036 * k * thick, 0.006 * k, 0.026 * k), armor_m))
     W = 0.042 * k * thick; T = 0.016 * k; L = 0.075 * k
     pc = wr + fwd * (0.02 * k + L / 2)
     out.append(_box(f'palm_{side}', pc, (ts, pn, fwd), (W, T, L / 2), digit_m))
@@ -156,11 +159,12 @@ def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digi
     else: offs = [-0.78, -0.26, 0.26, 0.78]; seg = [0.032, 0.025, 0.02]; rad = 0.0085 * thick
     digits = [(wr + fwd * (0.02 * k + L) + ts * (-o_) * W * 0.95, fwd, False) for o_ in offs]   # index nearest thumb
     # thenar mound on the palm's inner face at the thumb edge, thumb rising from it, opposed toward the palm
-    mc = pc - fwd * L * 0.18 + ts * W * 0.8 + pn * T * 0.7
-    mo = _box(f'thumb_mound_{side}', mc, (ts, pn, fwd), (W * 0.42, T * 0.75, L * 0.3), digit_m, bev=0.45)
+    mc = pc + fwd * L * 0.05 + ts * W * 0.72 + pn * T * 0.8
+    mo = _box(f'thumb_mound_{side}', mc, (ts, pn, fwd), (W * 0.36, T * 0.8, L * 0.34), digit_m, bev=0.45)
     out.append(mo)
-    tdir = (fwd * 0.55 + ts * 0.6 + pn * 0.35).normalized()
-    digits.append((mc + ts * W * 0.3 + fwd * L * 0.12, tdir, True))
+    # thumb runs down beside the index finger and turns in across the palm (opposition), never out past the hand
+    tdir = (fwd * 0.82 + ts * 0.18 + pn * 0.55).normalized()
+    digits.append((mc + ts * W * 0.22 + fwd * L * 0.22 + pn * T * 0.2, tdir, True))
     for i, (b, d, thumb) in enumerate(digits):
         for j, Ls in enumerate(seg):
             fi = 9 if thumb else i; bone(f'{S_}F{fi}_{j}'); J[f'{S_}F{fi}_{j}'] = b.copy()
@@ -472,6 +476,8 @@ def main():
     if '--hand-test' in argv: yield from hand_test(); return
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); scout_variants(); yield 0.1
+    if '--closeup' in argv:
+        render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.12, 0.92), dist=1.6, lens=60); return
     if '--skel' in argv:
         import v2export as X; X.JOV = J; X.write_skeleton('scout', [o for o in bpy.data.objects if o.type == 'MESH']); return
     yield from addon_pass()

@@ -1,8 +1,8 @@
 {
  "_doc": "Per-type skeleton shared by the game (src/robot/types.ts) and Blender (tools/blender/kit.py). Game frame: +Y up, +Z forward, metres. Each bone offset is relative to its parent; Right* bones mirror Left* in x. sole = foot-bone y of the sole, hand = forearm-bone y of the wrist.",
  "scout": {
-  "height": 2.04,
-  "sole": -0.25,
+  "height": 5.512,
+  "sole": -0.398,
   "hand": -0.221,
   "bones": {
    "Hips": [
@@ -96,19 +96,19 @@
     0.021
    ],
    "LeftF9_0": [
-    -0.019,
-    -0.0352,
-    0.1142
+    -0.0272,
+    -0.077,
+    0.1267
    ],
    "LeftF9_1": [
-    -0.009,
-    -0.0084,
-    0.0446
+    -0.0167,
+    -0.0309,
+    0.03
    ],
    "LeftF9_2": [
-    0.0005,
-    -0.0067,
-    0.0355
+    -0.0058,
+    -0.0256,
+    0.0248
    ],
    "LeftUpLeg": [
     0.12,

@@ -162,8 +162,9 @@ createScene(canvas, areaId).then(async (app) => {
 
   let frames = 0, last = performance.now(), t = 0;
   const timer = new THREE.Timer();
+  const fixedDt = +(qs.get('fixeddt') ?? 0); // capture hook: step the sim a fixed dt per rendered frame (slow renderers)
   app.renderer.setAnimationLoop(() => {
-    timer.update(); const rdt = timer.getDelta(); t += rdt;
+    timer.update(); const rdt = fixedDt || timer.getDelta(); t += rdt;
     const dt = rdt * (slowT > 0 ? 0.3 + 0.7 * (1 - Math.sin((slowT / 0.55) * Math.PI)) : 1);
     if (cust.open) {
       updateHangar(rdt); cust.tick();
