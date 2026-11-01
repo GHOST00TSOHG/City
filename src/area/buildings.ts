@@ -1,10 +1,44 @@
 import * as THREE from 'three/webgpu';
 import type { Building, Terrain } from './data';
 import { Soup, ringPts, signedArea, flatPoly } from './geom';
+import { exposedHeight } from './cleanup';
 import { type AreaStyle, styleFor, pick, WALL, ROOF, SHINGLE } from './textures';
 
 const CHUNK = 600; // m — one merged mesh per chunk keeps draw calls low and still frustum-culls
 const UP: [number, number, number] = [0, 1, 0];
+const PLINTH_MIN = 0.6; // bare wall taller than this (m) gets a stone base; lower foundations stay as before
+const TIER_H = 1.1, TIER_OUT = 0.35, TIER_MAX = 4; // stepped plinth: each step is at most this tall and sits this much further out
+
+/** Stepped stone plinth / retaining base under a building on a steep lot: concrete-block tiers from the floor down to the (lower) ground, each step set
+ *  out a little further with a cap ledge, so a tall foundation reads as a retaining wall instead of a bare facade. Follows the terrain along every edge. */
+function stoneBase(s: Soup, ring: [number, number][], floor: number, exposed: number, terrain: Terrain, seed: number, wall: THREE.Color) {
+  const sign = signedArea(ring) > 0 ? 1 : -1, n = ring.length, K = Math.min(TIER_MAX, Math.max(1, Math.ceil(exposed / TIER_H)));
+  const stone = new THREE.Color().setRGB(0.8, 0.78, 0.74).multiplyScalar(0.85 + ((seed >>> 3) % 100) / 100 * 0.15).lerp(wall, 0.12), cap = stone.clone().multiplyScalar(1.12);
+  const en: [number, number][] = []; // outward normal of each edge
+  for (let i = 0; i < n; i++) { const [x0, z0] = ring[i], [x1, z1] = ring[(i + 1) % n], L = Math.hypot(x1 - x0, z1 - z0) || 1; en.push([((z1 - z0) / L) * sign, (-(x1 - x0) / L) * sign]); }
+  const off = (k: number): [number, number][] => ring.map((p, i) => { // mitred offset ring
+    const a = en[(i + n - 1) % n], b = en[i], mx = a[0] + b[0], mz = a[1] + b[1], ml = Math.hypot(mx, mz) || 1, c = Math.min(Math.max((mx / ml) * b[0] + (mz / ml) * b[1], 0.5), 1), d = k / c;
+    return [p[0] + (mx / ml) * d, p[1] + (mz / ml) * d];
+  });
+  const rings = Array.from({ length: K + 1 }, (_, k) => (k === 0 ? ring : off(TIER_OUT * k)));
+  const g = (x: number, z: number) => Math.max(terrain.heightAt(x, z), 0);
+  s.cur = [floor - TIER_H * K, floor, WALL.concrete * 4 + ROOF.gravel * 32, 0];
+  for (let i = 0; i < n; i++) {
+    const L = Math.hypot(ring[(i + 1) % n][0] - ring[i][0], ring[(i + 1) % n][1] - ring[i][1]), m = Math.max(1, Math.ceil(L / 3));
+    const nrm: [number, number, number] = [en[i][0], 0, en[i][1]];
+    for (let k = 1; k <= K; k++) { // tier k occupies ring k, between floor-(k-1)*H and floor-k*H (last tier runs to the ground)
+      const A = rings[k][i], B = rings[k][(i + 1) % n], PA = rings[k - 1][i], PB = rings[k - 1][(i + 1) % n], top = floor - (k - 1) * TIER_H, bot = k === K ? -Infinity : floor - k * TIER_H;
+      for (let j = 0; j < m; j++) {
+        const u0 = j / m, u1 = (j + 1) / m, x0 = A[0] + (B[0] - A[0]) * u0, z0 = A[1] + (B[1] - A[1]) * u0, x1 = A[0] + (B[0] - A[0]) * u1, z1 = A[1] + (B[1] - A[1]) * u1;
+        const b0 = Math.min(Math.max(g(x0, z0) - 0.3, bot), top), b1 = Math.min(Math.max(g(x1, z1) - 0.3, bot), top);
+        if (top - b0 < 0.03 && top - b1 < 0.03) continue;
+        s.quad([x0, b0, z0], [x1, b1, z1], [x1, top, z1], [x0, top, z0], stone, nrm, [0.7, 0.7, 1, 1]);
+        const px0 = PA[0] + (PB[0] - PA[0]) * u0, pz0 = PA[1] + (PB[1] - PA[1]) * u0, px1 = PA[0] + (PB[0] - PA[0]) * u1, pz1 = PA[1] + (PB[1] - PA[1]) * u1;
+        s.quad([px0, top, pz0], [px1, top, pz1], [x1, top, z1], [x0, top, z0], cap, UP); // tread / cap ledge
+      }
+    }
+  }
+}
 
 /** Solid, clean building shells from baked footprints: walls + roof (flat / gabled / hipped / pyramidal / skillion). */
 export function buildBuildings(list: Building[], terrain: Terrain, material: THREE.Material, style: AreaStyle = styleFor('')) {
@@ -32,7 +66,9 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     const pack = wm * 4 + rm * 32;
     let gmin = Infinity; for (const [x, z] of outer) gmin = Math.min(gmin, terrain.heightAt(x, z));
     gmin = b.pad ?? Math.max(gmin, 0.2); // clean-up sets the floor level (pad) and a foundation (fy) down to the lowest ground
-    const base = b.m > 0 ? gmin + b.m : (b.fy ?? gmin - 0.4);
+    const exposed = b.m > 0 ? 0 : exposedHeight(outer, gmin, terrain.heightAt); // steep lot: bare wall between floor and downhill ground
+    const plinth = exposed > PLINTH_MIN;
+    const base = b.m > 0 ? gmin + b.m : plinth ? gmin : (b.fy ?? gmin - 0.4); // with a plinth the facade (windows, floors) starts at the floor, the stone below it
     const top = gmin + b.h;
     const pitched = b.s !== 'flat' && b.rh > 0.2;
     const eave = pitched ? top - b.rh : top;
@@ -52,6 +88,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
         s.quad([x0, base, z0], [x1, base, z1], [x1, eave, z1], [x0, eave, z0], wall, nrm, [foot, foot, 1, 1]);
       }
     }
+    if (plinth) stoneBase(s, outer, gmin, exposed, terrain, seed, wall);
     s.cur = [base, eave, pack, 0]; // roofs, gables, soffits: no windows
     if (!pitched) {
       flatPoly(s, outer, rings.slice(1), top, roof);
