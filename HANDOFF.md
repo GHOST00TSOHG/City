@@ -32,6 +32,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| Robot types: Scout / Heavy / Worker / Glitch, save v2, garage type picker | bot/websmith-robot-types | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Jonn directions for the rebuild | bot/websmith-jonn-directions | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-10-31 |
@@ -197,3 +198,68 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 - Height fix: `buildRoads(...).surface.surfaceAt(x,z)` (segment spatial hash) returns the asphalt/sidewalk top; `ground()` and `world.floorAt` use it, so the robot/camera stand on the road instead of the terrain under it. `__ground(x,z)` for tests; `tests/roads.spec.ts`.
 ## Palms (bot/websmith-no-nj-palms)
 - Bug: bake scatter gave wood/wetland cells a 25% palm chance even with `palmShare: 0`. Fixed in `tools/bake/bake.mjs`; runtime guard `buildTrees(..., palms = id === 'keywest')` turns any baked palm in NJ into broadleaf (no re-bake needed). `stats.palms` / `__stats()`; `tests/palms.spec.ts`.
+## Robot types (Scout, Heavy, Worker, Glitch)
+Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/blender/robot_types.py` (Hard Ops and MESHmachine run when installed in the box's Blender user dir; the add-ons themselves are never committed).
+- **Types (`src/robot/types.ts`):** `TYPES[type]` holds the label, height, 3 options for each of the 6 slots, default paint, movement multipliers and tri budget. All types share the Mixamo-style skeleton (`skeleton.json`, scaled per type).
+- **Renderer (`src/robot/kit.ts`, `typed.ts`):** each mesh type loads `public/robot/<type>/{parts.glb, kit.json, masks.webp, normal.webp}` plus the shared `decals.webp`. The visible nodes are merged into one rigid-skinned mesh per material region, so a robot costs 6 to 9 draws. Paint × baked AO/edge-wear/grime masks, a normal map, a decal atlas on UV1, pistons that aim at runtime, and per-pixel damage and repair sweep. **Screen face:** an eye glyph shader on the `screen` region (rect from `kit.json screens[helmet]`). It blinks, squints during burst, and shows X eyes when damage is above 70 %.
+- **Glitch:** `public/robot/glitch/cubes.json` (4,126 cubes in 48 parts) is drawn as one `InstancedMesh`. Bones come from a mat4 uniform array, and hidden slot options scale to 0. Idle drift, burst scatter and damage loosening all run on the GPU.
+- **Tris:** each kit is decimated after export with `node tools/robot-simplify.mjs <type> <ratio> <error>` (meshoptimizer, attribute-aware). `kit.json` keeps `tris_export` (pre-decimation), `tris` and `simplify`. Heavy uses 0.4/0.03: default build 22.0k, worst-case 29.8k (was 43k / 54k). Scout uses 0.7/0.01 (23.3k / 27.3k) and Worker 0.7/0.01 (19.0k / 28.4k). Re-run it after every Blender re-export, because it is not idempotent on an already-decimated file.
+- **Save v2 (`src/save.ts`):** `city.save.v2` = `{ type, paint: per type, slots: per type, damage }`. v1 migrates to scout: v1 colours go to scout, v1 part names (retired set) fall back to scout defaults, and damage is kept. v1 stays in storage. Bad values are sanitised.
+- **Garage:** 4 type cards above the slots. Switching type restores that type's last build and paint. The camera framing scales with the robot's height.
+- **Movement:** `ctl.setTuning(TYPES[t].tune)` sets walk/run/cruise/burst/jump/turn/accel multipliers. Scout is fast and agile, Heavy is slow with high inertia, Worker is the baseline, and Glitch is floaty and has the fastest burst.
+- **Test:** `npx vite --port 5180` then `node tools/test-robot-types.mjs 5180`. It covers migration, each type in the garage and the world, build restore on switch, reload, a corrupt save, and zero console errors. Shots go to `/workspace/city-shots/types-final-*.png`.
+- Measured (SwiftShader, Key West start): 41 to 51 draw calls in the garage and 35 to 45 in the world.
+- **Still to do:** Heavy ground-pound dust ring and shove; Glitch blink-dash; Scout double-jump/dash; LOD1/LOD2 for other players' robots past 25/80 m; KTX2 textures (WebP now); a phone cube-count drop for Glitch; a real-GPU fps check on an M4 Air. The old phase-7b parts (`public/robot/parts/*.glb`, `src/robot/parts.ts`, `loadRobot`, `robot_parts.py`) are unused but not deleted, because the plan doesn't call for removing them.
+
+## robots-v2 status (2026-10-31 22:55 ET)
+- **Blender (box only; add-ons in /workspace/private/blender-addons, .blend in /workspace/private, never committed):**
+  `xvfb-run -a -s "-screen 0 1920x1080x24" blender --enable-event-simulate -noaudio -P tools/blender/<type>_v2.py -- [--kit] [--skel] [--closeup] [--fast]`.
+  Run them one at a time: write_skeleton read-modify-writes src/robot/skeleton.json. `--skel` = rig only (seconds), `--kit` = add-on pass + parts.glb/kit.json + skeleton (~14 min).
+  v2export.JOV: a script run as __main__ under -P is not in sys.modules, so scout_v2 hands its J dict over explicitly.
+- **Types:** Scout (scout_v2.py), Heavy (heavy_v2.py, 3 clamp digits), Worker (worker_v2.py, 5 gloved fingers), Glitch (glitch_v2.py -> public/robot/glitch/shards.json, src/robot/glitch.ts).
+  Skeleton bones: scout 24, heavy 18, worker 24, glitch 24 (fingers included).
+- **Glitch runtime:** 4 draws (shards, cyan + magenta ghosts, particle pool). Instances are compacted to the equipped parts on setLook; ghosts draw a 260-shard prefix. All motion is in the TSL vertex shader (Fn-wrapped).
+- **Specials (KeyZ):** Heavy ground-pound (impact decal/dust/debris/shake at 0.47 s), Glitch blink-dash (dissolve, 40 m/s blink, reassembly burst at 0.42 s). Configured per type in types.ts (motion.special, specialDur) and applied in main.ts applyType().
+- **Audio:** src/robot/audio.ts. One master gain (1.0); every clip plays at 1.0; only *_idle_loop loops; footsteps 01-03 round-robin every half gait cycle; ogg with m4a fallback. Heavy footfalls kick the camera (0.12 x mass).
+- **Kit tris (body + worst-case slots), all < 30k:** scout 26,786 body (test: 27,264 drawn), heavy 25,225, worker 25,970, glitch 27,720 drawn.
+- **Test:** node tools/test-robot-types.mjs 5180: all PASS, 0 console errors; calls garage 44-49 / world 38-43.
+- **Clips:** node tools/clips-robot-types.mjs 5180 (deterministic ?fixeddt stepping) -> /workspace/robot-clips/.
+- **Renders:** /workspace/robot-renders/{scout,heavy,worker,glitch}-{front,side,back,34,night}.png, scout-v2c-closeup.png (wrist guard + tucked thumb).
+- **Bench:** ?bench is on origin/main, not on this branch (it was cut before bench landed). Rebase before the bench numbers.
+- **Never merge the PR.**
+
+## 2026-11-01 robots-v2 log
+- Scout v2g done (visor slit, seams per part, light knuckles); kit re-exported (e60d8fe). Renders: robot-renders/scout-v2g-{closeup,34}.png
+- Heavy v3: rebuilt from scratch in tools/blender/heavy_v2.py; faceted leg armour (dark core + hard plates), thigh/shin/calf pistons, V-brow/horns/twin eye slits. Preview: `-- --preview --out=heavy-v3.png` (34 + hand closeup).
+- Hands fix (all robots, shared S.build_hand): the four fingers now curl inward toward the thigh (curl rotation sign flipped for non-thumb digits); thumbs unchanged. Front render: `scout_v2.py -- --hands --out=scout-v2h-hands.png`.
+- Heavy v3 --kit run done (add-on pass + export to public/robot/heavy + turnaround), re-run after the hand fix (TRIS 70126 in Blender). Renders: heavy-v3h-34.png, heavy-v3h-closeup.png (hand).
+- Worker v3 rebuild in progress (worker_v2.py): faceted olive plates on a dark frame, pistons, lattice crane boom with ram + beacon, welder rig, forearm winch, work lights, boot treads, `--preview` mode.
+- Heavy test (TYPES=heavy): all PASS, 47/41 calls, 26,533 tris, 0 console errors. Test now takes TYPES=a,b env to run one robot at a time.
+- Worker v3 preview: worker-v3-34.png, worker-v3-closeup.png.
+- Worker v3 kit exported (Blender TRIS 49,858). Test (TYPES=worker): all PASS, 49/43 calls, 26,146 tris, 0 console errors. Next: Glitch from scratch.
+- Hands front render: scout-v2i-hands-front.png (az=0 = front, robot faces -y; kneecaps + front skirt visible). Curled fingers face the thighs.
+- Worker v3b: chamfered/angled plates, wider stance, menacing cyclops under brow cage + jaw, bigger lattice crane with jib/hook block, grittier olive. Render worker-v3b-34.png.
+
+## Glitch v3 (2026-11-01)
+- glitch_v2.py rebuilt: V-chest, glow piping, dense small shards, orbit trails, dash afterimage; glitch_post.py adds RGB split/scanlines.
+- Renders: /workspace/robot-renders/glitch-v3-34.png, glitch-v3-closeup.png. Close-up still busy.
+- Glitch kit exported (3800 shards, 30,400 tris). Test TYPES=glitch: garage 44 calls / world 38 calls, 30,656 tris, 0 console errors.
+
+## Glitch v3b / Worker v3c (2026-11-01)
+- Glitch v3b: 838 flat plate shards (inverse-transpose normals, part-aligned), glow-zone exclusion keeps visor/core visible, ankle strut, sparser afterimage, cyan/magenta rim lights in preview, post (RGB split/scanlines) via glitch_post.py. Renders: /workspace/robot-renders/glitch-v3b-34.png, glitch-v3b-closeup.png. Test: tris 11,544, garage 44 calls, world 38 calls, 0 console errors.
+- Worker v3c: solid box-section crane boom + jib/knuckle/ram, broader chest, bigger pauldrons, thicker limbs, hunch 0.17, hands 1.55. Render: worker-v3c-34.png. Test: tris 22,332, garage 49 calls, world 43 calls, 0 console errors.
+- Hands: all robots use shared S.build_hand (palm faces thigh, digits curl inward) — verified, no change needed.
+- Note: HOPS bevel 'angle' AttributeError in worker kit log is non-fatal.
+
+## Glitch v3c / Worker v3d
+- Worker v3d: one olive/gunmetal scheme with hazard-orange accents only (paint in src/robot/types.ts). Tapered, sloped plates with inset panels, a helmet sunk into a collar with a red visor slit, hydraulic pistons, three-talon claw feet, forged C-hook crane. Kit: 28,390 tris after export; simplified with `robot-simplify.mjs worker 0.7 0.01`. In game: 22,553 tris, garage 49 calls, world 43.
+- Glitch v3c: dark proxy under a flush dark tile skin (1,405 shards, 11,240 tris), about 40 light edge cracks, a thin 4-streak dash trail, rim lights lowered, a lighter post RGB split. In game: 15,312 tris, garage 44 calls, world 38.
+- Tests: TYPES=worker,glitch all PASS, 0 console errors.
+- Renders: /workspace/robot-renders/{worker-v3d-34,worker-v3d-closeup,glitch-v3c-34,glitch-v3c-closeup}.png
+
+## Glitch v4 hero pass (2026-11-01)
+- Build: `tools/blender/glitch_v4.py` (`--preview` renders `glitch-v4-34/-closeup`, `--kit` exports). Sleek tall body: wasp waist, inverted-triangle chest, chevron visor slit, two swept blade fins, digitigrade legs on blade feet; glossy near-black armor, cyan (`glow`→visor) + magenta (`glow_m`→decalColor, new REGION in v2export.py) seams.
+- Glitch slices (stills only): left forearm + right shin bands bisected, offset sideways, with cyan/magenta ghost copies for hard RGB-split edges. Stage: cyan + magenta rims, emissive ground-glow disc.
+- Runtime: Glitch is now a mesh kit (`createKitRobot`) + 16-shard overlay (`createGlitchBody`) on the same rig; kit meshes hide while uDash > 0.5 during blink-dash. cubes.json removed. Paint dark (#16181f / #1d2029, visor #3ff4ff, decal #ff2fb0); height 2.3, sole -0.2.
+- Stats: kit 25,830 tris (budget 26k); TYPES=glitch PASS: garage 50 calls, world 44 calls, 25,036 robot tris, walk 3.57 m/s, 0 console errors.
+- Note: skeleton.json `height` metadata counts every slot option (3.884), unused at runtime.
