@@ -1,0 +1,506 @@
+[
+ {
+  "name": "newark-penn-edge-street-S",
+  "area": "newark",
+  "pos": [
+   1690,
+   4,
+   3990
+  ],
+  "look": [
+   1700,
+   3,
+   4400
+  ]
+ },
+ {
+  "name": "newark-penn-edge-street-E",
+  "area": "newark",
+  "pos": [
+   1700,
+   4,
+   3960
+  ],
+  "look": [
+   2200,
+   3,
+   3960
+  ]
+ },
+ {
+  "name": "newark-penn-edge-street-SE",
+  "area": "newark",
+  "pos": [
+   1650,
+   4,
+   3900
+  ],
+  "look": [
+   2100,
+   3,
+   4350
+  ]
+ },
+ {
+  "name": "newark-penn-edge-mid-S",
+  "area": "newark",
+  "pos": [
+   1700,
+   90,
+   3800
+  ],
+  "look": [
+   1700,
+   20,
+   4300
+  ]
+ },
+ {
+  "name": "newark-penn-edge-mid-E",
+  "area": "newark",
+  "pos": [
+   1500,
+   90,
+   3960
+  ],
+  "look": [
+   2100,
+   20,
+   3960
+  ]
+ },
+ {
+  "name": "newark-penn-edge-mid-SE",
+  "area": "newark",
+  "pos": [
+   1450,
+   120,
+   3700
+  ],
+  "look": [
+   2000,
+   10,
+   4300
+  ]
+ },
+ {
+  "name": "newark-penn-edge-high-S",
+  "area": "newark",
+  "pos": [
+   1700,
+   1500,
+   3000
+  ],
+  "look": [
+   1700,
+   0,
+   4600
+  ]
+ },
+ {
+  "name": "newark-penn-edge-high-E",
+  "area": "newark",
+  "pos": [
+   800,
+   1500,
+   3960
+  ],
+  "look": [
+   2600,
+   0,
+   3960
+  ]
+ },
+ {
+  "name": "newark-penn-edge-high-SE",
+  "area": "newark",
+  "pos": [
+   900,
+   1500,
+   3000
+  ],
+  "look": [
+   2300,
+   0,
+   4500
+  ]
+ },
+ {
+  "name": "newark-penn-edge-max-S",
+  "area": "newark",
+  "pos": [
+   1700,
+   5900,
+   3400
+  ],
+  "look": [
+   1700,
+   0,
+   5200
+  ]
+ },
+ {
+  "name": "newark-penn-edge-max-SE",
+  "area": "newark",
+  "pos": [
+   1000,
+   5900,
+   2800
+  ],
+  "look": [
+   2200,
+   0,
+   4700
+  ]
+ },
+ {
+  "name": "newark-penn-edge-max-horizon-S",
+  "area": "newark",
+  "pos": [
+   1700,
+   5900,
+   3000
+  ],
+  "look": [
+   1700,
+   5000,
+   9000
+  ]
+ },
+ {
+  "name": "newark-penn-edge-max-horizon-E",
+  "area": "newark",
+  "pos": [
+   1000,
+   5900,
+   3960
+  ],
+  "look": [
+   8000,
+   5000,
+   3960
+  ]
+ },
+ {
+  "name": "newark-penn-edge-low-W",
+  "area": "newark",
+  "pos": [
+   2400,
+   30,
+   4400
+  ],
+  "look": [
+   1704,
+   15,
+   3962
+  ]
+ },
+ {
+  "name": "newark-aerial",
+  "area": "newark",
+  "pos": [
+   650,
+   360,
+   650
+  ],
+  "look": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "newark-overview-N",
+  "area": "newark",
+  "pos": [
+   200,
+   900,
+   3300
+  ],
+  "look": [
+   0,
+   0,
+   -900
+  ]
+ },
+ {
+  "name": "newark-edge-N-high",
+  "area": "newark",
+  "pos": [
+   0,
+   1500,
+   -500
+  ],
+  "look": [
+   0,
+   0,
+   -2000
+  ]
+ },
+ {
+  "name": "newark-edge-W-high",
+  "area": "newark",
+  "pos": [
+   0,
+   1500,
+   1500
+  ],
+  "look": [
+   -2000,
+   0,
+   1500
+  ]
+ },
+ {
+  "name": "newark-edge-E-mid",
+  "area": "newark",
+  "pos": [
+   1400,
+   80,
+   800
+  ],
+  "look": [
+   2200,
+   10,
+   800
+  ]
+ },
+ {
+  "name": "keywest-aerial",
+  "area": "keywest",
+  "pos": [
+   650,
+   420,
+   700
+  ],
+  "look": [
+   -900,
+   0,
+   -1300
+  ]
+ },
+ {
+  "name": "keywest-oldtown",
+  "area": "keywest",
+  "pos": [
+   -520,
+   140,
+   -760
+  ],
+  "look": [
+   -1050,
+   0,
+   -1350
+  ]
+ },
+ {
+  "name": "keywest-shore-S",
+  "area": "keywest",
+  "pos": [
+   -300,
+   60,
+   -200
+  ],
+  "look": [
+   -300,
+   0,
+   600
+  ]
+ },
+ {
+  "name": "keywest-shore-N",
+  "area": "keywest",
+  "pos": [
+   -1000,
+   90,
+   -1900
+  ],
+  "look": [
+   -1000,
+   0,
+   -2700
+  ]
+ },
+ {
+  "name": "keywest-harbor-docks",
+  "area": "keywest",
+  "pos": [
+   -1100,
+   45,
+   -2150
+  ],
+  "look": [
+   -1400,
+   0,
+   -2500
+  ]
+ },
+ {
+  "name": "keywest-edge-high-W",
+  "area": "keywest",
+  "pos": [
+   -1300,
+   1400,
+   -1300
+  ],
+  "look": [
+   -4000,
+   0,
+   -1300
+  ]
+ },
+ {
+  "name": "keywest-edge-max-E",
+  "area": "keywest",
+  "pos": [
+   0,
+   5900,
+   -1300
+  ],
+  "look": [
+   4500,
+   0,
+   -1300
+  ]
+ },
+ {
+  "name": "bayshore-aerial",
+  "area": "bayshore",
+  "pos": [
+   500,
+   260,
+   300
+  ],
+  "look": [
+   -700,
+   0,
+   -1300
+  ]
+ },
+ {
+  "name": "bayshore-shore",
+  "area": "bayshore",
+  "pos": [
+   -200,
+   60,
+   -300
+  ],
+  "look": [
+   -600,
+   0,
+   -900
+  ]
+ },
+ {
+  "name": "bayshore-edge-N-high",
+  "area": "bayshore",
+  "pos": [
+   -800,
+   1300,
+   -1000
+  ],
+  "look": [
+   -800,
+   0,
+   -3200
+  ]
+ },
+ {
+  "name": "bayshore-edge-max-W",
+  "area": "bayshore",
+  "pos": [
+   0,
+   5900,
+   -1000
+  ],
+  "look": [
+   -4000,
+   0,
+   -1000
+  ]
+ },
+ {
+  "name": "sandyhook-aerial",
+  "area": "sandyhook",
+  "pos": [
+   900,
+   420,
+   1300
+  ],
+  "look": [
+   -200,
+   0,
+   -600
+  ]
+ },
+ {
+  "name": "sandyhook-shore",
+  "area": "sandyhook",
+  "pos": [
+   400,
+   50,
+   500
+  ],
+  "look": [
+   900,
+   0,
+   900
+  ]
+ },
+ {
+  "name": "sandyhook-edge-high-S",
+  "area": "sandyhook",
+  "pos": [
+   0,
+   1500,
+   2500
+  ],
+  "look": [
+   0,
+   0,
+   5000
+  ]
+ },
+ {
+  "name": "passaic-aerial",
+  "area": "passaic",
+  "pos": [
+   -600,
+   320,
+   800
+  ],
+  "look": [
+   150,
+   0,
+   -150
+  ]
+ },
+ {
+  "name": "passaic-dock",
+  "area": "passaic",
+  "pos": [
+   0,
+   30,
+   0
+  ],
+  "look": [
+   0,
+   0,
+   0
+  ]
+ },
+ {
+  "name": "passaic-edge-high-S",
+  "area": "passaic",
+  "pos": [
+   0,
+   1200,
+   800
+  ],
+  "look": [
+   0,
+   0,
+   2600
+  ]
+ }
+]

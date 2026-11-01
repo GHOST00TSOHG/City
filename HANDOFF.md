@@ -47,6 +47,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Landmark: Branch Brook Park Octagon Shelter (`newark` / `branch-brook-park-octagon-shelter`) | jonn/newark-branch-brook-park-octagon-shelter | Grok Bot for Jonn (BlvckFish) | PR open | 2026-11-01 |
 | Landmark: clear vegetation + flatten terrain under footprints | bot/websmith-landmarks-terrain | Grok Bot (Websmith) | PR open | 2026-11-01 |
 | Landmark: Military Park, Wars of America + park pavilion (`newark` / `wars-of-america`, `military-park-pavilion`) | jonn/newark-military-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
+| Map cleanup: floating/sunk buildings and roads, water, overlaps, coast/docks, ground void, solid shells (all areas) | bot/websmith-map-cleanup | Claude (Websmith) | in progress, not pushed | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
