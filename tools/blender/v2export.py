@@ -89,6 +89,7 @@ def export_kit(rtype, slots, budget=28500, screens=None, extra_meta=None):
         if key not in groups:
             e = bpy.data.objects.new('__'.join(key), None); sc.collection.objects.link(e)
             e.location = joint_world(o['bone']); groups[key] = e
+            bpy.context.view_layer.update()   # fresh empty: make matrix_world valid before re-parenting
         mw = o.matrix_world.copy(); o.parent = groups[key]; o.matrix_world = mw
     bpy.context.view_layer.update()
     for o in sc.objects: o.select_set(False)
