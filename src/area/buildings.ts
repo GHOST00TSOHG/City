@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { Building, Terrain } from './data';
-import { Soup, ringPts, signedArea, flatPoly } from './geom';
+import { Soup, Grow, ringPts, signedArea, flatPoly } from './geom';
 import { foundation } from './foundation';
 import { type AreaStyle, styleFor, pick, WALL, ROOF, SHINGLE } from './textures';
 
@@ -17,7 +17,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     if (!rings.length) continue;
     const outer = rings[0], [cx, cz] = [b.o[0] / 10, b.o[1] / 10];
     const key = `${Math.floor(cx / CHUNK)},${Math.floor(cz / CHUNK)}`;
-    let s = chunks.get(key); if (!s) { chunks.set(key, (s = new Soup())); s.f = []; }
+    let s = chunks.get(key); if (!s) { chunks.set(key, (s = new Soup())); s.f = new Grow(); }
     // Painting: pick a wall material per building from the area style (bake colour hints brick), then a paint colour.
     const seed0 = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0, h1 = (seed0 % 1009) / 1009, h2 = ((seed0 >>> 10) % 997) / 997, h3 = ((seed0 >>> 20) % 991) / 991;
     wall.setHex(b.wc); const hsl = { h: 0, s: 0, l: 0 }; wall.getHSL(hsl);

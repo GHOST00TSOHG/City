@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { AreaData, Terrain } from './data';
 import { Soup, ringPts, flatPoly } from './geom';
-import { inLandmarkFlattenBlend, type LandmarkPad } from './landmarks';
+import type { LandmarkPad } from './landmarks';
 import { type AreaStyle, styleFor } from './textures';
 
 // Landcover class -> ground texture layer weights [grass, sand, soil, concrete] and a tint (texture colour is kept true).
@@ -59,11 +59,13 @@ export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaSt
 }
 
 const ROAD = [0x4c4c4e, 0x575758, 0x626262, 0x9a9184].map((h) => new THREE.Color(h));
-const LIFT = [0.16, 0.13, 0.1, 0.07];
+/** Road surface offsets over the terrain (m). Every layer stays under 0.1 m; majors sit above minors so a crossing covers it (the road material
+ *  also has a polygon offset against the terrain). Sidewalks sit under every road, centre markings 6 mm over their own road. */
+const LIFT = [0.07, 0.062, 0.054, 0.046];
 
 /** Road ribbons with mitred joins and round end caps, draped on the terrain. One mesh. */
 const MARK = [new THREE.Color(0xc9a43a), new THREE.Color(0xd8d8d2)]; // c0 centre line yellow, c1 white
-const WALK = new THREE.Color(0xa8a49c), WALK_LIFT = 0.05, WALK_W = 1.8;
+const WALK = new THREE.Color(0xa8a49c), WALK_LIFT = 0.038, WALK_W = 1.8;
 
 /** Road surface height query: spatial hash of road segments, so walkers stand ON the asphalt/sidewalk, not in it. */
 export interface RoadSurface { surfaceAt(x: number, z: number): number }
@@ -82,9 +84,6 @@ export function redrapeRoadGeometry(mesh: THREE.Mesh, surface: RoadSurface) {
 export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, landmarkPads: LandmarkPad[] = []): THREE.Mesh & { surface: RoadSurface } {
   const s = new Soup();
   const order = [...a.roads].sort((p, q) => q.c - p.c); // paths first, majors last (on top)
-  const step = Math.max(2, t.cell);
-  const stepAt = (x: number, z: number) => (landmarkPads.length && inLandmarkFlattenBlend(landmarkPads, x, z, t.cell) ? Math.min(step, 2) : step);
-  const base = (x: number, z: number) => Math.max(t.heightAt(x, z), 0.05);
   const B = 32, hash = new Map<number, number[]>(), segs: number[] = []; // seg: x0 z0 x1 z1 halfWidth lift
   const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number) => {
     const id = segs.length / 6; segs.push(x0, z0, x1, z1, hw, lift);
@@ -92,20 +91,18 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, la
     for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) { const k = i * 100003 + j; let l = hash.get(k); if (!l) hash.set(k, (l = [])); l.push(id); }
   };
   for (const r of order) {
-    const pts = resample(ringPts(r.p), stepAt); if (pts.length < 2) continue;
-    const w = r.w / 2, col = ROAD[r.c] ?? ROAD[1], lift = LIFT[r.c] ?? 0.1;
-    const Y = (x: number, z: number) => base(x, z) + lift;
-    const nearLm = landmarkPads.length > 0 && pts.some(([x, z]) => inLandmarkFlattenBlend(landmarkPads, x, z, t.cell));
-    const crossFor = (hw: number) => (nearLm ? Math.max(1, Math.ceil((2 * hw) / 2)) : 1); // ~2 m columns inside the blend
+    const w = r.w / 2, col = ROAD[r.c] ?? ROAD[1], lift = LIFT[r.c] ?? 0.05;
+    const pts = ringPts(r.p); if (pts.length < 2) continue;
+    // every layer is cut along the terrain triangles under it, so its vertices lie exactly on the rendered ground + a fixed lift
+    const layer = (c: THREE.Color, lf: number): Tri => (a, b, d) => drapedTri(s, t, a, b, d, c, lf);
     if (r.c <= 2 && r.w >= 5) { // sidewalks
-      const Yw = (x: number, z: number) => base(x, z) + WALK_LIFT;
-      ribbon(s, pts, w + WALK_W, WALK, Yw, crossFor(w + WALK_W));
+      ribbon(pts, w + WALK_W, layer(WALK, WALK_LIFT), w - 0.05);
       for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w + WALK_W, WALK_LIFT);
     }
-    ribbon(s, pts, w, col, Y, crossFor(w));
-    for (const e of [pts[0], pts[pts.length - 1]]) disc(s, e[0], e[1], w, col, Y);
+    ribbon(pts, w, layer(col, lift));
+    for (const e of [pts[0], pts[pts.length - 1]]) disc(layer(col, lift - 0.005), e[0], e[1], w);
     for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w, lift);
-    if (r.c <= 1 && r.w >= 6) dashes(s, pts, MARK[r.c], (x, z) => Y(x, z) + 0.012, r.c === 0 ? 0 : 1);
+    if (r.c <= 1 && r.w >= 6) dashes(pts, layer(MARK[r.c], lift + 0.006), r.c === 0 ? 0 : 1);
   }
   const m = new THREE.Mesh(s.geometry(), material) as THREE.Mesh & { surface: RoadSurface }; m.name = 'roads';
   m.surface = {
@@ -124,30 +121,75 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, la
   return m;
 }
 
-/** Split long polyline segments so no piece is longer than `step` metres (constant or per midpoint). */
-function resample(pts: [number, number][], step: number | ((x: number, z: number) => number)) {
-  const out: [number, number][] = [];
-  const segStep = (a: [number, number], b: [number, number]) => (typeof step === 'number' ? step : step((a[0] + b[0]) / 2, (a[1] + b[1]) / 2));
-  for (let i = 0; i < pts.length; i++) {
-    if (i > 0) {
-      const a = pts[i - 1], b = pts[i], st = segStep(a, b), n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / st);
-      for (let k = 1; k < n; k++) out.push([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n]);
+type XZ = [number, number];
+type Tri = (a: XZ, b: XZ, c: XZ) => void;
+
+/** Sutherland-Hodgman: polygon `subject` clipped to the convex polygon `clipper` (any winding). */
+function clipConvex(subject: XZ[], clipper: XZ[]): XZ[] {
+  const ccw = (clipper[1][0] - clipper[0][0]) * (clipper[2][1] - clipper[0][1]) - (clipper[1][1] - clipper[0][1]) * (clipper[2][0] - clipper[0][0]) > 0;
+  let out = subject;
+  for (let i = 0; i < clipper.length && out.length; i++) {
+    const a = clipper[i], b = clipper[(i + 1) % clipper.length], inp = out; out = [];
+    const side = (p: XZ) => ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) * (ccw ? 1 : -1);
+    for (let j = 0; j < inp.length; j++) {
+      const p = inp[j], q = inp[(j + 1) % inp.length], sp = side(p), sq = side(q);
+      if (sp >= 0) out.push(p);
+      if ((sp >= 0) !== (sq >= 0)) { const k = sp / (sp - sq); out.push([p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k]); }
     }
-    out.push(pts[i]);
   }
   return out;
 }
 
+/** Adds the plan triangle (a, b, c) cut along every terrain triangle under it (same split as the ground mesh: diagonal A-C), each piece lifted
+ *  by `lift` over its terrain plane, so the surface follows the rendered ground exactly (zero deviation) with no resampling. Heights are
+ *  kept at or above `minY` (the sea plane). */
+function drapedTri(s: Soup, t: Terrain, a: XZ, b: XZ, c: XZ, col: THREE.Color, lift: number, minY = 0.05) {
+  const { nx, nz, cell, x0, z0, h } = t;
+  const ix0 = Math.max(0, Math.floor((Math.min(a[0], b[0], c[0]) - x0) / cell)), ix1 = Math.min(nx - 2, Math.floor((Math.max(a[0], b[0], c[0]) - x0) / cell));
+  const iz0 = Math.max(0, Math.floor((Math.min(a[1], b[1], c[1]) - z0) / cell)), iz1 = Math.min(nz - 2, Math.floor((Math.max(a[1], b[1], c[1]) - z0) / cell));
+  const subject: XZ[] = [a, b, c];
+  for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+    const X0 = x0 + ix * cell, X1 = X0 + cell, Z0 = z0 + iz * cell, Z1 = Z0 + cell, i = iz * nx + ix, hA = h[i], hB = h[i + 1], hC = h[i + nx + 1], hD = h[i + nx];
+    for (let k = 0; k < 2; k++) {
+      const piece = clipConvex(subject, k === 0 ? [[X0, Z0], [X1, Z0], [X1, Z1]] : [[X0, Z0], [X1, Z1], [X0, Z1]]);
+      if (piece.length < 3) continue;
+      // plane height of this terrain triangle; the part below the sea plane (minY) is flat at minY, split exactly along the shoreline contour
+      const plane = (x: number, z: number) => { const tx = (x - X0) / cell, tz = (z - Z0) / cell; return k === 0 ? hA + (hB - hA) * tx + (hC - hB) * tz : hA + (hC - hD) * tx + (hD - hA) * tz; };
+      const g = piece.map(([x, z]) => plane(x, z) - minY);
+      const emit = (poly: XZ[], flat: boolean) => {
+        if (poly.length < 3) return;
+        const P = poly.map(([x, z]) => [x, (flat ? minY : plane(x, z)) + lift, z]);
+        for (let j = 1; j < P.length - 1; j++) s.tri(P[0], P[j], P[j + 1], col, [0, 1, 0]);
+      };
+      if (g.every((v) => v >= -1e-9)) emit(piece, false);
+      else if (g.every((v) => v <= 1e-9)) emit(piece, true);
+      else { emit(clipHalf(piece, g, 1), false); emit(clipHalf(piece, g, -1), true); }
+    }
+  }
+}
+
+/** Part of convex polygon `poly` where sign * g >= 0 (g = values at its vertices, linear along edges). */
+function clipHalf(poly: XZ[], g: number[], sign: number): XZ[] {
+  const out: XZ[] = [];
+  for (let i = 0; i < poly.length; i++) {
+    const j = (i + 1) % poly.length, p = poly[i], q = poly[j], gp = g[i] * sign, gq = g[j] * sign;
+    if (gp >= 0) out.push(p);
+    if ((gp >= 0) !== (gq >= 0)) { const k = gp / (gp - gq); out.push([p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k]); }
+  }
+  return out;
+}
+
+
 /** Centre-line markings: 3 m dashes every 9 m (kind 1) or a solid double line (kind 0), 0.12 m wide. */
-function dashes(s: Soup, pts: [number, number][], col: THREE.Color, Y: (x: number, z: number) => number, kind: number) {
+function dashes(pts: XZ[], tri: Tri, kind: number) {
   let acc = 0;
   for (let i = 0; i < pts.length - 1; i++) {
     const a = pts[i], b = pts[i + 1], dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz); if (L < 1e-3) continue;
     const nx = -dz / L * 0.06, nz = dx / L * 0.06;
     const strip = (u0: number, u1: number, off: number) => {
       const p0 = [a[0] + dx * u0 + nx * off * 2, a[1] + dz * u0 + nz * off * 2], p1 = [a[0] + dx * u1 + nx * off * 2, a[1] + dz * u1 + nz * off * 2];
-      const q = (p: number[], sgn: number) => [p[0] + nx * sgn, Y(p[0], p[1]), p[1] + nz * sgn];
-      s.quad(q(p0, 1), q(p1, 1), q(p1, -1), q(p0, -1), col, [0, 1, 0]);
+      const q = (p: number[], sgn: number): XZ => [p[0] + nx * sgn, p[1] + nz * sgn];
+      tri(q(p0, 1), q(p1, 1), q(p1, -1)); tri(q(p0, 1), q(p1, -1), q(p0, -1));
     };
     if (kind === 0) { strip(0, 1, 1.4); strip(0, 1, -1.4); }
     else for (let d = Math.ceil(acc / 9) * 9 - acc; d < L; d += 9) strip(d / L, Math.min(d + 3, L) / L, 0);
@@ -155,8 +197,10 @@ function dashes(s: Soup, pts: [number, number][], col: THREE.Color, Y: (x: numbe
   }
 }
 
-function ribbon(s: Soup, pts: [number, number][], w: number, col: THREE.Color, Y: (x: number, z: number) => number, cross = 1) {
-  const L: number[][] = [], R: number[][] = [];
+/** Ribbon of half-width `w` along `pts` with mitred joins (miter clamped at 2x) and a round disc at sharp bends. With `inner` > 0 only the two
+ *  side bands between `inner` and `w` are made (sidewalks: the road covers the middle, so this saves a third of the triangles). */
+function ribbon(pts: XZ[], w: number, tri: Tri, inner = 0) {
+  const L: XZ[] = [], R: XZ[] = [], Li: XZ[] = [], Ri: XZ[] = [];
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i], a = pts[Math.max(i - 1, 0)], b = pts[Math.min(i + 1, pts.length - 1)];
     let n1x = 0, n1z = 0, n2x = 0, n2z = 0;
@@ -165,21 +209,23 @@ function ribbon(s: Soup, pts: [number, number][], w: number, col: THREE.Color, Y
     if (i === 0) { n1x = n2x; n1z = n2z; } if (i === pts.length - 1) { n2x = n1x; n2z = n1z; }
     let mx = n1x + n2x, mz = n1z + n2z; const ml = Math.hypot(mx, mz) || 1; mx /= ml; mz /= ml;
     const cos = Math.max(mx * n1x + mz * n1z, 0.5); // clamp miter at 2x
-    const k = w / cos;
-    L.push([p[0] + mx * k, 0, p[1] + mz * k]); R.push([p[0] - mx * k, 0, p[1] - mz * k]);
-    if (i > 0 && cos < 0.92) disc(s, p[0], p[1], w, col, Y); // round sharp bends
+    const k = w / cos, ki = inner / cos;
+    L.push([p[0] + mx * k, p[1] + mz * k]); R.push([p[0] - mx * k, p[1] - mz * k]);
+    if (inner > 0) { Li.push([p[0] + mx * ki, p[1] + mz * ki]); Ri.push([p[0] - mx * ki, p[1] - mz * ki]); }
+    if (i > 0 && cos < 0.92) disc(tri, p[0], p[1], w); // round sharp bends
   }
-  // `cross` > 1 splits the ribbon across its width so every vertex samples the same terrain the grass mesh draws;
-  // a single quad spanning a terrain crease (landmark flatten blend) would otherwise float above or sink below the grass.
-  const col0 = (i: number, c: number) => { const l = L[i], r = R[i], f = c / cross, v = [l[0] + (r[0] - l[0]) * f, 0, l[2] + (r[2] - l[2]) * f]; v[1] = Y(v[0], v[2]); return v; };
-  for (let i = 0; i < pts.length - 1; i++) for (let c = 0; c < cross; c++) s.quad(col0(i, c), col0(i + 1, c), col0(i + 1, c + 1), col0(i, c + 1), col, [0, 1, 0]);
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (inner > 0) { tri(Li[i], L[i], L[i + 1]); tri(Li[i], L[i + 1], Li[i + 1]); tri(Ri[i], R[i], R[i + 1]); tri(Ri[i], R[i + 1], Ri[i + 1]); }
+    else { tri(L[i], R[i], R[i + 1]); tri(L[i], R[i + 1], L[i + 1]); }
+  }
 }
 
-function disc(s: Soup, x: number, z: number, r: number, col: THREE.Color, Y: (x: number, z: number) => number) {
-  const n = 10, y = Y(x, z) - 0.005, c = [x, y, z];
+function disc(tri: Tri, x: number, z: number, r: number) {
+  const n = 12, c: XZ = [x, z], pt = (a: number, k: number): XZ => [x + Math.cos(a) * r * k, z + Math.sin(a) * r * k];
   for (let i = 0; i < n; i++) {
     const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
-    s.tri(c, [x + Math.cos(a0) * r, y, z + Math.sin(a0) * r], [x + Math.cos(a1) * r, y, z + Math.sin(a1) * r], col, [0, 1, 0]);
+    if (r < 2) { tri(c, pt(a0, 1), pt(a1, 1)); continue; }
+    tri(c, pt(a0, 0.5), pt(a1, 0.5)); tri(pt(a0, 0.5), pt(a1, 0.5), pt(a1, 1)); tri(pt(a0, 0.5), pt(a1, 1), pt(a0, 1));
   }
 }
 
@@ -203,7 +249,7 @@ export function buildPoolsPiers(a: AreaData, t: Terrain, material: THREE.Materia
     } else if (p.line) {
       const pts = ringPts(p.line); if (pts.length < 2) continue;
       const w = Math.max((p.w ?? 2) / 2, 0.8);
-      ribbon(s, pts, w, deck, () => DY);
+      ribbon(pts, w, (a, b, c) => s.tri([a[0], DY, a[1]], [b[0], DY, b[1]], [c[0], DY, c[1]], deck, [0, 1, 0]));
     }
   }
   const m = new THREE.Mesh(s.geometry(), material); m.name = 'pools+piers';
