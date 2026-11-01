@@ -47,7 +47,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       const g = m.geo; g.computeBoundingBox(); const bb = g.boundingBox!, sz = bb.getSize(new THREE.Vector3()), tris = (g.index ? g.index.count : g.attributes.position.count) / 3;
       if (tris < 8 || Math.max(sz.x, sz.y, sz.z) < 0.05) continue;
       const c = bb.getCenter(new THREE.Vector3()), b = new THREE.Bone(); b.name = plateKey(n, m); b.position.copy(c); pb.add(b); R.list.push(b); inverses.set(b, new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
-      plates.push({ bone: b, c, out: new THREE.Vector3(), ext: 0, h: plateHash(plates.length), size: Math.min(1, Math.max(sz.x, sz.y, sz.z) / 0.4) });
+      plates.push({ bone: b, c, out: new THREE.Vector3(), ext: 0, h: plateHash(plates.length), size: Math.min(1, Math.max(sz.x, sz.y, sz.z) / 0.4), parent: n.bone });
     }
   }
   R.root.updateMatrixWorld(true);
@@ -86,13 +86,14 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
     if (low < 0) { hips.position.y -= low; R.root.updateMatrixWorld(true); }
   };
   const A = new THREE.Vector3(), B = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), inv = new THREE.Matrix4();
+  let ballForm = 0;
   const aimPistons = () => {
     R.root.updateMatrixWorld(true); inv.copy(R.root.matrixWorld).invert();
     kit.meta.pistons.forEach((p, i) => {
       if (build[p.slot] !== p.opt) return;
       A.set(...p.ap).applyMatrix4(R.by.get(p.a)!.matrixWorld).applyMatrix4(inv); B.set(...p.bp).applyMatrix4(R.by.get(p.b)!.matrixWorld).applyMatrix4(inv);
       const a = pist[i * 2], b = pist[i * 2 + 1];
-      a.position.copy(A); b.position.copy(B);
+      a.position.copy(A); b.position.copy(B); a.scale.setScalar(ballForm > 0.5 ? 0 : 1); b.scale.setScalar(ballForm > 0.5 ? 0 : 1); // pistons vanish into the closed ball
       const d = B.clone().sub(A).normalize(); a.quaternion.setFromUnitVectors(Y, d); b.quaternion.setFromUnitVectors(Y, d.negate());
     });
   };
@@ -107,7 +108,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt, s.gs ?? 0); aimPistons(); },
+    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt, s.gs ?? 0); ballForm = type === 'heavy' ? s.form ?? 0 : 0; aimPistons(); },
     dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); xfx.dispose(); },
   };
   model.setLook({}); aimPistons();
@@ -119,7 +120,11 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
 export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u: KitU): TypedRobot {
   const base = createKitRobot('glitch', kit, look, u);
   const list: THREE.Bone[] = []; base.root.traverse((o) => { if ((o as THREE.Bone).isBone) list.push(o as THREE.Bone); });
-  const G = createGlitchBody(data, list.map((b) => b.name), base.root, u.energy, u.damage);
+  // solid skin: one cube per 3 cm cell on the machinery geometry (arms, legs, spine, ribs; not the face, hands or feet) so the voxel skin covers the whole body
+  const fill: { bone: string; x: number; y: number; z: number }[] = [], seen = new Set<string>(); let kitN = 0;
+  for (const nd of kit.nodes) { if (nd.slot !== 'body' || /Head|Hand|F\d_|Foot$/.test(nd.bone)) continue; for (const m of nd.meshes) { const g = m.geo, pos = g.attributes.position; g.computeBoundingBox(); const sz = g.boundingBox!.getSize(new THREE.Vector3()); if (Math.max(sz.x, sz.y, sz.z) < 0.04) continue;
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i), k = `${nd.bone}:${Math.round(x / 0.03)}:${Math.round(y / 0.03)}:${Math.round(z / 0.03)}`; if (seen.has(k)) continue; seen.add(k); fill.push({ bone: nd.bone, x, y, z }); kitN++; } } }
+  const G = createGlitchBody(data, list.map((b) => b.name), base.root, u.energy, u.damage, fill);
   const bodyMeshes = base.root.children.filter((o) => (o as THREE.SkinnedMesh).isSkinnedMesh);
   const model: TypedRobot = {
     ...base,

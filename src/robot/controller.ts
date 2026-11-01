@@ -28,7 +28,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   // Z special: per-type move (ground-pound, blink-dash, ...); specialT = seconds since trigger, -1 = idle
   let specialKind = 'none', specialDur = 0.8, specialT = -1;
   let onSpecial: ((kind: string, phase: 'start' | 'hit' | 'end', p: THREE.Vector3) => void) | null = null;
-  let camYaw = 0, camPitch = 0.22, camDist = 5, fov = 55, dragging = false, lx = 0, ly = 0, lastDrag = -10;
+  let camSide = 0, camYaw = 0, camPitch = 0.22, camDist = 5, fov = 55, dragging = false, lx = 0, ly = 0, lastDrag = -10;
   const camPos = new THREE.Vector3(), camWant = new THREE.Vector3(), camOff = new THREE.Vector3(0, 3, -8), look = new THREE.Vector3();
   let anim: RobotAnim = 'fall', floor = { y: 0, water: false, roof: false };
   const k = (c: string) => keys.has(c);
@@ -92,7 +92,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     setGait(k: typeof gaitKind) { gaitKind = k; }, setLand(k: LandKind) { landKind = k; },
     set onLandFx(f: typeof onLandFx) { onLandFx = f; }, set onScrape(f: typeof onScrape) { onScrape = f; }, set onBall(f: typeof onBall) { onBall = f; }, set onLaunch(f: typeof onLaunch) { onLaunch = f; }, set onBump(f: typeof onBump) { onBump = f; }, set onSlide(f: typeof onSlide) { onSlide = f; },
     /** test hook: orbit the chase camera (radians) */
-    get camYaw() { return camYaw; }, set camYaw(v: number) { camYaw = v; },
+    get camYaw() { return camYaw; }, set camYaw(v: number) { camYaw = v; }, get camSide() { return camSide; }, set camSide(v: number) { camSide = v; }, // test hooks: camSide orbits the chase camera without changing the input / heading basis
     get ball() { return ballT; }, get slide() { return slideW; }, get cloud() { return cloudW; }, get form() { return ballT; }, get vox() { return vox; }, get landing() { return mode === 'LAND' ? { kind: landActive, t: landT, dur: landDur, s: landS } : null; }, get burstOn() { return burstOn; }, get floor() { return floor; }, get anim() { return anim; },
     get enabled() { return enabled; },
     setEnabled(v: boolean) { enabled = v; keys.clear(); model.root.visible = v; },
@@ -261,7 +261,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       const dist = camDist * (1 + sf * 0.9) + (air ? 1 : 0);
       fov += ((air ? 62 : 52) + sf * 26 + burstOn * 8 - fov) * (1 - Math.exp(-dt * 3));
       look.set(pos.x, pos.y + 1.0 + (air ? Math.sin(lean) * 0.4 : 0), pos.z);
-      const cw = camWant.set(look.x - Math.sin(camYaw) * Math.cos(camPitch) * dist, look.y + Math.sin(camPitch) * dist, look.z - Math.cos(camYaw) * Math.cos(camPitch) * dist);
+      const cy2 = camYaw + camSide, cw = camWant.set(look.x - Math.sin(cy2) * Math.cos(camPitch) * dist, look.y + Math.sin(camPitch) * dist, look.z - Math.cos(cy2) * Math.cos(camPitch) * dist);
       // smooth the offset from the robot, not the absolute position, so the camera never lags behind at 300 mph
       cw.sub(look); camOff.lerp(cw, 1 - Math.exp(-dt * (air ? 5 : 10))); camPos.copy(look).add(camOff);
       const cf = world.floorAt(camPos.x, camPos.z, camPos.y).y; if (camPos.y < cf + 0.6) camPos.y = cf + 0.6;

@@ -10,7 +10,7 @@ const F = process.env.FFMPEG || '/tmp/ffm/node_modules/ffmpeg-static/ffmpeg';
 for (const t of TYPES) {
   await p.evaluate(() => (window.__steps = 1e9)); await p.evaluate((t) => window.__robot.setType(t), t); await p.waitForFunction((t) => window.__robot.model.type === t, t, { timeout: 60000 });
   await p.evaluate(() => { const r = window.__robot; r.hangar(false); r.dropIn(0); for (let i = 0; i < 90; i++) r.ctl.update(1 / 30); }); await p.waitForTimeout(1200); await p.evaluate(() => (window.__steps = 0));
-  await p.evaluate(() => { window.__robot.ctl.press('KeyW', true); window.__robot.ctl.press('ShiftLeft', true); });
+  await p.evaluate((a) => { window.__robot.ctl.camSide = a; window.__robot.ctl.press('KeyW', true); window.__robot.ctl.press('ShiftLeft', true); }, +(process.env.CAM_SIDE ?? 1.05)); // 3/4 side view so the silhouette (flat / low / ball) reads
   const shots = [], st = async (n, name) => { await step(n); const f = `/tmp/tr-${t}-${name}.png`; await p.screenshot({ path: f, clip: { x: 340, y: 200, width: 600, height: 460 } }); shots.push(f); return p.evaluate(() => +(window.__robot.ctl.form).toFixed(2)); };
   const prog = []; for (let i = 0; i < 6; i++) prog.push(await st(i === 0 ? 6 : 8, `f${i}`));
   await step(90); prog.push(await st(1, 'run'));

@@ -22,13 +22,20 @@ const CLOUD = 520;
  * respawns), and a CPU particle pool for the blink-dash afterimage and reassembly burst: 3 draw calls.
  * Colours are garage slots: shell (white skin), shorts (grey skin), decalColor (cloud / burst), visor (dash glow).
  */
-export function createGlitchBody(data: ShardData, boneNames: string[], root: THREE.Object3D, energy: any, damage: any) {
+/** `fill`: extra skin cubes (bone-local) sampled from the machinery geometry so the re-formed body is solid; see typed.ts createGlitchRobot. */
+export interface FillCube { bone: string; x: number; y: number; z: number }
+export function createGlitchBody(data: ShardData, boneNames: string[], root: THREE.Object3D, energy: any, damage: any, fill: FillCube[] = []) {
   const all = data.parts.flatMap((p, pi) => p.shards.map((s) => ({ s, pi, bi: Math.max(0, boneNames.indexOf(p.bone)) })));
+  const bodyPi = Math.max(0, data.parts.findIndex((p) => p.slot === 'body'));
+  fill.forEach((f, i) => all.push({ s: [f.x, f.y, f.z, 0.0105, 0.0105, 0.0105, 0, 0, 0, 1, i % 3 === 0 ? 1 : 0], pi: bodyPi, bi: Math.max(0, boneNames.indexOf(f.bone)) }));
   const n = all.length;
-  const off = new Float32Array(n * 4), dim = new Float32Array(n * 4), quat = new Float32Array(n * 4), seeds = new Float32Array(n);
+  // SOLID FILL: every skin cube is drawn twice, the second copy offset by up to +-SPREAD m, so the voxel skin closes small gaps and the re-formed body reads solid
+  const DUP = 2, SPREAD = 0.028;
+  const off = new Float32Array(n * 4 * DUP), dim = new Float32Array(n * 4 * DUP), quat = new Float32Array(n * 4 * DUP), seeds = new Float32Array(n * DUP);
   all.forEach(({ s, pi, bi }, i) => {
     off.set([s[0], s[1], s[2], bi], i * 4); dim.set([s[3], s[5], s[4], s[10] + pi * 4], i * 4); quat.set([s[6], s[7], s[8], s[9]], i * 4);
     seeds[i] = Math.random();
+    const j = n + i; off.set([s[0] + (Math.random() - 0.5) * 2 * SPREAD, s[1] + (Math.random() - 0.5) * 2 * SPREAD, s[2] + (Math.random() - 0.5) * 2 * SPREAD, bi], j * 4); dim.set(dim.subarray(i * 4, i * 4 + 4), j * 4); quat.set(quat.subarray(i * 4, i * 4 + 4), j * 4); seeds[j] = Math.random();
   });
   const bOff = new THREE.InstancedBufferAttribute(off.slice(), 4), bDim = new THREE.InstancedBufferAttribute(dim.slice(), 4);
   const bQ = new THREE.InstancedBufferAttribute(quat.slice(), 4), bSeed = new THREE.InstancedBufferAttribute(seeds.slice(), 1);
@@ -43,7 +50,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   // ---- voxel skin
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.4, metalness: 0 });
   mat.positionNode = Fn(() => {
-    const q: any = aQ, lp0: any = (positionLocal as any).mul(aDim.xyz).mul(1.14).mul(uVis.element(part.toInt()));
+    const q: any = aQ, lp0: any = (positionLocal as any).mul(aDim.xyz).mul(1.4).mul(uVis.element(part.toInt()));
     const fph0 = fract(time.mul(hash(seed.add(12)).mul(0.6).add(0.7)).add(seed.mul(7)));
     const lp: any = lp0.mul(float(1).sub(uFly.mul(step(0.25, hash(seed.add(13)))).mul(smoothstep(uCenter.y.add(0.15), uCenter.y.sub(0.55), (uBones.element(aOff.w.toInt()) as any).mul(vec4(aOff.xyz, 1)).y)).mul(fph0.mul(0.75))));
     const t: any = (cross as any)(q.xyz, lp).add(lp.mul(q.w)), rp: any = lp.add((cross as any)(q.xyz, t).mul(2));
@@ -73,7 +80,7 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
   // night readability: a faint self-lit share of the skin colour keeps the solid body legible against dark streets
   mat.emissiveNode = (mat.colorNode as any).mul(0.3).add(uGlow.mul(uCloud.mul(0.22))).add(uGlow.mul(uBurst.mul(2.5).add(uDash.mul(1.2)).add(uFly.mul(0.35))));
   Object.assign(mat.userData, { uWhite, uGrey, uGlow });
-  const body = new THREE.InstancedMesh(BOX, mat, n); body.name = 'glitch:cubes';
+  const body = new THREE.InstancedMesh(BOX, mat, n * DUP); body.name = 'glitch:cubes';
 
   // ---- drifting cube cloud: one instanced draw, GPU-only lifecycle
   const emitPts = (data.emit ?? []).map(([b, x, y, z]) => [x, y, z, Math.max(0, boneNames.indexOf(b))]);
@@ -129,12 +136,12 @@ export function createGlitchBody(data: ShardData, boneNames: string[], root: THR
     setLook(look: RobotLook) {
       data.parts.forEach((p, k) => (vis[k] = p.slot === 'body' || (look as any)[p.slot] === p.opt ? 1 : 0));
       const idx: number[] = []; all.forEach((a, i) => vis[a.pi] && idx.push(i));
+      const m = idx.length;
       idx.forEach((src, d) => {
-        for (let c = 0; c < 4; c++) { bOff.array[d * 4 + c] = off[src * 4 + c]; bDim.array[d * 4 + c] = dim[src * 4 + c]; bQ.array[d * 4 + c] = quat[src * 4 + c]; }
-        bSeed.array[d] = seeds[src];
+        for (const [from, to] of [[src, d], [n + src, m + d]]) { for (let c = 0; c < 4; c++) { bOff.array[to * 4 + c] = off[from * 4 + c]; bDim.array[to * 4 + c] = dim[from * 4 + c]; bQ.array[to * 4 + c] = quat[from * 4 + c]; } bSeed.array[to] = seeds[from]; }
       });
       for (const b of [bOff, bDim, bQ, bSeed]) b.needsUpdate = true;
-      visN = idx.length; body.count = visN;
+      visN = m; body.count = m * DUP;
       uWhite.value.set(look.shell); uGrey.value.set(look.shorts); uGlow.value.set(look.visor); uPart.value.set(look.decalColor ?? look.shell);
     },
     update(s: PoseInput, dt: number, bones: THREE.Object3D[]) {
