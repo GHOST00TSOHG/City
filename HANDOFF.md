@@ -208,3 +208,11 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Smaller body cubes (0.021–0.028). Emitters across the whole body; runtime cloud 520 instances (1 draw), drifting away from the body axis (head points from head centre).
 - v2export: parts < 80 tris or `_keep` are never decimated, which fixes the missing in-game face.
 - Budget: 19,644 cube tris + 10,092 kit tris = 29.7k. TYPES=glitch passes 8/8 (49/43 calls). Front garage proof: city-shots/glitch-front-a.png.
+
+## Heavy v4 legs
+- heavy_v2.py: thicker thigh loft and plates, exposed knee hubs + bigger knee joint, ankle pistons, bigger ankle, wider/longer planted feet, splayed toes, longer heel/sole.
+- New `glow_m` heat vents on the shins (decalColor). Heavy had no decalColor surface before, so the colour check failed on the old kit too (pre-existing failure, verified A/B); it now passes.
+- Re-exported with the v2export keep fix: 28,203 tris. TYPES=heavy passes 8/8, 48 garage / 42 world calls. Render: robot-renders/heavy-v4-34.png.
+
+## Slice effect removed
+- Deleted glitch_v4.py (displaced slices) and glitch_post.py (RGB split / scanlines). The runtime had no slice code left; glitch.ts keeps only the dash dissolve and rare datamosh.
