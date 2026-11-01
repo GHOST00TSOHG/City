@@ -95,12 +95,14 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, la
     const pts = resample(ringPts(r.p), stepAt); if (pts.length < 2) continue;
     const w = r.w / 2, col = ROAD[r.c] ?? ROAD[1], lift = LIFT[r.c] ?? 0.1;
     const Y = (x: number, z: number) => base(x, z) + lift;
+    const nearLm = landmarkPads.length > 0 && pts.some(([x, z]) => inLandmarkFlattenBlend(landmarkPads, x, z, t.cell));
+    const crossFor = (hw: number) => (nearLm ? Math.max(1, Math.ceil((2 * hw) / 2)) : 1); // ~2 m columns inside the blend
     if (r.c <= 2 && r.w >= 5) { // sidewalks
       const Yw = (x: number, z: number) => base(x, z) + WALK_LIFT;
-      ribbon(s, pts, w + WALK_W, WALK, Yw);
+      ribbon(s, pts, w + WALK_W, WALK, Yw, crossFor(w + WALK_W));
       for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w + WALK_W, WALK_LIFT);
     }
-    ribbon(s, pts, w, col, Y);
+    ribbon(s, pts, w, col, Y, crossFor(w));
     for (const e of [pts[0], pts[pts.length - 1]]) disc(s, e[0], e[1], w, col, Y);
     for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w, lift);
     if (r.c <= 1 && r.w >= 6) dashes(s, pts, MARK[r.c], (x, z) => Y(x, z) + 0.012, r.c === 0 ? 0 : 1);
@@ -153,7 +155,7 @@ function dashes(s: Soup, pts: [number, number][], col: THREE.Color, Y: (x: numbe
   }
 }
 
-function ribbon(s: Soup, pts: [number, number][], w: number, col: THREE.Color, Y: (x: number, z: number) => number) {
+function ribbon(s: Soup, pts: [number, number][], w: number, col: THREE.Color, Y: (x: number, z: number) => number, cross = 1) {
   const L: number[][] = [], R: number[][] = [];
   for (let i = 0; i < pts.length; i++) {
     const p = pts[i], a = pts[Math.max(i - 1, 0)], b = pts[Math.min(i + 1, pts.length - 1)];
@@ -167,8 +169,10 @@ function ribbon(s: Soup, pts: [number, number][], w: number, col: THREE.Color, Y
     L.push([p[0] + mx * k, 0, p[1] + mz * k]); R.push([p[0] - mx * k, 0, p[1] - mz * k]);
     if (i > 0 && cos < 0.92) disc(s, p[0], p[1], w, col, Y); // round sharp bends
   }
-  for (const v of [...L, ...R]) v[1] = Y(v[0], v[2]);
-  for (let i = 0; i < pts.length - 1; i++) s.quad(L[i], L[i + 1], R[i + 1], R[i], col, [0, 1, 0]);
+  // `cross` > 1 splits the ribbon across its width so every vertex samples the same terrain the grass mesh draws;
+  // a single quad spanning a terrain crease (landmark flatten blend) would otherwise float above or sink below the grass.
+  const col0 = (i: number, c: number) => { const l = L[i], r = R[i], f = c / cross, v = [l[0] + (r[0] - l[0]) * f, 0, l[2] + (r[2] - l[2]) * f]; v[1] = Y(v[0], v[2]); return v; };
+  for (let i = 0; i < pts.length - 1; i++) for (let c = 0; c < cross; c++) s.quad(col0(i, c), col0(i + 1, c), col0(i + 1, c + 1), col0(i, c + 1), col, [0, 1, 0]);
 }
 
 function disc(s: Soup, x: number, z: number, r: number, col: THREE.Color, Y: (x: number, z: number) => number) {
