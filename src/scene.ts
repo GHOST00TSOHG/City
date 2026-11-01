@@ -1,3 +1,5 @@
+import { quality } from './perf/quality';
+import { diag } from './perf/diag';
 import * as THREE from 'three/webgpu';
 import { createSky } from './sky';
 import { createFlyControls } from './flyControls';
@@ -47,8 +49,8 @@ export const VIEWS: Record<string, View[]> = {
 
 export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const qs = new URLSearchParams(location.search);
-  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: qs.get('gl') === '1', powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const renderer = new THREE.WebGPURenderer({ canvas, antialias: true, forceWebGL: qs.get('gl') === '1' || qs.get('backend') === 'webgl2', powerPreference: 'high-performance' });
+  renderer.setPixelRatio(quality.basePR()); // tier pixel ratio (Air 1.25); the canvas is CSS-sized, so this upscales
   renderer.setSize(innerWidth, innerHeight, false);
   renderer.toneMapping = THREE.NeutralToneMapping; // keeps hues true at low light (ACES shifted night colours toward grey-orange)
   renderer.toneMappingExposure = 1.0;
@@ -183,11 +185,12 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     get areaId() { return cur.id; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
     get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, lamps: a.lamps.length, chunks: cur.blds.group.children.length, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
     /** Warm the fetch cache for an area (data only; cheap, run when idle). */
+    interiorEntry(x: number, z: number) { return cur.interiors.entry(x, z); },
     preload(id: string) { return loadArea(id).then(() => undefined, () => undefined); },
     /** Build the next area off-scene, compile its shaders, then swap in one frame and drop the old one. */
     async switchArea(id: string, viewName?: string) {
       if (id === cur.id) return;
-      const next = await buildContent(id);
+      const tb = performance.now(); const next = await buildContent(id); diag.event('area build', performance.now() - tb);
       next.group.visible = true;
       const tmp = new THREE.Scene(); tmp.add(next.group);
       if (A6) await prewarm(renderer, tmp, camera, scene); // includes hidden/empty meshes, and the real scene's lights

@@ -83,3 +83,9 @@ html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; fon
 #bench th:first-child, #bench td:first-child { text-align: left; }
 #bench .pass { color: #4dd88a; } #bench .fail { color: #ff6b6b; }
 #bench-status { position: fixed; left: 8px; bottom: 8px; z-index: 55; background: rgba(8, 12, 22, .8); color: #dfe6f3; padding: 4px 8px; border-radius: 4px; font: 12px ui-monospace, Menlo, monospace; }
+#bench { max-height: 92vh; overflow-y: auto; width: min(980px, 92vw); }
+#bench button.copy { display: block; width: 100%; font-size: 20px; font-weight: 600; padding: 12px; margin-bottom: 10px; background: #f07a22; border-color: #f07a22; color: #111; }
+#bench h3 { margin: 10px 0 0; font-size: 13px; text-transform: uppercase; }
+#bench ol { margin: 4px 0 6px 18px; padding: 0; } #bench .w { font-size: 11px; }
+#bench textarea { width: 100%; height: 120px; font: 10px ui-monospace, monospace; }
+#bench tr.tot td { font-weight: 600; }

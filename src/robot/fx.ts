@@ -1,3 +1,4 @@
+import { quality } from '../perf/quality';
 import * as THREE from 'three/webgpu';
 import { uniform, uv, positionLocal, normalView, positionView, dot, abs, pow, float, vec3, smoothstep, sin, time, length, mix, mx_noise_float, attribute } from 'three/tsl';
 
@@ -47,7 +48,7 @@ export function createRobotFx(scene: THREE.Scene, camera: THREE.PerspectiveCamer
   const crater = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), crMat); crater.visible = false; crater.renderOrder = 5; scene.add(crater); let crT = 99;
 
   // Particles: charge debris (rises), sparks (fall, bright). One instanced pool, per-instance colour.
-  const N = 90, pGeo = new THREE.IcosahedronGeometry(1, 0), pMat = new THREE.MeshBasicNodeMaterial({ fog: false });
+  const N = quality.fxParticles, pGeo = new THREE.IcosahedronGeometry(1, 0), pMat = new THREE.MeshBasicNodeMaterial({ fog: false });
   const parts = new THREE.InstancedMesh(pGeo, pMat, N); parts.frustumCulled = false; scene.add(parts);
   const P = Array.from({ length: N }, () => ({ p: new THREE.Vector3(), v: new THREE.Vector3(), life: 0, max: 1, s: 0.05, g: 0, spin: 0 }));
   const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), c = new THREE.Color(), e = new THREE.Euler();

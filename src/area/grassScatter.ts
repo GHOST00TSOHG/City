@@ -1,6 +1,9 @@
 import { sampleHeight, type TerrainGrid } from './data';
 /** Pure grass scatter (shared by the main-thread legacy path and the A6 grass worker). */
-export const R = 40, DENS = 22, MAX = 140000; // radius m, blades per m², cap
+export let R = 40; export const DENS = 22, MAX = 140000;
+/** quality tier hook (Air tier uses a shorter radius); call before building grass, and in the worker on init */
+export function setGrassR(r: number) { R = r; }
+// // radius m, blades per m², cap
 // cover classes that grow grass: land (yards) 0, grass 1, wetland 5, pitch 6
 const GROWS: Record<number, number> = { 0: 0.75, 1: 1, 5: 0.6, 6: 1 };
 export interface MaskGrid { nx: number; nz: number; cell: number; x0: number; z0: number; bits: Uint8Array }

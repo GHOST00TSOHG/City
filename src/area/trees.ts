@@ -1,3 +1,5 @@
+import { quality } from '../perf/quality';
+import { diag } from '../perf/diag';
 import * as THREE from 'three/webgpu';
 import { attribute, positionLocal, vec3, sin, float, time, uniform, texture, uv, instanceColor, cameraPosition, step } from 'three/tsl';
 import { A6, budget } from '../perf/frame';
@@ -109,8 +111,16 @@ function normalise(gs: THREE.BufferGeometry[]) {
   const s = 10 / (box.max.y - box.min.y), c = box.getCenter(new THREE.Vector3());
   gs.forEach(g => { g.translate(-c.x, -box.min.y, -c.z); g.scale(s, s, s); g.computeBoundingSphere(); });
 }
+// A6/Safari: decode images with createImageBitmap (off the main thread) instead of <img> + decode-on-upload.
+const bmpLoader = typeof createImageBitmap !== 'undefined' ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none' }) : null;
 const texLoader = new THREE.TextureLoader();
-function tex(url: string, repeat = false) { const t = texLoader.load(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
+function loadTex(url: string) {
+  if (!bmpLoader) return texLoader.load(url);
+  const t = new THREE.Texture(); t.flipY = false; const t0 = performance.now();
+  bmpLoader.load(url, (img) => { t.image = img; t.needsUpdate = true; diag.event('image decode (bitmap)', 0); diag.section('decode wait', performance.now() - t0); });
+  return t;
+}
+function tex(url: string, repeat = false) { const t = loadTex(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
 
 function ezGeometry(preset: any, lod: number) {
   const tr = new EzTree(); tr.loadFromJson(structuredClone(preset));
@@ -155,14 +165,14 @@ function builtinSpecies(uWind: any): TreeSpecies[] {
   const leafMats = [oakLeafUrl, ashLeafUrl].map(u => windMaterial(new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.5 }), uWind, tex(u), true));
   const far: TreePart = { geometry: broad(false), material: cards };
   const palmSp: TreeSpecies = { name: 'palm', kind: 0, lods: [
-    { maxDist: 120, parts: [{ geometry: palm(true), material: cards }] },
-    { maxDist: 420, parts: [{ geometry: palm(false), material: cards }] },
+    { maxDist: 120 * quality.treeDist, parts: [{ geometry: palm(true), material: cards }] },
+    { maxDist: 420 * quality.treeDist, parts: [{ geometry: palm(false), material: cards }] },
     { maxDist: 3200, parts: [{ geometry: palm(false, true), material: cards }] }] };
   const ez = [oakPreset, ashPreset].map((pr, i) => {
     const hi = ezGeometry(pr, 0), mid = ezGeometry(pr, 1);
     return { name: i ? 'ez-ash' : 'ez-oak', kind: 1 as const, lods: [
-      { maxDist: 85, parts: [{ geometry: hi.b, material: bark }, { geometry: hi.l, material: leafMats[i] }] },
-      { maxDist: 200, parts: [{ geometry: mid.b, material: bark }, { geometry: mid.l, material: leafMats[i] }] },
+      { maxDist: 85 * quality.treeDist, parts: [{ geometry: hi.b, material: bark }, { geometry: hi.l, material: leafMats[i] }] },
+      { maxDist: 200 * quality.treeDist, parts: [{ geometry: mid.b, material: bark }, { geometry: mid.l, material: leafMats[i] }] },
       { maxDist: 3200, parts: [far] }] };
   });
   return [palmSp, ...ez];
@@ -181,7 +191,7 @@ async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
         node.traverse((m: any) => { if (!m.isMesh) return; const geo = m.geometry.clone().applyMatrix4(m.matrixWorld); const src = m.material;
           const mat = windMaterial(new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide, alphaTest: src.alphaTest || (src.transparent ? 0.5 : 0) }), uWind, src.map ?? new THREE.Texture(), !!src.map);
           parts.push({ geometry: geo, material: mat }); });
-        normalise(parts.map(p => p.geometry)); lods.push({ maxDist: sp.lods?.[i] ?? [120, 400, 3200][i] ?? 3200, parts });
+        normalise(parts.map(p => p.geometry)); lods.push({ maxDist: (sp.lods?.[i] ?? [120, 400, 3200][i] ?? 3200) * (i < 2 ? quality.treeDist : 1), parts });
       });
       if (lods.length) out.push({ name: sp.name, kind: sp.kind, lods });
     } catch (e) { console.warn('tree model skipped', sp.url, e); }
@@ -275,7 +285,7 @@ export async function buildTrees(flat: number[], terrain: Terrain) {
     // bytes this refresh would upload (estimate from last time) — wait for a frame with room if over budget
     let est = 0; for (const b of near.flat()) est += b.n * (16 + 3 + 2) * 4 * b.meshes.length;
     if (!budget.upload(est)) return;
-    last.copy(cam); refreshes++;
+    last.copy(cam); refreshes++; diag.event('tree refresh');
     for (const bs of near) for (const b of bs) b.n = 0;
     const c0 = Math.max(0, Math.floor((cx - r - gx0) / CELL)), c1 = Math.min(gw - 1, Math.floor((cx + r - gx0) / CELL));
     const r0 = Math.max(0, Math.floor((cz - r - gz0) / CELL)), r1 = Math.min(gh - 1, Math.floor((cz + r - gz0) / CELL));

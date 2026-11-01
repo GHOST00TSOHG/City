@@ -1,7 +1,10 @@
 import * as THREE from 'three/webgpu';
 import { instancedBufferAttribute, positionLocal, vec3, vec2, sin, cos, float, time, uniform, mix, hash, smoothstep, cameraPosition, distance } from 'three/tsl';
 import type { Terrain } from './data';
-import { R, MAX, scatterGrass } from './grassScatter';
+import { R, MAX, scatterGrass, setGrassR } from './grassScatter';
+import { quality } from '../perf/quality';
+import { diag } from '../perf/diag';
+setGrassR(quality.grassR);
 import { A6, budget } from '../perf/frame';
 
 /** Ground mask (bake: ground-mask.bin): 2 m cells, bit set = building, pool or road, no grass. */
@@ -53,14 +56,14 @@ export function buildGrass(terrain: Terrain, mask: GroundMask | null) {
   if (A6 && typeof Worker !== 'undefined') {
     worker = new Worker(new URL('./grass.worker.ts', import.meta.url), { type: 'module' });
     const grid = { nx: terrain.nx, nz: terrain.nz, cell: terrain.cell, x0: terrain.x0, z0: terrain.z0, h: terrain.h, cover: terrain.cover };
-    worker.postMessage({ init: true, terrain: grid, mask: plain }); spare = new Float32Array(MAX * 4);
-    worker.onmessage = (e) => {
+    worker.postMessage({ init: true, r: quality.grassR, terrain: grid, mask: plain }); spare = new Float32Array(MAX * 4);
+    worker.onmessage = diag.wrap((e) => { diag.event('grass refresh');
       inFlight = false; const { arr, n } = e.data as { arr: Float32Array; n: number };
       if (!visible) { spare = arr; return; } // climbed above grass height while it was in flight
       // copy into the live array (swapping arrays makes the backend reallocate + re-upload the whole buffer)
       (buf.array as Float32Array).set(arr.subarray(0, n * 4)); spare = arr; g.instanceCount = n;
       buf.clearUpdateRanges(); buf.addUpdateRange(0, n * 4); buf.needsUpdate = true; budget.upload(n * 16);
-    };
+    });
   }
   let visible = false;
   function update(cam: THREE.Vector3) {

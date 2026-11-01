@@ -1,5 +1,6 @@
 /** Loads a baked area (see tools/bake) — area.json + terrain.bin. All coordinates in dm, x east, z south. */
 import { A6 } from '../perf/frame';
+import { diag } from '../perf/diag';
 export interface Building { r: number[][]; h: number; m: number; s: string; rh: number; o: [number, number, number, number, number]; wc: number; rc: number; src?: string }
 export interface Road { c: number; w: number; p: number[] }
 export interface Pier { poly?: number[]; line?: number[]; w?: number }
@@ -13,7 +14,7 @@ const waiting = new Map<number, { ok: (v: any) => void; err: (e: Error) => void 
 function viaWorker(id: string, base: string) {
   if (!worker) {
     worker = new Worker(new URL('./area.worker.ts', import.meta.url), { type: 'module' });
-    worker.onmessage = (e) => { const w = waiting.get(e.data.seq); if (!w) return; waiting.delete(e.data.seq); if (e.data.error) w.err(new Error(e.data.error)); else w.ok(e.data); };
+    worker.onmessage = diag.wrap((e) => { diag.event('area data msg'); const w = waiting.get(e.data.seq); if (!w) return; waiting.delete(e.data.seq); if (e.data.error) w.err(new Error(e.data.error)); else w.ok(e.data); });
   }
   const n = ++seq;
   return new Promise<{ area: AreaData; terrain: Terrain; mask: ArrayBuffer | null }>((ok, err) => {
