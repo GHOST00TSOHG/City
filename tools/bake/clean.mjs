@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Bake clean step: removes data defects from the baked buildings so the runtime never has to draw them.
 //   - buildings standing in water (>= 10 % of the footprint under the sea plane, same ground the game renders)
+//   - parts whose min_height reaches their top (inside-out, no volume)
 //   - overlapping buildings (plan overlap > 1 m2 with > 1 m of shared height): duplicates dropped, a tall small building inside a larger lower one
 //     becomes a hole in it, partial overlaps are trimmed (the smaller building yields), anything still overlapping is dropped
 // bake.mjs calls cleanBuildings() before writing; run `node tools/bake/clean.mjs <area...>` to clean already-baked public/areas/<id> files
@@ -59,10 +60,11 @@ const dedupe = (p) => p.filter((q, i) => { const n = p[(i + 1) % p.length]; retu
 
 /** buildings: baked records (r rings in dm, h, m, s, rh, o ...). grid: decodeTerrain() result. Returns new list + stats; input records may be modified. */
 export function cleanBuildings(buildings, grid) {
-  const stats = { in: buildings.length, inWater: 0, duplicatesDropped: 0, holed: 0, trimmed: 0, droppedAfterTrim: 0 };
+  const stats = { in: buildings.length, inWater: 0, badHeight: 0, duplicatesDropped: 0, holed: 0, trimmed: 0, droppedAfterTrim: 0 };
   const alive = [];
   for (const b of buildings) { // water
     const rs = b.r.map(ring).filter((r) => r.length >= 3); if (!rs.length) continue;
+    if (b.m > 0 && b.h - b.m < 0.5) { stats.badHeight++; continue; } // part whose min_height reaches its top: inside-out, no volume
     if (!(b.m > 0)) { const pts = samples(rs); let wet = 0; for (const [x, z] of pts) if (sampleHeight(grid, x, z) < 0) wet++; if (wet / pts.length >= LIMITS.waterFraction) { stats.inWater++; continue; } }
     alive.push({ b, rs, area: Math.abs(area2(rs[0])) - rs.slice(1).reduce((s, h) => s + Math.abs(area2(h)), 0), dead: false, tr: null });
   }
@@ -121,7 +123,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
     const { buildings, stats } = cleanBuildings(area.buildings, grid);
     area.buildings = buildings; fs.writeFileSync(path.join(dir, 'area.json'), JSON.stringify(area));
     const mf = path.join(dir, 'manifest.json'), m = JSON.parse(fs.readFileSync(mf, 'utf8'));
-    m.counts.buildings = buildings.length; if (!m.clean || stats.inWater + stats.duplicatesDropped + stats.holed + stats.trimmed + stats.droppedAfterTrim > 0) m.clean = stats;
+    m.counts.buildings = buildings.length; if (!m.clean) m.clean = stats; else if (stats.in !== stats.out || stats.trimmed || stats.holed) { for (const k of Object.keys(stats)) if (k !== 'in') m.clean[k] = k === 'out' ? stats.out : (m.clean[k] ?? 0) + stats[k]; } // cumulative over runs
     for (const f of ['area.json']) { const b = fs.readFileSync(path.join(dir, f)); if (m.sizes?.[f]) m.sizes[f] = { bytes: b.length, gzip: zlib.gzipSync(b, { level: 9 }).length }; }
     fs.writeFileSync(mf, JSON.stringify(m, null, 2) + '\n');
     console.log(id, JSON.stringify(stats));

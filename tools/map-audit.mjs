@@ -14,7 +14,7 @@ import * as THREE from 'three';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'tools/map-audit.out');
 const label = process.argv[2] ?? 'run';
-const ALL = process.argv.includes('--all'), only = process.argv.slice(3).filter((a) => a !== '--all');
+const ALL = process.argv.includes('--all'), DBG = (process.argv.find((a) => a.startsWith('--dbg=')) ?? '').slice(6), only = process.argv.slice(3).filter((a) => !a.startsWith('--'));
 const T = { // thresholds (metres)
   floatBase: 0.15,      // wall bottom above terrain at a footprint sample
   buriedWall: 1.0,      // terrain above the floor line by more than this at a boundary sample
@@ -164,9 +164,27 @@ function openEdgeReport(P, index) { // P: Float32Array xyz triples (triangle sou
     const ax = P[e.a * 3], ay = P[e.a * 3 + 1], az = P[e.a * 3 + 2], bx = P[e.b * 3], by = P[e.b * 3 + 1], bz = P[e.b * 3 + 2];
     if (Math.hypot(bx - ax, by - ay, bz - az) < 0.01) continue;
     let covered = true; for (const f of [0.2, 0.5, 0.8]) if (!cover(ax + (bx - ax) * f, ay + (by - ay) * f, az + (bz - az) * f, e.t)) { covered = false; break; }
-    if (!covered) { free++; if (freeEdges.length < 3) freeEdges.push([+ax.toFixed(2), +ay.toFixed(2), +az.toFixed(2)]); }
+    if (!covered) { free++; if (freeEdges.length < 3) freeEdges.push([+ax.toFixed(2), +ay.toFixed(2), +az.toFixed(2)]); if (DBG && P.dbg) console.log('FREE', [ax, ay, az].map((v) => +v.toFixed(2)).join(','), '->', [bx, by, bz].map((v) => +v.toFixed(2)).join(',')); }
   }
   return { open: open.length, free, tris: nT, sample: freeEdges };
+}
+
+// rays from points inside the solid: every ray must hit the shell (two-sided); an escaping ray is a see-through hole
+const LEAK_DIRS = (() => { const d = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]; for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) { const l = Math.hypot(x, y, z); d.push([x / l, y / l, z / l]); } return d; })();
+function leaks(P, pts) {
+  let n = 0;
+  for (const [ox, oy, oz] of pts) for (const [dx, dy, dz] of LEAK_DIRS) {
+    let hit = false;
+    for (let t = 0; t < P.length && !hit; t += 9) {
+      const e1x = P[t + 3] - P[t], e1y = P[t + 4] - P[t + 1], e1z = P[t + 5] - P[t + 2], e2x = P[t + 6] - P[t], e2y = P[t + 7] - P[t + 1], e2z = P[t + 8] - P[t + 2];
+      const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x, det = e1x * px + e1y * py + e1z * pz; if (Math.abs(det) < 1e-12) continue;
+      const tx = ox - P[t], ty = oy - P[t + 1], tz = oz - P[t + 2], u = (tx * px + ty * py + tz * pz) / det; if (u < -1e-6 || u > 1 + 1e-6) continue;
+      const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x, v = (dx * qx + dy * qy + dz * qz) / det; if (v < -1e-6 || u + v > 1 + 1e-6) continue;
+      if ((e2x * qx + e2y * qy + e2z * qz) / det > 1e-6) hit = true;
+    }
+    if (!hit) { n++; if (DBG && P.dbg) console.log('ESCAPE from', [ox, oy, oz].map((v) => +v.toFixed(2)).join(','), 'dir', [dx, dy, dz].map((v) => +v.toFixed(2)).join(',')); }
+  }
+  return n;
 }
 
 // ---------------------------------------------------------------- landmark GLB solidity via gltf-transform (decodes meshopt)
@@ -201,7 +219,7 @@ for (const id of ids) {
   const terrain = S.makeTerrain(grid), { kept: bl, culled } = S.cullUnderLandmarks(area.buildings, lm.footprints);
   const style = S.styleFor(id), dummy = new THREE.MeshBasicMaterial();
   const C = { buildings: bl.length, landmarks: lm.list.length };
-  const cls = { a_floating: 0, b_sunk: 0, c_road_floating: 0, c_road_sunk: 0, d_in_water: 0, e_overlap_buildings: 0, f_shore_steps: 0, f_waterline_flat_tris: 0, f_pier_floating: 0, f_pier_sunk: 0, f_edge_steps: 0, g_void_rays: 0, h_nonsolid_buildings: 0 };
+  const cls = { a_floating: 0, b_sunk: 0, c_road_floating: 0, c_road_sunk: 0, d_in_water: 0, e_overlap_buildings: 0, f_shore_steps: 0, f_waterline_flat_tris: 0, f_pier_floating: 0, f_pier_sunk: 0, f_edge_steps: 0, g_void_rays: 0, h_nonsolid_buildings: 0, h_leaking_buildings: 0 };
   const ex = {}; const note = (k, v) => { (ex[k] ??= []).length < (ALL ? 1e6 : 8) && ex[k].push(v); };
 
   // ---- buildings: a, b, d, h, and collect volumes for e
@@ -225,8 +243,15 @@ for (const id of ids) {
     }
     if (flt) { cls.a_floating++; note('a', { i: bi, gap: +(yMin - minB).toFixed(2), at: [Math.round(b.o[0] / 10), Math.round(b.o[1] / 10)] }); }
     if (sunk) { cls.b_sunk++; note('b', { i: bi, buried: +(maxB - floor).toFixed(2), at: [Math.round(b.o[0] / 10), Math.round(b.o[1] / 10)] }); }
+    if (DBG && String(bi) === DBG) { P.dbg = true; const F0 = [...F].slice(0, 4); console.log('DBG building', bi, JSON.stringify({ b: { h: b.h, m: b.m, s: b.s, rh: b.rh, o: b.o, ring: b.r[0].length / 2 }, floor, eave, yMin, yMax, F0 })); }
     const rep = openEdgeReport(P);
     if (rep.free > 0) { cls.h_nonsolid_buildings++; note('h', { i: bi, free: rep.free, open: rep.open, s: b.s, m: b.m, at: [Math.round(b.o[0] / 10), Math.round(b.o[1] / 10)], e: rep.sample }); }
+    if (interior.length) { // up to 3 inside points at mid wall height
+      const clear = ([x, z]) => { let d = 1e9; for (const r of rs) for (let i = 0; i < r.length; i++) { const [ax, az] = r[i], [bx2, bz2] = r[(i + 1) % r.length], dx = bx2 - ax, dz = bz2 - az, L2 = dx * dx + dz * dz || 1, t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / L2)); d = Math.min(d, Math.hypot(ax + dx * t - x, az + dz * t - z)); } return d; };
+      const ranked = interior.map((p) => [clear(p), p]).filter(([c]) => c >= 0.4).sort((p, q) => q[0] - p[0]); // points well inside only (not on a wall)
+      const pick = (ranked.length ? [ranked[0][1], ranked[ranked.length >> 1][1]] : []).filter((p, i, a) => a.indexOf(p) === i).map(([x, z]) => [x, floor + Math.min(1.2, Math.max(0.3, (eave - floor) * 0.4)), z]);
+      const lk = leaks(P, pick); if (lk > 0) { cls.h_leaking_buildings++; note('h_leak', { i: bi, escapedRays: lk, s: b.s, at: [Math.round(b.o[0] / 10), Math.round(b.o[1] / 10)] }); }
+    }
     let minX = 1e9, maxX = -1e9, minZ = 1e9, maxZ = -1e9; for (const [x, z] of rs[0]) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }
     vol.push({ bi, rs, y0: part ? yMin : floor, y1: yMax, minX, maxX, minZ, maxZ, tr: null, part });
   });
