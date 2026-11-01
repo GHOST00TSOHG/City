@@ -167,3 +167,9 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - glitch_v2.py rebuilt: V-chest, glow piping, dense small shards, orbit trails, dash afterimage; glitch_post.py adds RGB split/scanlines.
 - Renders: /workspace/robot-renders/glitch-v3-34.png, glitch-v3-closeup.png. Close-up still busy.
 - Glitch kit exported (3800 shards, 30,400 tris). Test TYPES=glitch: garage 44 calls / world 38 calls, 30,656 tris, 0 console errors.
+
+## Glitch v3b / Worker v3c (2026-11-01)
+- Glitch v3b: 838 flat plate shards (inverse-transpose normals, part-aligned), glow-zone exclusion keeps visor/core visible, ankle strut, sparser afterimage, cyan/magenta rim lights in preview, post (RGB split/scanlines) via glitch_post.py. Renders: /workspace/robot-renders/glitch-v3b-34.png, glitch-v3b-closeup.png. Test: tris 11,544, garage 44 calls, world 38 calls, 0 console errors.
+- Worker v3c: solid box-section crane boom + jib/knuckle/ram, broader chest, bigger pauldrons, thicker limbs, hunch 0.17, hands 1.55. Render: worker-v3c-34.png. Test: tris 22,332, garage 49 calls, world 43 calls, 0 console errors.
+- Hands: all robots use shared S.build_hand (palm faces thigh, digits curl inward) — verified, no change needed.
+- Note: HOPS bevel 'angle' AttributeError in worker kit log is non-fatal.
