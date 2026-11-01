@@ -89,9 +89,11 @@ export function makeKitMaterials(u: U, masks: THREE.Texture | null, normal: THRE
 export async function loadKit(type: RobotType, u: U, base = `${import.meta.env.BASE_URL}robot/`): Promise<Kit> {
   const dir = `${base}${type}/`;
   decalTex ??= loadTex(`${base}decals.webp`, true);
-  const [gltf, meta, masks, normal, decals] = await Promise.all([
-    new GLTFLoader().loadAsync(`${dir}parts.glb`), fetch(`${dir}kit.json`).then((r) => r.json() as Promise<KitMeta>),
-    loadTex(`${dir}masks.webp`, false).catch(() => null), loadTex(`${dir}normal.webp`, false).catch(() => null), decalTex,
+  const meta = await fetch(`${dir}kit.json`).then((r) => r.json() as Promise<KitMeta & { version?: number }>);
+  const baked = (meta.version ?? 1) < 2; // v2 kits are add-on modelled with real bevels: no baked mask/normal atlases
+  const [gltf, masks, normal, decals] = await Promise.all([
+    new GLTFLoader().loadAsync(`${dir}parts.glb`),
+    baked ? loadTex(`${dir}masks.webp`, false).catch(() => null) : null, baked ? loadTex(`${dir}normal.webp`, false).catch(() => null) : null, decalTex,
   ]);
   const mats = makeKitMaterials(u, masks, normal, decals);
   gltf.scene.updateMatrixWorld(true);

@@ -38,14 +38,19 @@ export interface RobotModel {
   animate(s: PoseInput, dt: number): void;
   dispose(): void;
 }
-export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number }
+export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number; fist?: number; special?: number; damage?: number }
+/** Per-type body mechanics (types.ts TYPES[t].motion). mass slows blends and deepens the plant; sway = hip roll; limp = right-leg hitch. */
+export interface MotionProfile { mass: number; bob: number; sway: number; stride: number; arms: number; limp: number; hunch: number; curl: number; special: 'none' | 'groundpound' | 'blinkdash' }
+export const DEFAULT_MOTION: MotionProfile = { mass: 1, bob: 1, sway: 1, stride: 1, arms: 1, limp: 0, hunch: 0, curl: 0.35, special: 'none' };
 
 /** Bones by Mixamo-style names so Jonn's rig and the placeholder share one pose code path. */
 export const BONES = ['Hips', 'Spine', 'Head', 'LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm', 'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot'] as const;
-export type Bones = Partial<Record<(typeof BONES)[number], THREE.Object3D>>;
+export type Bones = Partial<Record<(typeof BONES)[number], THREE.Object3D>> & Record<string, THREE.Object3D | undefined>;
 
 /** Procedural pose: Euler targets (x pitch, z roll) per bone; damped so state changes blend. */
-export function makePoser(b: Bones) {
+export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION) {
+  const fingers = Object.keys(b).filter((n) => /^(Left|Right)F\d_\d$/.test(n)) as (keyof Bones)[];
+  let fistC = 0;
   const rest = new Map<THREE.Object3D, THREE.Quaternion>();
   for (const o of Object.values(b)) if (o) rest.set(o, o.quaternion.clone());
   const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), e = new THREE.Euler();
@@ -57,7 +62,7 @@ export function makePoser(b: Bones) {
   };
   let hipY = 0;
   return (p: PoseInput, dt: number) => {
-    const k = 1 - Math.exp(-dt * (p.anim === 'roll' ? 30 : 12)), s = Math.sin(p.phase), c = Math.cos(p.phase);
+    const k = 1 - Math.exp(-dt * (p.anim === 'roll' ? 30 : 12) / Math.sqrt(M.mass)), s = Math.sin(p.phase), c = Math.cos(p.phase);
     let hips = [0, 0, 0], spine = [0, 0, 0], head = [0, 0, 0], la = [0, 0, 0.12], ra = [0, 0, -0.12], lf = [0, 0, 0], rf = [0, 0, 0];
     let lu = [0, 0, 0], ru = [0, 0, 0], ll = [0, 0, 0], rl = [0, 0, 0], lft = [0, 0, 0], rft = [0, 0, 0], bob = 0;
     const breathe = Math.sin(p.t * 2.2) * 0.03;
@@ -84,11 +89,36 @@ export function makePoser(b: Bones) {
         lu = [-2.0, 0, 0]; ru = [-2.0, 0, 0]; ll = [2.3, 0, 0]; rl = [2.3, 0, 0]; spine = [0.7, 0, 0]; head = [0.4, 0, 0];
         la = [-1.2, 0, 0.3]; ra = [-1.2, 0, -0.3]; lf = [-1.6, 0, 0]; rf = [-1.6, 0, 0]; break;
     }
+    // per-type mass layer: hip sway + counter-rotation, heel-to-toe roll, limp hitch, hunch, special moves
+    const moving = p.anim === 'walk' || p.anim === 'run';
+    if (moving) {
+      const A = M.stride; lu = lu.map((v, i) => (i ? v : v * A)); ru = ru.map((v, i) => (i ? v : v * A));
+      la = [la[0] * M.arms, la[1], la[2]]; ra = [ra[0] * M.arms, ra[1], ra[2]];
+      hips = [hips[0], -s * 0.1 * M.sway, c * 0.07 * M.sway]; spine = [spine[0], spine[1] + s * 0.1 * M.sway, spine[2] - c * 0.05 * M.sway]; // counter-rotate the chest
+      lft = [Math.sin(p.phase + 0.9) * 0.35, 0, 0]; rft = [-Math.sin(p.phase + 0.9) * 0.35, 0, 0]; // heel strike -> toe off
+      bob *= M.bob * (1 + M.limp * Math.max(0, -s));
+      if (M.limp) { rl = [rl[0] * (1 - M.limp * 0.5), 0, 0]; spine[2] += Math.max(0, -s) * 0.08 * M.limp; }
+    }
+    spine[0] += M.hunch; head[0] -= M.hunch * 0.7;
+    const sp = p.special ?? 0;
+    if (sp > 0 && M.special === 'groundpound') { // wind up (arms high) -> slam (fists down, deep squat)
+      const up = Math.min(1, sp / 0.35), dn = Math.max(0, Math.min(1, (sp - 0.35) / 0.12)), rec = Math.max(0, (sp - 0.7) / 0.5);
+      const w = (1 - rec);
+      la = [(-2.6 * up + 3.3 * dn) * w, 0, 0.3]; ra = la.map((v, i) => (i === 2 ? -0.3 : v)) as number[]; lf = [-1.2 * up * w, 0, 0]; rf = lf.slice();
+      lu = [-1.1 * dn * w, 0, 0.25]; ru = [-1.1 * dn * w, 0, -0.25]; ll = [1.5 * dn * w, 0, 0]; rl = ll.slice(); spine = [(-0.3 * up + 0.7 * dn) * w, 0, 0]; bob = -0.35 * dn * w;
+    }
+    if (sp > 0 && M.special === 'blinkdash') { spine = [0.6, 0, 0]; la = [-1.4, 0, 0.6]; ra = [-1.4, 0, -0.6]; lu = [-0.7, 0, 0]; ru = [0.5, 0, 0]; ll = [0.9, 0, 0]; }
+    if (p.damage && p.damage > 0.5) { head[2] += Math.sin(p.t * 1.7) * 0.06 * p.damage; spine[2] += 0.05 * p.damage; }
     hipY += (bob - hipY) * k; if (b.Hips) b.Hips.position.y = (b.Hips.userData.y0 ?? 0) + hipY;
     set('Hips', hips[0], hips[1], hips[2], k); set('Spine', spine[0], spine[1], spine[2] + p.bank * 0.2, k); set('Head', head[0], head[1], head[2], k);
     set('LeftArm', la[0], la[1], la[2], k); set('RightArm', ra[0], ra[1], ra[2], k); set('LeftForeArm', lf[0], lf[1], lf[2], k); set('RightForeArm', rf[0], rf[1], rf[2], k);
     set('LeftUpLeg', lu[0], lu[1], lu[2], k); set('RightUpLeg', ru[0], ru[1], ru[2], k); set('LeftLeg', ll[0], ll[1], ll[2], k); set('RightLeg', rl[0], rl[1], rl[2], k);
     set('LeftFoot', lft[0], lft[1], lft[2], k); set('RightFoot', rft[0], rft[1], rft[2], k);
+    // fingers: relaxed curl in idle/walk, fist on boost / special; thumb curls less
+    const want = Math.max(p.fist ?? 0, sp > 0 ? 1 : 0, p.anim === 'fall' || p.anim === 'roll' ? 0.8 : 0);
+    fistC += (want - fistC) * (1 - Math.exp(-dt * 14));
+    const cu = M.curl + (1.25 - M.curl) * fistC + (moving ? Math.sin(p.phase * 2) * 0.04 : Math.sin(p.t * 1.3) * 0.03);
+    for (const f of fingers) { const th = (f as string).includes('F9_') /* thumb */; set(f, 0, 0, 0, 1); const o = b[f]!; o.rotateZ(((f as string)[0] === 'L' ? -1 : 1) * (th ? 0.55 : 1) * cu); } // palms face the thighs: curl toward the body midline
   };
 }
 

@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
-import { uniform, uniformArray, instancedBufferAttribute, positionLocal, vec3, vec4, float, sin, time, step, mix, max, fract } from 'three/tsl';
 import { makePoser, type Bones, type RobotLook, type RobotModel, type PoseInput, REGIONS } from './model';
 import { TYPES, SLOT_KEYS, skeleton, type RobotType, type SlotBuild } from './types';
+import { createGlitchBody, type ShardData } from './glitch';
 import { loadKit, buildSkinned, createKitUniforms, type Kit } from './kit';
 
 export type KitU = ReturnType<typeof createKitUniforms>;
@@ -45,7 +45,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
     }
   };
   rebuild();
-  const pose = makePoser(R.bones);
+  const pose = makePoser(R.bones, TYPES[type].motion);
   const A = new THREE.Vector3(), B = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), inv = new THREE.Matrix4();
   const aimPistons = () => {
     R.root.updateMatrixWorld(true); inv.copy(R.root.matrixWorld).invert();
@@ -76,57 +76,17 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
   return model;
 }
 
-/** Glitch: every cube of every part in ONE InstancedMesh; bones are a mat4 uniform array indexed per instance. */
-export interface CubeData { vox: number; parts: { slot: string; opt: string; bone: string; cubes: [number, number, number, number, number][] }[] }
-export function createGlitchRobot(data: CubeData, look: RobotLook, u: KitU): TypedRobot {
+/** Glitch: shard body (glitch.ts) driven by the shared rig + poser. */
+export function createGlitchRobot(data: ShardData, look: RobotLook, u: KitU): TypedRobot {
   const R = rig('glitch');
-  const boneNames = R.list.map((b) => b.name), n = data.parts.reduce((s, p) => s + p.cubes.length, 0);
-  const off = new Float32Array(n * 4), aux = new Float32Array(n * 4), dir = new Float32Array(n * 3);
-  let i = 0;
-  data.parts.forEach((p, pi) => {
-    const bi = Math.max(0, boneNames.indexOf(p.bone));
-    for (const [x, y, z, s, c] of p.cubes) {
-      off.set([x, y, z, s * 0.94], i * 4); aux.set([bi, c, pi, Math.random()], i * 4);
-      const v = new THREE.Vector3(x, y * 0.3, z).normalize().add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(0.8)).normalize();
-      dir.set([v.x, v.y, v.z], i * 3); i++;
-    }
-  });
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  const aOff = instancedBufferAttribute(new THREE.InstancedBufferAttribute(off, 4), 'vec4') as any, aAux = instancedBufferAttribute(new THREE.InstancedBufferAttribute(aux, 4), 'vec4') as any, aDir = instancedBufferAttribute(new THREE.InstancedBufferAttribute(dir, 3), 'vec3') as any;
-  const boneMats = R.list.map(() => new THREE.Matrix4()), uBones = uniformArray(boneMats, 'mat4');
-  const vis = data.parts.map(() => 0), uVis = uniformArray(vis, 'float');
-  const uWhite = uniform(new THREE.Color()), uDark = uniform(new THREE.Color()), uGlitch = uniform(new THREE.Color());
-  const seed = aAux.w, part = aAux.z, col = aAux.y;
-  // drift: a few cubes always float off and return; burst scatters all of them; damage loosens a growing share
-  const idle = step(0.975, seed).mul(sin(time.mul(1.3).add(seed.mul(40))).mul(0.5).add(0.5)).mul(0.22);
-  const scatter = max(float(0), u.energy.sub(1.5)).mul(seed.mul(0.5).add(0.15));
-  const loose = step(float(1).sub(u.damage.mul(0.4)), fract(seed.mul(7.13))).mul(sin(time.mul(2).add(seed.mul(30))).mul(0.06).add(0.1));
-  const snap = u.sweep.greaterThan(-0.9).select(float(0), float(1));
-  const local = positionLocal.mul(aOff.w.mul(uVis.element(part.toInt()))).add(aOff.xyz).add(aDir.mul(idle.add(scatter).add(loose.mul(snap))));
-  const mat = new THREE.MeshStandardNodeMaterial({ flatShading: true, roughness: 0.25, metalness: 0.05 });
-  mat.positionNode = (uBones.element(aAux.x.toInt()) as any).mul(vec4(local, 1)).xyz;
-  const glow = col.greaterThan(1.5);
-  mat.colorNode = glow.select(uGlitch.mul(0.3), col.greaterThan(0.5).select(uDark, uWhite)).mul(float(1).sub(u.damage.mul(0.35)));
-  const flick = step(0.9, fract(sin(time.mul(23).add(seed.mul(91))).mul(43758.5))).mul(0.8).add(0.6);
-  mat.emissiveNode = mix(vec3(0), uGlitch.mul(u.energy.mul(1.6)).mul(flick), glow.select(float(1), float(0)));
-  mat.roughnessNode = col.greaterThan(0.5).select(float(0.55), float(0.22));
-  const mesh = new THREE.InstancedMesh(geo, mat, n); mesh.name = 'glitch:cubes'; mesh.frustumCulled = false;
-  const id = new THREE.Matrix4(); for (let k = 0; k < n; k++) mesh.setMatrixAt(k, id);
-  R.root.add(mesh);
-  const pose = makePoser(R.bones), inv = new THREE.Matrix4();
+  const G = createGlitchBody(data, R.list.map((b) => b.name), R.root, u.energy, u.damage);
+  const pose = makePoser(R.bones, TYPES.glitch.motion);
   const model: TypedRobot = {
     type: 'glitch', root: R.root, nozzles: R.nozzles, height: TYPES.glitch.height, uniforms: u, joints: R.joints,
-    setLook(l) {
-      Object.assign(look, l);
-      data.parts.forEach((p, k) => (vis[k] = p.slot === 'body' || (look as any)[p.slot] === p.opt ? 1 : 0));
-      u.screen.value.set(0, 0, 0, 0); uWhite.value.set(look.shell); uDark.value.set(look.joints); uGlitch.value.set(look.visor); u.glow.value.set(look.visor);
-    },
+    setLook(l) { Object.assign(look, l); G.setLook(look); u.screen.value.set(0, 0, 0, 0); u.glow.value.set(look.visor); },
     equip() {},
-    animate(s, dt) {
-      pose(s, dt); R.root.updateMatrixWorld(true); inv.copy(R.root.matrixWorld).invert();
-      R.list.forEach((b, k) => boneMats[k].multiplyMatrices(inv, b.matrixWorld));
-    },
-    dispose() { geo.dispose(); mat.dispose(); },
+    animate(s, dt) { pose(s, dt); G.update(s, dt, R.list); },
+    dispose() { G.dispose(); },
   };
   model.setLook({}); model.animate({ anim: 'idle', phase: 0, speed: 0, lean: 0, bank: 0, crouch: 0, t: 0 }, 0.016);
   return model;
@@ -139,13 +99,13 @@ export function createGlitchRobot(data: CubeData, look: RobotLook, u: KitU): Typ
 export async function createRobotSwitch(type: RobotType, look: RobotLook) {
   const root = new THREE.Group(); root.name = 'PlayerRobot';
   const u = createKitUniforms();
-  const kits = new Map<RobotType, Promise<Kit | CubeData>>();
+  const kits = new Map<RobotType, Promise<Kit | ShardData>>();
   const load = (t: RobotType) => {
-    if (!kits.has(t)) kits.set(t, t === 'glitch' ? fetch(`${import.meta.env.BASE_URL}robot/glitch/cubes.json`).then((r) => r.json()) : loadKit(t, u));
+    if (!kits.has(t)) kits.set(t, t === 'glitch' ? fetch(`${import.meta.env.BASE_URL}robot/glitch/shards.json`).then((r) => r.json()) : loadKit(t, u));
     return kits.get(t)!;
   };
   let cur: TypedRobot;
-  const make = async (t: RobotType, l: RobotLook) => { const k = await load(t); return t === 'glitch' ? createGlitchRobot(k as CubeData, l, u) : createKitRobot(t, k as Kit, l, u); };
+  const make = async (t: RobotType, l: RobotLook) => { const k = await load(t); return t === 'glitch' ? createGlitchRobot(k as ShardData, l, u) : createKitRobot(t, k as Kit, l, u); };
   cur = await make(type, look); root.add(cur.root);
   const sw = {
     root, uniforms: u, onSwap: (_m: TypedRobot) => {},

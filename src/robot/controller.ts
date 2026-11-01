@@ -19,6 +19,9 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   let heading = 0, mode: RobotMode = 'SKYDIVING', burst = 1, rollT = 0, landT = 0, airT = 0, phase = 0, t = 0;
   let lean = 0, bank = 0, yawRate = 0, power = 0, burstOn = 0, enabled = true, charging = false, hero = false;
   let onImpact: ((p: THREE.Vector3, strength: number) => void) | null = null;
+  // Z special: per-type move (ground-pound, blink-dash, ...); specialT = seconds since trigger, -1 = idle
+  let specialKind = 'none', specialDur = 0.8, specialT = -1;
+  let onSpecial: ((kind: string, phase: 'start' | 'hit' | 'end', p: THREE.Vector3) => void) | null = null;
   let camYaw = 0, camPitch = 0.22, camDist = 5, fov = 55, dragging = false, lx = 0, ly = 0, lastDrag = -10;
   const camPos = new THREE.Vector3(), camWant = new THREE.Vector3(), camOff = new THREE.Vector3(0, 3, -8), look = new THREE.Vector3();
   let anim: RobotAnim = 'fall', floor = { y: 0, water: false, roof: false };
@@ -31,6 +34,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       else if (mode === 'SKYDIVING') mode = 'ROCKETS';
     }
     if (e.code === 'KeyF' && !e.repeat) { if (mode === 'ROCKETS') mode = 'SKYDIVING'; else if (mode === 'SKYDIVING') mode = 'ROCKETS'; else if (mode === 'GROUND') { vel.y = 9; mode = 'ROCKETS'; } }
+    if (e.code === 'KeyZ' && !e.repeat && specialT < 0 && (mode === 'GROUND' || specialKind === 'blinkdash')) { specialT = 0; onSpecial?.(specialKind, 'start', pos); }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   });
   addEventListener('keyup', (e) => keys.delete(e.code));
@@ -70,6 +74,10 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     /** Drop-in spawn: start high above (x, z) facing `h`, skydiving into the superman pose. */
     /** Hero drop: straight down fast, ends in a crouched superhero landing with an impact callback. */
     heroDrop(x: number, y: number, z: number, h = 0) { this.spawn(x, y, z, h); vel.set(0, -45, 0); hero = true; airT = 1; },
+    /** Per-type Z special (types.ts motion.special / specialDur). */
+    setSpecial(kind: string, dur: number) { specialKind = kind; specialDur = dur; specialT = -1; },
+    get special() { return specialT; }, get phase() { return phase; },
+    set onSpecial(f: ((kind: string, phase: 'start' | 'hit' | 'end', p: THREE.Vector3) => void) | null) { onSpecial = f; },
     set onImpact(f: ((p: THREE.Vector3, s: number) => void) | null) { onImpact = f; },
     /** Power-up stance: hold to charge (ground: crouch in place; air: hover). Refills BURST faster. */
     set charging(v: boolean) { charging = v; }, get charging() { return charging && enabled; },
@@ -159,7 +167,17 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       // lean pivots around the hips so the flying body stays centred
       if (lean > 0.01 && mode !== 'ROLL') r.position.y += Math.sin(lean) * 0.55;
       const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
-      model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t }, dt);
+      if (specialT >= 0) {
+        const p0 = specialT; specialT += dt;
+        if (specialKind === 'groundpound') { vel.x *= 0.5; vel.z *= 0.5; if (p0 < 0.47 && specialT >= 0.47) { onSpecial?.(specialKind, 'hit', pos); onImpact?.(pos, 1.2); } }
+        if (specialKind === 'blinkdash' && specialT > 0.12 && p0 < 0.3) { // ~7 m blink along the heading, stopped by walls
+          const step = 40 * Math.min(dt, 0.3 - Math.max(p0, 0.12)), nx = pos.x + Math.sin(heading) * step, nz = pos.z + Math.cos(heading) * step;
+          if (!world.blocked(nx, nz, pos.y + 1)) { pos.x = nx; pos.z = nz; r.position.copy(pos); }
+        }
+        if (specialKind === 'blinkdash' && p0 < 0.42 && specialT >= 0.42) onSpecial?.(specialKind, 'hit', pos);
+        if (specialT > specialDur) { specialT = -1; onSpecial?.(specialKind, 'end', pos); }
+      }
+      model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn }, dt);
 
       // chase camera: behind and above; pulls back with a wider FOV at speed, closer and narrower on foot
       const spd = vel.length(), sf = Math.min(1, spd / CRUISE);

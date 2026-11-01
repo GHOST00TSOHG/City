@@ -12,6 +12,7 @@ import { loadSave, writeSave, lookOf, storeLook } from './save';
 import { createRobotController } from './robot/controller';
 import { createThrust } from './robot/thrust';
 import { createRobotHud } from './robot/hud';
+import { createRobotAudio } from './robot/audio';
 import { createSnow, createRain, createWeatherUI, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
@@ -72,17 +73,26 @@ createScene(canvas, areaId).then(async (app) => {
   setDamage(damage);
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
-  ctl.setTuning(TYPES[save.robot.type].tune);
+  const sfx = createRobotAudio();
+  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setSpecial(d.motion.special, d.specialDur); sfx.setType(t); };
+  applyType(save.robot.type);
   robot.onSwap = () => { thrust.attach(robot.nozzles); joints = robot.joints; };
   idle(() => TYPE_KEYS.forEach((t) => robot.preload(t)));
   const switchType = (t: RobotType): RobotLook => {
     storeLook(save, cust.look); save.robot.type = t; writeSave(save);
-    const l = lookOf(save); void robot.setType(t, l); ctl.setTuning(TYPES[t].tune); fx.setColor(l.visor); return l;
+    const l = lookOf(save); void robot.setType(t, l); applyType(t); fx.setColor(l.visor); return l;
   };
   const hud = createRobotHud();
   const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
   const heroDrop = () => { const s = app.spawnPoint(); ctl.heroDrop(s.x, s.ground + 160, s.z, s.heading); };
-  ctl.onImpact = (p, k) => fx.impact(p, k);
+  ctl.onImpact = (p, k) => { fx.impact(p, k); sfx.hit(); };
+  ctl.onSpecial = (kind, phase) => { if (phase === 'start') sfx.special(kind); if (phase === 'hit') fx.kick(kind === 'groundpound' ? 1 : 0.35); };
+  let lastStep = 0, lastBurst = 0;
+  const stepFx = () => { // footfalls every half gait cycle; heavier types shake the camera
+    const n = Math.floor(ctl.phase / Math.PI), a = ctl.anim;
+    if (n !== lastStep && (a === 'walk' || a === 'run') && ctl.mode === 'GROUND') { sfx.step(); const m = TYPES[save.robot.type].motion.mass; if (m > 1.5) fx.kick(0.12 * m); }
+    lastStep = n; if (ctl.burstOn > 0.5 && lastBurst <= 0.5) sfx.boost(); lastBurst = ctl.burstOn;
+  };
   let robotMode = qs.get('mode') !== 'free';
   const setRobotMode = (on: boolean) => {
     robotMode = on; ctl.setEnabled(on); app.controls.setEnabled(!on); hud.setVisible(on); thrust.setVisible(on);
@@ -162,7 +172,7 @@ createScene(canvas, areaId).then(async (app) => {
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); hud.update(dt, ctl); }
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); hud.update(dt, ctl); stepFx(); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
