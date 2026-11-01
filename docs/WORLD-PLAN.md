@@ -49,6 +49,13 @@ What this means:
 - **6c:** seam and pop polish (dithered fade, shared edges); remove the area-switch UI inside a region.
 - **6d (optional):** the low-detail NJ corridor.
 
-## Decisions needed
-- Is a 40 km drive between Newark and the shore wanted, or are two regions plus fade travel fine?
-- Is re-baking with network access (OSM, Overture, Mapterhorn) allowed from CI or the box?
+## Decisions (Luis, 2026-11-01)
+- **NJ is connected by road, with a shortened, compressed connector, not the real ~40 km.** The shore cluster (Bayshore and Sandy Hook) and the Newark cluster (Newark and Passaic) sit in one NJ frame. A short drivable connector road joins them, a few km of procedural highway through generic low-detail terrain. The real offsets inside each cluster (about 200 m and 0.7 km) are kept. This replaces option 6d (the real-length Overture corridor) and the "two regions plus fade travel" option.
+- **Key West stays a separate area, placed not super far away, and is reached by flying over it (no road).** It gets its own offset in the same world frame, past the NJ coastline over open water, so the player can fly there. No road or bridge links it. Ocean tiles between the areas are terrain-only (water plane plus fog), so the flight streams cheaply.
+- **Re-baking the area map data from online sources (OSM, Overture, Mapterhorn) is approved.**
+- **Timing:** all of this, including the re-bake, starts after Luis's Air test of the current preview. Nothing is re-baked or built yet.
+
+### Phase changes from these decisions
+- 6a: world.json places the compressed NJ layout and the Key West offset. It re-bakes shore and newark as merged extents.
+- 6b and 6c: unchanged.
+- 6d: the compressed NJ connector road plus terrain-only ocean tiles for the Key West flight. This replaces the real-length corridor.
