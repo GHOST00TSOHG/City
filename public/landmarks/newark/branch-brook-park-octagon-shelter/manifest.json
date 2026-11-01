@@ -1,0 +1,34 @@
+{
+  "id": "branch-brook-park-octagon-shelter",
+  "name": "Branch Brook Park Octagon Shelter",
+  "area": "newark",
+  "file": "branch-brook-park-octagon-shelter.glb",
+  "lat": 40.75503755,
+  "lon": -74.18201133,
+  "headingDeg": 0,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [3836, 1932, 292], "switchM": [150, 600] },
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "footprint centre",
+      "source": "https://www.openstreetmap.org/way/1257648454",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "plan, height, materials, and roof (1906 Carrère & Hastings pavilion)",
+      "source": "https://branchbrookpark.org/uploads/1/3/1/7/131747681/bbp_clr_vol4_1_-_structures_in_the_park.pdf",
+      "author": "Cultural Landscape Report Volume 4 (January 2005), prepared for Essex County Parks and the Branch Brook Park Alliance",
+      "license": "public report"
+    },
+    {
+      "what": "park history (octagonal gazebo on Meeker Mound)",
+      "source": "https://essexcountyparks.org/parks/branch-brook-park/about",
+      "author": "Essex County Parks",
+      "license": "public park page"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}
