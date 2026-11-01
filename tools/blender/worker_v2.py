@@ -1,4 +1,4 @@
-"""WORKER v2: beat-up utility rig. Tall, lanky, slouched; worn olive paint with a yellow replacement arm panel,
+"""WORKER v3 (rebuilt from scratch): beat-up utility rig. Tall, lanky, slouched; worn olive paint with a yellow replacement arm panel,
 hazard-striped shoulders, rubber hoses, toolbelt, back-mounted crane boom, welder forearm on the right,
 blinking work lights, single-lens box-cam head. 5 gloved fingers. Asymmetric: built per side, no mirror.
 Run: blender --enable-event-simulate -noaudio -P worker_v2.py -- [--fast] [--kit]"""
@@ -9,10 +9,10 @@ from scout_v2 import *
 import scout_v2 as S, addons as A
 
 V = Vector
-OLV = mat('armor_white', (0.17, 0.2, 0.08), 0.62, 0.05)     # shell: worn olive
-YEL = mat('armor_blue', (0.75, 0.48, 0.02), 0.5)             # torso: replacement yellow panels
-ORA = mat('armor_red', (0.62, 0.12, 0.02), 0.5)              # shorts: safety orange
-GRY = mat('armor_yellow', (0.09, 0.095, 0.1), 0.55, 0.3)     # backpack: crane / tanks
+OLV = mat('armor_white', (0.06, 0.075, 0.025), 0.62, 0.05, wear=True)     # shell: worn olive
+YEL = mat('armor_blue', (0.62, 0.38, 0.02), 0.5, wear=True)             # torso: replacement yellow panels
+ORA = mat('armor_red', (0.55, 0.1, 0.015), 0.5, wear=True)              # shorts: safety orange
+GRY = mat('armor_yellow', (0.03, 0.032, 0.035), 0.55, 0.4, wear=True)     # backpack: crane / tanks
 FR = mat('frame', (0.04, 0.042, 0.05), 0.55, 0.8)
 ST = mat('steel', (0.45, 0.45, 0.46), 0.3, 1.0)
 RUB = mat('rubber', (0.012, 0.012, 0.014), 0.85)
@@ -43,37 +43,60 @@ def hazard(name, c, half, n=5, rz=0.0, ry=0.0):
         x = -half[0] + (i + 0.5) * 2 * half[0] / n
         S._box(f'{name}_{i}', V(c) + R @ V((x, 0, 0)), (R.col[0], R.col[1], R.col[2]), (half[0] / n, half[1], half[2]), YEL if i % 2 == 0 else FR, 0.1)
 
+def _frame(a, b):
+    d = (b - a).normalized(); x = V((1, 0, 0)); x = (x - d * x.dot(d)).normalized(); y = d.cross(x).normalized()
+    return x, y, d
+
 def arm(s):
     side = 'L' if s > 0 else 'R'; B = 'Left' if s > 0 else 'Right'
     bone(B + 'Arm'); J[B + 'Arm'] = V((0.34 * s, 0.02, 1.64))
     joint(f'shoulder_{side}', V((0.32 * s, 0.02, 1.64)), (1, 0, 0), 0.06, 0.09)
-    # mismatched: left pauldron olive and dented-flat, right one a yellow replacement
-    box(f'pauldron_{side}', (0.42 * s, 0.02, 1.74), (0.13, 0.15, 0.08), OLV if s > 0 else YEL, ry=-0.35 * s, rz=0.06 * s)
-    hazard(f'hz_sh_{side}', (0.43 * s, -0.135, 1.74), (0.12, 0.008, 0.03), rz=0, ry=-0.35 * s)
-    box(f'worklight_{side}', (0.43 * s, -0.08, 1.84), (0.035, 0.025, 0.025), FR); box(f'worklight_lens_{side}', (0.43 * s, -0.106, 1.84), (0.025, 0.003, 0.018), LAMP, bev=0.3)
+    # mismatched pauldrons: left olive with dents, right a yellow replacement; hazard band + work light on each
+    box(f'pauldron_{side}', (0.42 * s, 0.02, 1.75), (0.13, 0.15, 0.075), OLV if s > 0 else YEL, ry=-0.35 * s, rz=0.06 * s, bev=0.12)
+    box(f'pauldron_lip_{side}', (0.5 * s, 0.02, 1.68), (0.035, 0.14, 0.05), FR, ry=-0.35 * s, bev=0.15)
+    hazard(f'hz_sh_{side}', (0.43 * s, -0.135, 1.75), (0.12, 0.008, 0.028), rz=0, ry=-0.35 * s)
+    for i in range(3): box(f'p_rivet_{side}{i}', (0.36 * s + 0.05 * i * s, 0.12, 1.82 - 0.02 * i), (0.006, 0.006, 0.006), ST)
+    box(f'worklight_{side}', (0.43 * s, -0.07, 1.855), (0.04, 0.03, 0.028), FR, bev=0.2)
+    box(f'worklight_lens_{side}', (0.43 * s, -0.101, 1.855), (0.03, 0.003, 0.02), LAMP, bev=0.3)
+    box(f'worklight_cage_{side}', (0.43 * s, -0.106, 1.855), (0.032, 0.002, 0.003), ST, bev=0.1)
     sh, el, wr = V((0.42 * s, 0.02, 1.6)), V((0.45 * s, 0.07, 1.24)), V((0.45 * s, -0.04, 0.9))
     cyl(f'upperarm_{side}', sh, el, 0.04, FR)
-    box(f'upperarm_panel_{side}', (0.45 * s, 0.02, 1.42), (0.055, 0.065, 0.12), OLV if s < 0 else YEL)
+    x, y, d = _frame(sh, el)
+    S._box(f'upperarm_panel_{side}', sh.lerp(el, 0.45) - y * 0.0 + x * 0.02 * s, (x, y, d), (0.055, 0.065, 0.12), OLV if s < 0 else YEL, bev=0.12)
+    piston(f'bicep_piston_{side}', sh + y * -0.07 + d * 0.04, el + y * -0.06 - d * 0.04, r=0.014)
     bone(B + 'ForeArm'); J[B + 'ForeArm'] = el.copy()
     joint(f'elbow_{side}', el, (1, 0, 0), 0.05, 0.08)
-    fa = loft(f'forearm_{side}', [(0, 0, 0, 0.06, 0.06), (0.17, 0, 0, 0.085, 0.08), (0.3, 0, 0, 0.07, 0.065)], OLV, e=3.2); place(fa, el, wr)
-    if s < 0:  # right forearm: welder torch rig, always on
-        cyl(f'welder_body_{side}', el.lerp(wr, 0.3) + V((-0.07, -0.05, 0)), el.lerp(wr, 0.9) + V((-0.08, -0.1, 0)), 0.025, ST, n=14)
-        cyl(f'welder_tip_{side}', el.lerp(wr, 0.9) + V((-0.08, -0.1, 0)), el.lerp(wr, 1.05) + V((-0.08, -0.13, -0.02)), 0.01, LAMP, n=10)
-        hose(f'hose_w_{side}', [el + V((-0.05, 0.08, 0.02)), el.lerp(wr, 0.5) + V((-0.06, 0.06, 0)), el.lerp(wr, 0.3) + V((-0.07, -0.04, 0))], 0.012)
+    fa = loft(f'forearm_{side}', [(0, 0, 0, 0.05, 0.05), (0.17, 0, 0, 0.06, 0.06), (0.3, 0, 0, 0.055, 0.05)], FR, e=6, n=8); place(fa, el, wr)
+    x, y, d = _frame(el, wr); fm = el.lerp(wr, 0.5)
+    S._box(f'forearm_plate_{side}', fm + x * 0.05 * s, (x, y, d), (0.02, 0.07, 0.13), OLV, bev=0.12)
+    S._box(f'forearm_top_{side}', fm - y * 0.06, (x, y, d), (0.065, 0.02, 0.12), OLV if s > 0 else YEL, bev=0.12)
+    S._box(f'forearm_cuff_{side}', el.lerp(wr, 0.92), (x, y, d), (0.075, 0.075, 0.018), FR, bev=0.2)
+    if s < 0:  # right: welder rig with tank, torch head, gas hose and a hot glowing tip
+        cyl(f'welder_body_{side}', el.lerp(wr, 0.25) + V((-0.08, -0.06, 0)), el.lerp(wr, 0.92) + V((-0.09, -0.11, 0)), 0.024, ST, n=14)
+        cyl(f'welder_nozzle_{side}', el.lerp(wr, 0.92) + V((-0.09, -0.11, 0)), el.lerp(wr, 1.06) + V((-0.09, -0.15, -0.03)), 0.012, FR, n=10, r2=0.007)
+        cyl(f'welder_tip_{side}', el.lerp(wr, 1.06) + V((-0.09, -0.15, -0.03)), el.lerp(wr, 1.09) + V((-0.09, -0.16, -0.035)), 0.006, LAMP, n=8)
+        cyl(f'welder_tank_{side}', el + V((-0.08, 0.06, -0.02)), el.lerp(wr, 0.5) + V((-0.08, 0.06, 0)), 0.026, ORA, n=14)
+        hose(f'hose_w_{side}', [el + V((-0.08, 0.06, -0.02)), el.lerp(wr, 0.4) + V((-0.11, 0.0, 0)), el.lerp(wr, 0.25) + V((-0.08, -0.06, 0))], 0.009)
+    else:  # left: compact crane winch on the forearm
+        cyl(f'winch_{side}', fm + x * 0.08 - y * 0.02, fm + x * 0.11 - y * 0.02, 0.035, YEL, n=16)
+        cyl(f'winch_drum_{side}', fm + x * 0.075 - y * 0.02, fm + x * 0.115 - y * 0.02, 0.022, RUB, n=16)
+    hose(f'hose_a_{side}', [sh + V((0.05 * s, 0.07, 0)), el + V((0.06 * s, 0.07, 0)), el.lerp(wr, 0.6) + V((0.06 * s, 0.05, 0))], 0.01)
     slot('arms', 'claw'); box(f'a_claw_{side}', tuple(el.lerp(wr, 0.6) + V((0.09 * s, 0, 0))), (0.02, 0.05, 0.1), ST)
     slot('arms', 'drill'); cyl(f'a_drill_{side}', el.lerp(wr, 0.5) + V((0.08 * s, -0.04, 0)), el.lerp(wr, 0.5) + V((0.08 * s, -0.25, 0)), 0.03, ST, r2=0.004)
     slot('arms', 'welder'); box(f'a_tank_{side}', tuple(el.lerp(wr, 0.4) + V((0.08 * s, 0.05, 0))), (0.03, 0.03, 0.08), ORA)
     slot('body')
-    S.build_hand(side, wr, (wr - el).normalized(), fingers=5, size=1.9, curl=0.45, armor_m=OLV, digit_m=RUB, thick=1.25)
+    S.build_hand(side, wr, (wr - el).normalized(), fingers=5, size=1.35, curl=0.5, armor_m=OLV, digit_m=RUB, thick=1.1)
 
 def leg(s):
     side = 'L' if s > 0 else 'R'; B = 'Left' if s > 0 else 'Right'
     hip, knee, ank = V((0.13 * s, 0, 0.98)), V((0.14 * s, -0.08, 0.56)), V((0.15 * s, 0.03, 0.15))
     bone(B + 'UpLeg'); J[B + 'UpLeg'], J[B + 'Leg'], J[B + 'Foot'] = hip.copy(), knee.copy(), ank.copy()
     joint(f'hip_{side}', hip, (1, 0, 0), 0.055, 0.1)
-    cyl(f'thigh_core_{side}', hip, knee, 0.035, FR)
-    th = loft(f'thigh_{side}', [(0.04, 0, 0, 0.065, 0.07), (0.2, 0, 0, 0.08, 0.085), (0.36, 0, 0, 0.065, 0.07)], OLV, e=3.4); place(th, hip, knee)
+    th = loft(f'thigh_{side}', [(0.04, 0, 0, 0.05, 0.05), (0.2, 0, 0, 0.06, 0.06), (0.36, 0, 0, 0.05, 0.05)], FR, e=6, n=8); place(th, hip, knee)
+    x, y, d = _frame(hip, knee); tm = hip.lerp(knee, 0.5)
+    S._box(f'thigh_front_{side}', tm - y * 0.065, (x, y, d), (0.07, 0.02, 0.14), OLV, bev=0.12)
+    S._box(f'thigh_side_{side}', tm + x * 0.07 * s, (x, y, d), (0.02, 0.06, 0.13), OLV if s > 0 else YEL, bev=0.12)
+    piston(f'thigh_piston_{side}', hip + x * 0.07 * s * -1 - y * 0.03, knee - x * 0.06 * s - y * 0.02, r=0.013)
     slot('legs', 'cans'); cyl(f'l_can_{side}', hip.lerp(knee, 0.3) + V((0.08 * s, 0.05, 0)), hip.lerp(knee, 0.8) + V((0.08 * s, 0.05, 0)), 0.03, ORA)
     slot('legs', 'strut'); cyl(f'l_strut_{side}', hip + V((0.07 * s, -0.06, -0.05)), knee + V((0.06 * s, -0.06, 0.04)), 0.012, ST)
     slot('legs', 'ribbed')
@@ -81,15 +104,22 @@ def leg(s):
     slot('body')
     bone(B + 'Leg')
     joint(f'knee_{side}', knee, (1, 0, 0), 0.055, 0.11)
-    box(f'kneepad_{side}', tuple(knee + V((0, -0.08, 0))), (0.06, 0.03, 0.07), ORA if s > 0 else OLV)
-    sh = loft(f'shin_{side}', [(0.04, 0, 0, 0.07, 0.075), (0.2, 0, 0, 0.085, 0.09), (0.38, 0, 0, 0.065, 0.07)], OLV, e=3.4); place(sh, knee, ank)
-    hose(f'hose_k_{side}', [knee + V((0.06 * s, 0.07, 0.06)), knee.lerp(ank, 0.5) + V((0.08 * s, 0.08, 0)), ank + V((0.06 * s, 0.06, 0.05))], 0.011)
-    if s > 0: hazard(f'hz_shin_{side}', tuple(knee.lerp(ank, 0.55) + V((0, -0.088, 0))), (0.06, 0.006, 0.02))
+    box(f'kneepad_{side}', tuple(knee + V((0, -0.08, 0.01))), (0.065, 0.03, 0.07), ORA if s > 0 else OLV, rx=0.2, bev=0.15)
+    sh = loft(f'shin_{side}', [(0.04, 0, 0, 0.05, 0.05), (0.2, 0, 0, 0.06, 0.06), (0.38, 0, 0, 0.05, 0.05)], FR, e=6, n=8); place(sh, knee, ank)
+    x, y, d = _frame(knee, ank); sm = knee.lerp(ank, 0.45)
+    S._box(f'shin_front_{side}', sm - y * 0.07, (x, y, d), (0.075, 0.022, 0.15), OLV, bev=0.12)
+    S._box(f'shin_side_{side}', sm + x * 0.07 * s, (x, y, d), (0.02, 0.065, 0.14), OLV, bev=0.12)
+    S._box(f'shin_calf_{side}', sm + y * 0.06, (x, y, d), (0.06, 0.025, 0.13), GRY, bev=0.12)
+    piston(f'shin_piston_{side}', knee - x * 0.07 * s + y * 0.02, ank - x * 0.07 * s + y * 0.03 - d * -0.05, r=0.013)
+    hose(f'hose_k_{side}', [knee + V((0.07 * s, 0.07, 0.06)), knee.lerp(ank, 0.5) + V((0.09 * s, 0.08, 0)), ank + V((0.07 * s, 0.06, 0.05))], 0.011)
+    hazard(f'hz_shin_{side}', tuple(knee.lerp(ank, 0.32) + V((0, -0.095, 0))), (0.065, 0.006, 0.018))
     bone(B + 'Foot')
     joint(f'ankle_{side}', ank, (1, 0, 0), 0.045, 0.09)
-    box(f'boot_{side}', tuple(ank + V((0, -0.06, -0.08))), (0.09, 0.17, 0.06), FR)
-    box(f'toecap_{side}', tuple(ank + V((0, -0.2, -0.09))), (0.085, 0.05, 0.05), ST)
+    box(f'boot_{side}', tuple(ank + V((0, -0.06, -0.08))), (0.09, 0.17, 0.06), FR, bev=0.15)
+    box(f'boot_upper_{side}', tuple(ank + V((0, -0.02, -0.03))), (0.08, 0.1, 0.03), OLV, bev=0.15)
+    box(f'toecap_{side}', tuple(ank + V((0, -0.2, -0.09))), (0.085, 0.05, 0.05), ST, bev=0.2)
     box(f'sole_{side}', tuple(ank + V((0, -0.06, -0.135))), (0.1, 0.18, 0.012), RUB)
+    for i in range(5): box(f'tread_{side}{i}', tuple(ank + V((0, -0.2 + i * 0.075, -0.15))), (0.095, 0.012, 0.006), RUB, bev=0.1)
     slot('boots', 'stabilizer'); box(f'bt_stab_{side}', tuple(ank + V((0.11 * s, -0.02, -0.11))), (0.03, 0.12, 0.02), ORA)
     slot('boots', 'wheels'); cyl(f'bt_wheel_{side}', ank + V((0.1 * s, 0.1, -0.09)), ank + V((0.13 * s, 0.1, -0.09)), 0.05, RUB)
     slot('boots', 'clamp'); box(f'bt_clamp_{side}', tuple(ank + V((0, -0.28, -0.11))), (0.06, 0.03, 0.02), ST, rx=0.4)
@@ -115,10 +145,17 @@ def build():
     # back: frame + crane boom
     box('backframe', (0, 0.2, 1.48), (0.18, 0.05, 0.2), GRY)
     cyl('crane_base', V((0.08, 0.27, 1.55)), V((0.08, 0.3, 1.55)), 0.06, ST)
-    cyl('crane_boom', V((0.08, 0.3, 1.55)), V((0.18, 0.35, 2.1)), 0.025, YEL, n=14)
+    A_, B_ = V((0.08, 0.3, 1.55)), V((0.18, 0.35, 2.1))
+    for rx_ in (-0.025, 0.025): cyl(f'crane_boom_{rx_}', A_ + V((rx_, 0, 0)), B_ + V((rx_, 0, 0)), 0.012, YEL, n=10)
+    for i in range(6):
+        p0, p1 = A_.lerp(B_, i / 6), A_.lerp(B_, (i + 1) / 6)
+        cyl(f'crane_brace_{i}', p0 + V((-0.025, 0, 0)), p1 + V((0.025, 0, 0)), 0.005, YEL, n=6)
+    piston('crane_ram', V((0.08, 0.25, 1.4)), A_.lerp(B_, 0.45) + V((0, -0.02, 0)), r=0.015)
+    box('crane_beacon', (0.18, 0.35, 2.12), (0.015, 0.015, 0.012), LAMP, bev=0.3)
     cyl('crane_jib', V((0.18, 0.35, 2.1)), V((0.14, 0.0, 2.2)), 0.018, YEL, n=12)
     cyl('crane_cable', V((0.14, 0.0, 2.19)), V((0.14, -0.02, 1.98)), 0.003, FR, n=6)
-    box('crane_hook', (0.14, -0.02, 1.97), (0.012, 0.006, 0.02), ST)
+    box('crane_block', (0.14, -0.02, 1.98), (0.02, 0.012, 0.025), YEL, bev=0.2)
+    cyl('crane_hook', V((0.14, -0.02, 1.955)), V((0.14, -0.03, 1.935)), 0.008, ST, n=8)
     hose('hose_back', [V((-0.12, 0.25, 1.62)), V((-0.2, 0.18, 1.72)), V((-0.32, 0.05, 1.68))], 0.016)
     slot('bionics', 'tanks')
     for s in (1, -1): cyl(f'b_tank_{s}', V((0.09 * s - 0.03, 0.27, 1.3)), V((0.09 * s - 0.03, 0.27, 1.5)), 0.05, ORA)
@@ -191,6 +228,9 @@ def addon_pass():
 def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
+    if '--preview' in S.argv:
+        S.render(S.OUT.replace('.png', '-34.png'), tgt=(0, 0, 1.1), dist=5.8)
+        S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-0.5, cam_el=0.12, res=(1500, 1200), tgt=(-0.35, -0.15, 1.05), dist=1.6, lens=60, setup=False); return
     if '--skel' in S.argv if 'worker' != 'scout' else '--skel' in argv:
         import v2export as X; X.write_skeleton('worker', [o for o in bpy.data.objects if o.type == 'MESH']); return
     yield from addon_pass()
