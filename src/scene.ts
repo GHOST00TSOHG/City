@@ -93,7 +93,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     };
     const g = mk(0.62, 0.3, 0.55, 1, 1.15), r = mk(0.52, 0.5, 0.3, 0.75, 1.5); // gain: Standard is darker than the old Lambert
     groundMat.colorNode = g.color; groundMat.roughnessNode = g.rough; groundMat.emissiveNode = g.emissive;
-    roadMat.colorNode = r.color.mul(mx_noise_float(positionWorld.mul(2.7)).mul(0.12).add(mx_noise_float(positionWorld.mul(0.35)).mul(0.08)).add(1)); // asphalt grain + patching roadMat.roughnessNode = r.rough; roadMat.emissiveNode = r.emissive;
+    roadMat.colorNode = r.color.mul(mx_noise_float(positionWorld.mul(2.7)).mul(0.12).add(mx_noise_float(positionWorld.mul(0.35)).mul(0.08)).add(1)); // asphalt grain + patching
+    roadMat.roughnessNode = r.rough; roadMat.emissiveNode = r.emissive;
   }
   { // snow settles on roofs and other up-facing building surfaces
     const fm = facade.material as any, base = fm.colorNode;
