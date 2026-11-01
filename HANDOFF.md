@@ -134,8 +134,19 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Measured (SwiftShader, Key West start): 41 to 51 draw calls in the garage and 35 to 45 in the world.
 - **Still to do:** Heavy ground-pound dust ring and shove; Glitch blink-dash; Scout double-jump/dash; LOD1/LOD2 for other players' robots past 25/80 m; KTX2 textures (WebP now); a phone cube-count drop for Glitch; a real-GPU fps check on an M4 Air. The old phase-7b parts (`public/robot/parts/*.glb`, `src/robot/parts.ts`, `loadRobot`, `robot_parts.py`) are unused but not deleted, because the plan doesn't call for removing them.
 
-## robots-v2 status (2026-10-31 21:30 ET)
-- Step 1 done (f52d593): tools/blender/scout_v2.py -> /workspace/robot-renders/scout-v2b.png, scout-v2b-closeup.png (hands).
-  Add-ons: Boxcutter 31 box + 4 circle, HOps bool 14 / bevel 68 / weighted normal 68, MESHmachine fuse 15. 78,151 tris pre-decimation (target <30k).
-- Audio staged (uncommitted) in public/audio/robots/{scout,heavy,worker,glitch}/ (ogg+m4a, 1.1 MB) + LICENSES.md. No runtime audio system exists yet.
-- TODO: Heavy/Worker/Glitch builds, rig w/ finger bones, anim, decimate, game integration, audio wiring, step-3 deliverables.
+## robots-v2 status (2026-10-31 22:55 ET)
+- **Blender (box only; add-ons in /workspace/private/blender-addons, .blend in /workspace/private, never committed):**
+  `xvfb-run -a -s "-screen 0 1920x1080x24" blender --enable-event-simulate -noaudio -P tools/blender/<type>_v2.py -- [--kit] [--skel] [--closeup] [--fast]`.
+  Run them one at a time: write_skeleton read-modify-writes src/robot/skeleton.json. `--skel` = rig only (seconds), `--kit` = add-on pass + parts.glb/kit.json + skeleton (~14 min).
+  v2export.JOV: a script run as __main__ under -P is not in sys.modules, so scout_v2 hands its J dict over explicitly.
+- **Types:** Scout (scout_v2.py), Heavy (heavy_v2.py, 3 clamp digits), Worker (worker_v2.py, 5 gloved fingers), Glitch (glitch_v2.py -> public/robot/glitch/shards.json, src/robot/glitch.ts).
+  Skeleton bones: scout 24, heavy 18, worker 24, glitch 24 (fingers included).
+- **Glitch runtime:** 4 draws (shards, cyan + magenta ghosts, particle pool). Instances are compacted to the equipped parts on setLook; ghosts draw a 260-shard prefix. All motion is in the TSL vertex shader (Fn-wrapped).
+- **Specials (KeyZ):** Heavy ground-pound (impact decal/dust/debris/shake at 0.47 s), Glitch blink-dash (dissolve, 40 m/s blink, reassembly burst at 0.42 s). Configured per type in types.ts (motion.special, specialDur) and applied in main.ts applyType().
+- **Audio:** src/robot/audio.ts. One master gain (1.0); every clip plays at 1.0; only *_idle_loop loops; footsteps 01-03 round-robin every half gait cycle; ogg with m4a fallback. Heavy footfalls kick the camera (0.12 x mass).
+- **Kit tris (body + worst-case slots), all < 30k:** scout 26,786 body (test: 27,264 drawn), heavy 25,225, worker 25,970, glitch 27,720 drawn.
+- **Test:** node tools/test-robot-types.mjs 5180: all PASS, 0 console errors; calls garage 44-49 / world 38-43.
+- **Clips:** node tools/clips-robot-types.mjs 5180 (deterministic ?fixeddt stepping) -> /workspace/robot-clips/.
+- **Renders:** /workspace/robot-renders/{scout,heavy,worker,glitch}-{front,side,back,34,night}.png, scout-v2c-closeup.png (wrist guard + tucked thumb).
+- **Bench:** ?bench is on origin/main, not on this branch (it was cut before bench landed). Rebase before the bench numbers.
+- **Never merge the PR.**
