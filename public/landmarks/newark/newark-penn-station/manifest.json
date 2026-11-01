@@ -1,0 +1,58 @@
+{
+  "id": "newark-penn-station",
+  "name": "Newark Penn Station",
+  "area": "newark",
+  "file": "newark-penn-station.glb",
+  "lat": 40.7341966,
+  "lon": -74.16440802,
+  "headingDeg": 317.0,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [4457, 1594, 302], "switchM": [150, 600] },
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "footprint",
+      "source": "https://www.openstreetmap.org/way/49200094",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "plan dimensions (station house 302 ft by 79 ft, waiting room 46 ft ceiling, train shed 1,200 ft)",
+      "source": "https://npgallery.nps.gov/NRHP/GetAsset/c0b4ec8b-58ac-4b7d-909a-040d3dcf7d4c",
+      "author": "National Register of Historic Places nomination, Pennsylvania Station (Newark), ref. 78001760",
+      "license": "public domain"
+    },
+    {
+      "what": "west facade rhythm, materials, and street-portal description",
+      "source": "https://npgallery.nps.gov/GetAsset/3afc9307-17be-44c4-b1fa-ab7ae7d0c947",
+      "author": "National Register boundary increase, Newark Penn Station and Dock Bridge, 2012",
+      "license": "public domain"
+    },
+    {
+      "what": "1935 Market Street portal photograph",
+      "source": "https://commons.wikimedia.org/wiki/File:Newark_Penn_Station_LOC_gsc.5a02636.jpg",
+      "author": "Gottscho-Schleisner, Inc.",
+      "license": "public domain"
+    },
+    {
+      "what": "west front and shed reference photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Newark_Penn_Station_June_2015_001.jpg",
+      "author": "King of Hearts",
+      "license": "CC BY-SA 3.0"
+    },
+    {
+      "what": "Raymond Boulevard portal reference photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Newark_Penn_Station_vc.jpg",
+      "author": "Ken Lund",
+      "license": "CC BY-SA 2.0"
+    },
+    {
+      "what": "north approach and portal reference photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Newark_Penn_and_Dock_Bridge_vc.jpg",
+      "author": "The All-Nite Images",
+      "license": "CC BY-SA 2.0"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}
