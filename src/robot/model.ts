@@ -227,13 +227,13 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
       fold('LeftArm', 0.07, 0, 0.5, 0.04, sInA); fold('RightArm', 0.07, 0, 0.5, 0.04, sInA); fold('LeftUpLeg', 0.07, 0, 0.36, 0.0, sInL); fold('RightUpLeg', 0.07, 0, 0.36, 0.0, sInL); // arms AND legs sink into the dome (centre of the sphere)
       fold('Head', 0.1, 0, 0.5, 0, sHd); fold('Spine', 1, 0, -0.3, 0.02, sS); if (b.Hips) b.Hips.position.y -= 0.62 * sstep(bl, 0.3, 1); // the dome settles over the pelvis; the ball sits on the ground
     }
-    if (hv > 0) { // Scout: FLAT low hover-sprint sled: the whole body pitches horizontal, legs trail back folded into the thruster pods, arms swept along the flanks, head forward, body near the ground
-      const sA = sstep(hv, 0, 0.4), sL = sstep(hv, 0.15, 0.7), sS = sstep(hv, 0.25, 0.85);
-      ovr('Hips', 1.38, 0, 0, sS); ovr('Spine', 0.06, 0, 0, sS); ovr('Head', -1.2, 0, 0, sS);
-      ovr('LeftArm', 0.25, 0, 0.1, sA); ovr('RightArm', 0.25, 0, -0.1, sA); ovr('LeftForeArm', -0.1, 0, 0, sA); ovr('RightForeArm', -0.1, 0, 0, sA);
-      ovr('LeftUpLeg', 0.1, 0, 0.04, sL); ovr('RightUpLeg', 0.1, 0, -0.04, sL); ovr('LeftLeg', 0.75, 0, 0, sL); ovr('RightLeg', 0.75, 0, 0, sL); ovr('LeftFoot', 0.3, 0, 0, sL); ovr('RightFoot', 0.3, 0, 0, sL);
-      fold('LeftUpLeg', 0.75, 0.13, 0, 0.02, sL); fold('RightUpLeg', 0.75, -0.13, 0, 0.02, sL); fold('LeftArm', 0.9, 0.27, 0.3, -0.04, sA); fold('RightArm', 0.9, -0.27, 0.3, -0.04, sA);
-      if (b.Hips) b.Hips.position.y -= 0.6 * sS;
+    if (hv > 0) { // Scout MOTORCYCLE mode: torso is the bike body (horizontal), the head swells into the giant round headlight, the arms become the front forks, the legs become two tailpipes pointing straight back (flames trail behind)
+      const sA = sstep(hv, 0, 0.4), sL = sstep(hv, 0.15, 0.7), sS = sstep(hv, 0.25, 0.85), sH = sstep(hv, 0.3, 0.75);
+      ovr('Hips', 1.38, 0, 0, sS); ovr('Spine', 0.06, 0, 0, sS); ovr('Head', -1.35, 0, 0, sS);
+      ovr('LeftArm', -1.62, 0, 0.04, sA); ovr('RightArm', -1.62, 0, -0.04, sA); ovr('LeftForeArm', -0.12, 0, 0, sA); ovr('RightForeArm', -0.12, 0, 0, sA);
+      ovr('LeftUpLeg', 0.19, 0, 0.0, sL); ovr('RightUpLeg', 0.19, 0, 0.0, sL); ovr('LeftLeg', 0, 0, 0, sL); ovr('RightLeg', 0, 0, 0, sL); ovr('LeftFoot', 0, 0, 0, sL); ovr('RightFoot', 0, 0, 0, sL);
+      fold('LeftUpLeg', 0.95, 0.2, 0, 0.02, sL); fold('RightUpLeg', 0.95, -0.2, 0, 0.02, sL); fold('LeftArm', 1, 0.2, 0.34, -0.04, sA); fold('RightArm', 1, -0.2, 0.34, -0.04, sA); fold('Head', 2.3, 0, 0.6, 0.02, sH);
+      if (b.Hips) b.Hips.position.y -= 0.52 * sS;
     }
     if (sl > 0) { ovr('Spine', -0.32, 0, 0, sl * (1 - hv * 0.6)); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl * (1 - hv)); ovr('LeftLeg', 2.0, 0, 0, sl * (1 - hv)); ovr('RightUpLeg', -0.5, 0, -0.14, sl * (1 - hv)); ovr('RightLeg', 0.25, 0, 0, sl * (1 - hv));
       ovr('LeftFoot', -0.4, 0, 0, sl * (1 - hv)); ovr('RightFoot', 0.2, 0, 0, sl * (1 - hv)); ovr('LeftArm', 0.3, 0, 0.95, sl * (1 - hv)); ovr('RightArm', 0.3, 0, -0.95, sl * (1 - hv)); if (b.Hips) b.Hips.position.y -= 0.34 * sl * (1 - hv); } // Scout: thruster-assisted slide (rides on the hover form)

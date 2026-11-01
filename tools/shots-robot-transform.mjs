@@ -16,7 +16,7 @@ for (const t of TYPES) {
   await step(90); prog.push(await st(1, 'run'));
   await p.evaluate(() => { window.__robot.ctl.press('KeyW', false); window.__robot.ctl.press('ShiftLeft', false); });
   for (let i = 0; i < 4; i++) prog.push(await st(i === 0 ? 14 : 12, `u${i}`));
-  execSync(`${F} -y -loglevel error -pattern_type glob -i '/tmp/tr-${t}-*.png' -vf "scale=380:-1,tile=4x3" -frames:v 1 test-results/transform-${t}.png`);
+  execSync(`${F} -y -loglevel error -pattern_type glob -i '/tmp/tr-${t}-*.png' -vf "scale=380:-1,tile=4x3" -frames:v 1 test-results/transform-${t}${process.env.STRIP_SUFFIX ?? ''}.png`);
   console.log(t, 'form progress', prog.join(' '));
 }
 console.log('console errors', errs.length, errs.slice(0, 5)); await b.close();

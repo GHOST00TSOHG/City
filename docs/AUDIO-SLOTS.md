@@ -23,8 +23,8 @@ Rules in force: **no idle sound** (robots are silent standing still); **every lo
 | `land-slam` (Heavy), `land-knee` (Scout), `land-hiss` (Worker), `land-reform` (Glitch) `_light` / `_heavy` | touchdown after a fall. strength s = clamp((fall speed - 6) / 34, 0, 1): **s < 0.5 plays `_light`, s >= 0.5 plays `_heavy`** (0.5 = 23 m/s down, about a 12 m fall; the hero drop is s = 1). Plain landings use the same variants | impact = landing frame 0 (the clip's impact is at its frame 0). Landing animation lasts (0.75 / 0.85 / 0.80 / 0.70 s) + 0.55 x s |
 | `special` Heavy ground pound | Z: plays `land-slam_heavy` | impact 0.47 s = frame 28 after the key |
 | `teleport-snap_01..03` (Glitch special) | Z blink-dash | dissolve 0 to 0.12 s (frames 0 to 7), reform burst 0.42 s = frame 25 |
-| `takeoff-charge` (1.5 s clip) | F on the ground: crouch / spool-up. The take-off crouch is shorter than the clip, so the clip starts that far into itself and **its end meets the ignite** | crouch (= audible part of the charge): Heavy 0.50 s (30 frames), Worker 0.20 s (12), Scout 0.12 s (7), Glitch 0.10 s (6); ignite at the same frame the crouch ends |
-| `thrust-ignite` (1.3 s clip) | the rockets light (end of the crouch, or F / Space again in the air) | t = 0. Burn loop enters at +0.95 s (frame 57), fades in over 0.3 s (18 frames): full level at +1.25 s (frame 75) |
+| `takeoff-charge` (1.5 s clip) | F on the ground: the take-off crouch now lasts the **whole 1.5 s clip for every robot** and the clip **starts at the START of the crouch** (offset 0), so all of it plays and its end meets the ignite | crouch = charge = **1.50 s = 90 frames** for all four (was Heavy 0.50 s = 30 frames, Worker 0.20 s = 12, Scout 0.12 s = 7, Glitch 0.10 s = 6); ignite at frame 90. The lift-off kick is unchanged (capped at the old 0.5 s crouch value) |
+| `thrust-ignite` (1.3 s clip) | the rockets light (end of the 1.5 s crouch, or F / Space again in the air) | t = 0 (frame 90 after F on the ground; was frame 7 to 30). Burn loop enters at +0.95 s (frame 57), fades in over 0.3 s (18 frames): full level at +1.25 s (frame 75) = 2.75 s (165 frames) after F |
 | `boost` (2.0 s clip) | the super-fast rocket kick: Shift BURST starts while flying; layers over the burn loop | the burst weight reaches 50% 0.087 s (5 frames) after the key: t = 0 there; clip ends 120 frames later |
 | `thrust-cutoff` | the rockets stop (landing set-down, F, touchdown) | t = 0; the burn loop fades out over 0.15 s (9 frames) |
 | `thrust-crackle` (Glitch) | while flying and throttle > 0.05, random every 0.15 to 0.55 s (9 to 33 frames) | random |
@@ -35,9 +35,19 @@ Rules in force: **no idle sound** (robots are silent standing still); **every lo
 | `steam-vent` (Worker) | tread unfold finished | frame 48 after the unfold started |
 | `tread-turn-sparks` (Worker) | treads out, speed above 3 m/s, yaw rate above 1.6 rad/s, 1.0 s (60 frames) cooldown | t = 0 |
 | `dissolve` (Glitch) | running starts: the cloud weight (1 - e^(-3.2 t)) passes 0.5 | 0.217 s (13 frames) after Shift+W |
-| `teleport-snap_01..03` (Glitch on foot, **Luis's pick**) | while running as a cloud at over 3 m/s: first snap 0.3 s (18 frames) after the dissolve, then every 0.62 s (37 frames); random, no immediate repeat | |
+| `teleport-snap_01..03` (Glitch on foot, **Luis's pick**) | while running as a cloud at over 3 m/s: first snap 0.3 s (18 frames) after the dissolve, then every 0.62 s (37 frames); random, no immediate repeat. **At most 2 overlapping voices**: a snap requested while 2 are still sounding is dropped (a voice is reserved synchronously, so 6 requests in one frame start 2) | |
 | `reform` (Glitch) | he stops: cloud weight (rate 4.5 /s) falls below 0.5 | 0.154 s (9 frames) after the keys are released; solid about 0.5 s (30 frames) later |
 | `cloud` loop file | **not used** (Luis chose the teleport snaps for the on-foot run) | |
+
+## Scout motorcycle mode (new slots for Echo; silent until the files exist)
+
+| slot | trigger | timing |
+|---|---|---|
+| `scout-moto-transform` | Scout runs (Shift+W on the ground): fold starts | plays instead of `scout-transform` when the file exists. t = 0 at the fold start, 0.8 s = **48 frames**; the clip should carry the snap lock at 0.75 s (frame 45): it starts 0.05 s (3 frames) late so the lock lands on the game lock at 0.80 s (frame 48) |
+| `scout-moto-unfold` | the keys are released and the 0.85 s (51 frame) slide is over | plays instead of `scout-unfold`; t = 0 at the unfold start, 0.8 s = **48 frames**, lock at frame 48 |
+| `scout-moto-engine` (loop, .ogg) | motorcycle mode locked (form >= 0.97, includes the slide) | gain = 0.5 + 0.5 x u, rate = 0.8 + 0.6 x u, u = speed / 9 m/s (0.5 / 0.8 at standstill, 1.0 / 1.4 at 9 m/s); starts at the lock (frame 47 after the fold began), stops with a 0.15 s (9 frame) fade at the unfold. Until Echo delivers it, `scout-hover-sprint` plays instead (gain 0.55 + 0.45 u) |
+
+The form itself (`transform.ts`): head swells into the round headlight with a working beam (additive cone + road glow, no real light), two wheels, forks, and two tailpipes pointing straight back with the flames trailing behind. Transform timing is unchanged: 0.8 s in, 0.8 s out, plate waves between frames 0 and 22, wheels drop at frames 14 to 33 (front) and 20 to 39 (rear), headlight lens grows between frames 24 and 43, beam at full brightness from frame 41 (form 0.85, 9 /s).
 
 ## Loops (always .ogg)
 
@@ -48,7 +58,7 @@ Rules in force: **no idle sound** (robots are silent standing still); **every lo
 | `roll` (Heavy) | ball closed (form >= 0.97) on the ground. **README map: rate = 0.8 + 0.4 x clamp((v - 16) / 9, 0, 1) over 16 to 25 m/s; gain = -4 dB at 16 m/s rising to 0 dB at 25 m/s** (-4 dB / rate 0.8 below 16). The closed ball now accelerates to **25 m/s** (`BALL_TOP`) so the whole range is used | rate 0.8 to 1.2, gain 0.63 to 1.0 | starts at the lock (frame 47 after the fold began, speed about 5.9 m/s), reaches 16 m/s 0.22 s (13 frames) later and 24 m/s after 0.85 s (51 frames); stops when the unfold starts (0.15 s fade) |
 | `tread-growl` (Worker) | treads out and locked (form >= 0.97) | u = speed / 7.5 m/s (clamped 0..1). **rate = 0.85 + 0.5 x u**; gain = -12 dB x (1 - u): -12 dB at crawl to 0 dB at 7.5 m/s. In tread mode speed runs 3.6 to 7.5 m/s: u 0.48 to 1.0, rate 1.09 to 1.35, gain 0.49 to 1.0 | starts at the lock (frame 47 after the fold began), stops at the unfold |
 | `tread-clatter` (Worker) | same | **rate = 0.6 + 0.9 x u**, same gain map: rate 1.03 to 1.5 | same |
-| `hover-sprint` (Scout) | the low hover-sprint form is locked (form >= 0.97, includes the slide) | gain = 0.55 + 0.45 x speed / 9 m/s (0.55 standing in form, 1.0 at 9 m/s), rate 1 | starts at the lock (frame 47), stops at the unfold |
+| `hover-sprint` (Scout, until `moto-engine` exists) | motorcycle mode is locked (form >= 0.97, includes the slide) | gain = 0.55 + 0.45 x speed / 9 m/s (0.55 standing in form, 1.0 at 9 m/s), rate 1 | starts at the lock (frame 47), stops at the unfold |
 
 ## Transformations (on foot only; flying never transforms; Glitch does not transform)
 
@@ -57,14 +67,14 @@ All three: **fold 0.80 s = 48 frames, unfold 0.80 s = 48 frames** (matches Echo'
 | robot | form | starts when | unfold when |
 |---|---|---|---|
 | Heavy | armoured ball (rolls) | Shift+W on the ground | keys released; the roll eases upright first (up to about 20 frames) |
-| Scout | low hover-sprint | Shift+W on the ground | keys released and the 0.85 s (51 frames) slide is over |
+| Scout | **motorcycle mode** (round headlight, wheels, tailpipes) | Shift+W on the ground | keys released and the 0.85 s (51 frames) slide is over |
 | Worker | tread mode | running and ground speed above **5.0 m/s** (about 3 frames after Shift while walking at 3.4 m/s) | speed below **3.6 m/s** (hysteresis band 1.4 m/s; tread mode brakes with momentum, so about 11 frames after the keys are released at full speed) |
 
 ## Speed ranges at a glance
 
 | robot | walk | run / form speed | loop in that form |
 |---|---|---|---|
-| Scout | 3.91 m/s | 9.0 m/s | `hover-sprint`, gain 0.55 to 1.0 |
+| Scout | 3.91 m/s | 9.0 m/s | `moto-engine` (or `hover-sprint`), gain 0.5 to 1.0, rate 0.8 to 1.4 |
 | Heavy | 2.72 m/s | ball 5.9 m/s at the lock, up to 25 m/s | `roll`, 16 to 25 m/s mapped to rate 0.8 to 1.2, gain -4 to 0 dB |
 | Worker | 3.40 m/s | tread mode 3.6 to 7.5 m/s | `tread-growl` rate 1.09 to 1.35, `tread-clatter` rate 1.03 to 1.5, gain -6 to 0 dB |
 | Glitch | 3.57 m/s | cloud 8.1 m/s | none: `dissolve`, snaps every 0.62 s, `reform` |

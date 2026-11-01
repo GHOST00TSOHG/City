@@ -30,6 +30,7 @@ for (const t of TYPES) {
     else await p.evaluate(() => { const r = window.__robot; r.hangar(false); r.dropIn(30); });
     if (sc === 'run') await p.waitForTimeout(1500); await p.evaluate(() => (window.__steps = 0)); // (land: stop the free-running loop immediately so the whole fall is filmed)
     const at = {}, add = (sec, c, d) => (at[s(sec)] ??= []).push([c, d]);
+    if (process.env.CAM_SIDE) await p.evaluate((a) => (window.__robot.ctl.camSide = a), +process.env.CAM_SIDE); // optional 3/4 side camera
     if (sc === 'run') { add(0.3, 'KeyW', true); add(1.0, 'ShiftLeft', true); add(4.3, 'KeyW', false); add(4.3, 'ShiftLeft', false); await shoot(`${t}-run`, 6.5, at); }
     else await shoot(`${t}-land`, 4.6, at);
     await p.evaluate(() => { const c = window.__robot.ctl; for (const k of ['KeyW', 'ShiftLeft']) c.press(k, false); });

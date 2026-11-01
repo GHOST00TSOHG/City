@@ -121,7 +121,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if (launchT >= 0) { // crouch-and-launch: jets spool up on the ground, then kick off
         launchT += dt; vel.x *= Math.exp(-dt * 8); vel.z *= Math.exp(-dt * 8);
         if (mode !== 'GROUND') launchT = -1;
-        else if (launchT >= launchDur) { vel.y = 9 + launchDur * 10; mode = 'ROCKETS'; launchT = -1; }
+        else if (launchT >= launchDur) { vel.y = 9 + Math.min(launchDur, 0.5) * 10; mode = 'ROCKETS'; launchT = -1; }
       }
       flyT = mode === 'ROCKETS' ? flyT + dt : 0;
       const spool = launchT >= 0 ? 0.25 + 0.6 * Math.min(1, launchT / launchDur) : 0;

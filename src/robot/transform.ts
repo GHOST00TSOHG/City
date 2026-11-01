@@ -1,8 +1,10 @@
 import * as THREE from 'three/webgpu';
+import { float, length, pow, uniform, uv, vec3 } from 'three/tsl';
 import type { RobotType } from './types';
+const uBeamK = uniform(0); // 0..1 headlight beam brightness (Scout motorcycle mode)
 
 /**
- * Transformers-style plate choreography for the on-foot transformations (Heavy ball, Scout hover-sprint, Worker tread mode).
+ * Transformers-style plate choreography for the on-foot transformations (Heavy ball, Scout motorcycle mode, Worker tread mode).
  * Every armour plate rides its own bone (typed.ts). During a transformation each plate lifts off, flips and settles back in a
  * STAGGERED wave (extremities first when folding, core first when unfolding, plus a per-plate random offset), so the limbs'
  * dark frames and pistons show through; instanced gears spin up at the joints mid-transformation and disappear again.
@@ -67,13 +69,52 @@ export function createTransformFx(type: RobotType, root: THREE.Object3D, by: Map
     treads.instanceMatrix.needsUpdate = true; links.instanceMatrix.needsUpdate = true;
   };
   if (type === 'heavy') for (const p of plates) { if (p.parent === 'Hips') p.sink = new THREE.Vector3(...BALL.Hips); else if (p.parent === 'Spine' && (p.c.y < 0.22 || /\/(back_plate|stack|mast)/.test(p.bone.name) || p.c.distanceTo(new THREE.Vector3(...BALL.Spine)) > BALL.outlier)) p.sink = new THREE.Vector3(...BALL.Spine); } // sinks: everything below the dome (waist, rings, pistons) and the back panel / stacks / mast
+  // ---- Scout motorcycle mode: two wheels (tires + spoked rims, 2 draws), a giant round headlight lens + working beam (additive cone) + glow pool on the road (3 draws). No real light: the scene's light count never changes.
+  const WR = 0.34; let tires: THREE.InstancedMesh | null = null, rims: THREE.InstancedMesh | null = null, lens: THREE.Mesh | null = null, beam: THREE.Mesh | null = null, pool: THREE.Mesh | null = null, lensMat: THREE.MeshBasicNodeMaterial | null = null;
+  const wheelPos = [new THREE.Vector3(), new THREE.Vector3()]; let wheelSpin = 0, motoA = 0;
+  const hb = by.get('Head'), lh = by.get('LeftHand'), rh = by.get('RightHand'), hp = by.get('Hips');
+  if (type === 'scout' && hb && lh && rh && hp) {
+    const tire = new THREE.CylinderGeometry(WR, WR, 0.15, 28).rotateZ(Math.PI / 2);
+    const rimParts: THREE.BufferGeometry[] = [new THREE.CylinderGeometry(WR * 0.74, WR * 0.74, 0.17, 24, 1, true).rotateZ(Math.PI / 2), new THREE.CylinderGeometry(0.07, 0.07, 0.24, 12).rotateZ(Math.PI / 2)];
+    for (let i = 0; i < 6; i++) { const sp = new THREE.BoxGeometry(0.05, WR * 1.5, 0.035); sp.rotateX((i / 6) * Math.PI); rimParts.push(sp); }
+    const rim = merge(rimParts);
+    tires = new THREE.InstancedMesh(tire, new THREE.MeshStandardNodeMaterial({ color: '#34373e', metalness: 0.2, roughness: 0.8 }), 2); rims = new THREE.InstancedMesh(rim, new THREE.MeshStandardNodeMaterial({ color: '#d8dbe0', metalness: 0.9, roughness: 0.3, emissive: '#2a2a32', side: THREE.DoubleSide }), 2);
+    for (const m of [tires, rims]) { m.frustumCulled = false; m.visible = false; m.count = 2; root.add(m); } tires.name = 'scout:tires'; rims.name = 'scout:rims';
+    lensMat = new THREE.MeshBasicNodeMaterial({ color: '#fff4d8' }); lens = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), lensMat); lens.name = 'scout:headlight'; lens.visible = false; lens.frustumCulled = false; root.add(lens);
+    const cone = new THREE.ConeGeometry(1.5, 7, 28, 1, true); cone.translate(0, -3.5, 0); cone.rotateX(-Math.PI / 2); // apex at the lens, opens forward (+z)
+    const bm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+    bm.colorNode = vec3(1.0, 0.93, 0.72).mul(uBeamK); bm.opacityNode = pow(uv().y, 1.3).mul(0.17).mul(uBeamK); beam = new THREE.Mesh(cone, bm); beam.name = 'scout:beam'; beam.visible = false; beam.frustumCulled = false; beam.renderOrder = 6; root.add(beam);
+    const pm = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    pm.colorNode = vec3(1.0, 0.92, 0.7).mul(uBeamK); pm.opacityNode = pow(float(1).sub(length(uv().sub(0.5)).mul(2).min(1)), 2).mul(0.35).mul(uBeamK);
+    pool = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), pm); pool.name = 'scout:beam-pool'; pool.visible = false; pool.frustumCulled = false; pool.renderOrder = 6; root.add(pool);
+  }
+  const mq = new THREE.Quaternion(), mq2 = new THREE.Quaternion(), mp = new THREE.Vector3(), mf = new THREE.Vector3(), mS = new THREE.Vector3(), mm = new THREE.Matrix4(), hv3 = new THREE.Vector3(), rootInvM = new THREE.Matrix4();
+  const motoUpdate = (form: number, dt: number, gs: number) => {
+    if (!tires || !rims || !lens || !beam || !pool || !lensMat) return;
+    const vis = form > 0.3; for (const m of [tires, rims, lens, beam, pool]) m.visible = vis; if (!vis) return;
+    root.updateMatrixWorld(true); rootInvM.copy(root.matrixWorld).invert(); wheelSpin += gs * dt / WR;
+    // wheels: the front one sits between the fork tips (the hands), the rear one under the hips; both always rest on the road (root y = 0)
+    lh!.getWorldPosition(mp); hv3.copy(mp); rh!.getWorldPosition(mp); hv3.add(mp).multiplyScalar(0.5).applyMatrix4(rootInvM); const fz = hv3.z + 0.08;
+    hp!.getWorldPosition(mp); mp.applyMatrix4(rootInvM); const rz = mp.z - 0.52;
+    const dF = smooth(Math.max(0, Math.min(1, (form - 0.3) / 0.4))), dR = smooth(Math.max(0, Math.min(1, (form - 0.42) / 0.4)));
+    [[fz, dF], [rz, dR]].forEach(([z, d], k) => { mp.set(0, WR * (0.4 + 0.6 * d) , z as number); mq.setFromAxisAngle(X, wheelSpin); mS.setScalar(0.35 + 0.65 * (d as number)); mm.compose(mp, mq, mS); tires!.setMatrixAt(k, mm); rims!.setMatrixAt(k, mm); });
+    tires.instanceMatrix.needsUpdate = rims.instanceMatrix.needsUpdate = true;
+    // headlight: a big round lens on the (enlarged) head, facing forward; the beam cone + road pool fade in with the form
+    motoA += ((form > 0.85 ? 1 : 0) - motoA) * (1 - Math.exp(-dt * 9)); uBeamK.value = motoA;
+    // forward direction of the bike = root +z (the body travels along it); the beam leans a little toward the road
+    mf.set(0, -0.09, 1).normalize();
+    const L = hb!.matrixWorld; mp.set(0, 0.12, 0.1).applyMatrix4(L).applyMatrix4(rootInvM); // lens centre in front of the head
+    lens.position.copy(mp); lens.scale.set(0.21, 0.21, 0.1).multiplyScalar(0.25 + 0.75 * smooth(Math.max(0, Math.min(1, (form - 0.5) / 0.4)))); lens.quaternion.identity(); lensMat.color.setScalar(1).multiplyScalar(1 + motoA * 3);
+    beam.position.copy(mp); beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), mf); beam.scale.setScalar(0.4 + 0.6 * motoA);
+    const tHit = mf.y < -0.01 ? Math.min(7, mp.y / -mf.y) : 5; pool.position.set(mp.x + mf.x * tHit, 0.03, mp.z + mf.z * tHit); pool.scale.set(2.4 + tHit * 0.2, 1, 3.4 + tHit * 0.3);
+  };
   let prev = 0, dir = 1, spin = 0, active = false;
   const smooth = (x: number) => x * x * (3 - 2 * x);
   return {
     gears,
     /** form 0..1 (controller); plates and gears follow. Cheap when idle (a single check). */
     update(form: number, dt: number, gs = 0) {
-      treadUpdate(form, dt, gs);
+      treadUpdate(form, dt, gs); motoUpdate(form, dt, gs);
       const dp = form - prev; if (dp > 1e-4) dir = 1; else if (dp < -1e-4) dir = -1; prev = form;
       const run = form > 0.002;
       if (!run) { if (active) { for (const p of plates) { p.bone.position.copy(p.c); p.bone.quaternion.identity(); p.bone.scale.set(1, 1, 1); } gears.visible = false; active = false; } return; }
@@ -93,7 +134,7 @@ export function createTransformFx(type: RobotType, root: THREE.Object3D, by: Map
       G.forEach((d, i) => { const b = by.get(d.bone)!; m4.copy(inv).multiply(b.matrixWorld); ps.set(...d.off); qs.setFromAxisAngle(X, spin * (i % 2 ? -1 : 1) * (1 + (i % 3) * 0.3)); sc.setScalar(d.r * g); m4.multiply(new THREE.Matrix4().compose(ps, qs, sc)); gears.setMatrixAt(i, m4); });
       gears.instanceMatrix.needsUpdate = true;
     },
-    dispose() { treads?.removeFromParent(); links?.removeFromParent(); gears.removeFromParent(); geo.dispose(); mat.dispose(); },
+    dispose() { for (const m of [tires, rims, lens, beam, pool]) m?.removeFromParent(); treads?.removeFromParent(); links?.removeFromParent(); gears.removeFromParent(); geo.dispose(); mat.dispose(); },
   };
 }
 export const plateHash = hash;
