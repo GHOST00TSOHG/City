@@ -43,11 +43,11 @@ export const TYPES: Record<RobotType, TypeDef> = {
     tune: { walk: 1, run: 1, cruise: 1, burst: 1, jump: 1, turn: 1, accel: 1 },
   },
   glitch: {
-    label: 'Glitch', blurb: 'Special. A predator of data shards: RGB split, orbiting shards, blink-dash (Q).', height: 2.0, sole: -0.09, tris: 30_000,
+    label: 'Glitch', blurb: 'Special. A sleek glitch predator: glowing seams, RGB-split slices, crisp shards, blink-dash (Q).', height: 2.3, sole: -0.2, tris: 30_000,
     motion: { mass: 0.6, bob: 0.6, sway: 0.5, stride: 1.15, arms: 1.2, limp: 0, hunch: 0.1, curl: 0.5, special: 'blinkdash' }, specialDur: 0.6,
     slots: { helmet: ['smooth', 'skull', 'halo'], arms: ['block', 'blade', 'orbit'], bionics: ['wings', 'ring', 'spikes'], legs: ['slim', 'block', 'digi'], thrusters: ['jets', 'trail', 'ring'], boots: ['block', 'hover', 'spike'] },
     names: { smooth: 'Smooth face', skull: 'Open skull', halo: 'Crown halo', block: 'Block', blade: 'Blade', orbit: 'Orbit', wings: 'Wings', ring: 'Ring', 'thrusters.ring': 'Ring jets', spikes: 'Spikes', slim: 'Slim', digi: 'Digitigrade', jets: 'Jets', trail: 'Trail', hover: 'Hover', spike: 'Spike' },
-    paint: { shell: '#f2f1ec', joints: '#2b2e33', torso: '#f2f1ec', shorts: '#2b2e33', backpack: '#2b2e33', visor: '#b04bff', decalColor: '#b04bff' },
+    paint: { shell: '#16181f', joints: '#0b0c0f', torso: '#1d2029', shorts: '#0b0c0f', backpack: '#1d2029', visor: '#3ff4ff', decalColor: '#ff2fb0' },
     tune: { walk: 1.05, run: 1.08, cruise: 1.1, burst: 1.25, jump: 1.15, turn: 1.15, accel: 1.15 },
   },
 };

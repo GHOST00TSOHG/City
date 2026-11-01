@@ -76,17 +76,20 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
   return model;
 }
 
-/** Glitch: shard body (glitch.ts) driven by the shared rig + poser. */
-export function createGlitchRobot(data: ShardData, look: RobotLook, u: KitU): TypedRobot {
-  const R = rig('glitch');
-  const G = createGlitchBody(data, R.list.map((b) => b.name), R.root, u.energy, u.damage);
-  const pose = makePoser(R.bones, TYPES.glitch.motion);
+/** Glitch v4: a glossy mesh kit (like the other types) plus a small crisp shard overlay (glitch.ts) on the same rig. */
+export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u: KitU): TypedRobot {
+  const base = createKitRobot('glitch', kit, look, u);
+  const list: THREE.Bone[] = []; base.root.traverse((o) => { if ((o as THREE.Bone).isBone) list.push(o as THREE.Bone); });
+  const G = createGlitchBody(data, list.map((b) => b.name), base.root, u.energy, u.damage);
+  const bodyMeshes = base.root.children.filter((o) => (o as THREE.SkinnedMesh).isSkinnedMesh);
   const model: TypedRobot = {
-    type: 'glitch', root: R.root, nozzles: R.nozzles, height: TYPES.glitch.height, uniforms: u, joints: R.joints,
-    setLook(l) { Object.assign(look, l); G.setLook(look); u.screen.value.set(0, 0, 0, 0); u.glow.value.set(look.visor); },
-    equip() {},
-    animate(s, dt) { pose(s, dt); G.update(s, dt, R.list); },
-    dispose() { G.dispose(); },
+    ...base,
+    setLook(l) { base.setLook(l); G.setLook(look); },
+    animate(s, dt) {
+      base.animate(s, dt); G.update(s, dt, list);
+      const hide = G.uniforms.uDash.value > 0.5; for (const m of bodyMeshes) m.visible = !hide; // blink-dash: the body dissolves into shards
+    },
+    dispose() { base.dispose(); G.dispose(); },
   };
   model.setLook({}); model.animate({ anim: 'idle', phase: 0, speed: 0, lean: 0, bank: 0, crouch: 0, t: 0 }, 0.016);
   return model;
@@ -99,13 +102,13 @@ export function createGlitchRobot(data: ShardData, look: RobotLook, u: KitU): Ty
 export async function createRobotSwitch(type: RobotType, look: RobotLook) {
   const root = new THREE.Group(); root.name = 'PlayerRobot';
   const u = createKitUniforms();
-  const kits = new Map<RobotType, Promise<Kit | ShardData>>();
+  const kits = new Map<RobotType, Promise<Kit | [Kit, ShardData]>>();
   const load = (t: RobotType) => {
-    if (!kits.has(t)) kits.set(t, t === 'glitch' ? fetch(`${import.meta.env.BASE_URL}robot/glitch/shards.json`).then((r) => r.json()) : loadKit(t, u));
+    if (!kits.has(t)) kits.set(t, t === 'glitch' ? Promise.all([loadKit(t, u), fetch(`${import.meta.env.BASE_URL}robot/glitch/shards.json`).then((r) => r.json() as Promise<ShardData>)]) : loadKit(t, u));
     return kits.get(t)!;
   };
   let cur: TypedRobot;
-  const make = async (t: RobotType, l: RobotLook) => { const k = await load(t); return t === 'glitch' ? createGlitchRobot(k as ShardData, l, u) : createKitRobot(t, k as Kit, l, u); };
+  const make = async (t: RobotType, l: RobotLook) => { const k = await load(t); return t === 'glitch' ? createGlitchRobot(...(k as [Kit, ShardData]), l, u) : createKitRobot(t, k as Kit, l, u); };
   cur = await make(type, look); root.add(cur.root);
   const sw = {
     root, uniforms: u, onSwap: (_m: TypedRobot) => {},
