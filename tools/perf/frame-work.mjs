@@ -29,7 +29,7 @@ await page.addInitScript(() => {
   window.requestAnimationFrame = (cb) => raf((t) => { const s = performance.now(); const h0 = performance.memory?.usedJSHeapSize ?? 0; W.step?.(); cb(t); const js = performance.now() - s; if (W.on) { const h1 = performance.memory?.usedJSHeapSize ?? 0; W.frames.push({ ...W.cur, js, heap: Math.max(0, h1 - h0) }); W.cur = { up: 0, upCalls: 0, comp: 0, js: 0 }; } });
   new PerformanceObserver((l) => { if (!W.on) return; for (const e of l.getEntries()) { W.long++; W.longMs = Math.max(W.longMs, e.duration); } }).observe({ entryTypes: ['longtask'] });
 });
-await page.goto(`http://localhost:${port}/?gl=1&join=0&area=${area}`);
+await page.goto(`http://localhost:${port}/?gl=1&join=0&area=${area}${process.env.Q ? '&' + process.env.Q : ''}`);
 await page.waitForFunction(() => window.__city?.ready && window.__robot, null, { timeout: 120000 });
 await page.waitForTimeout(6000); // let idle preloads + first-sight compiles settle so we measure flight, not boot
 const FR = Number(process.env.FRAMES ?? 150), STEP = Number(process.env.STEP ?? 3);
@@ -38,12 +38,13 @@ const res = await page.evaluate(async ([FR, STEP]) => {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   await wait(300); c.press('KeyF', true); await wait(50); c.press('KeyF', false); c.press('KeyW', true);
   // Fixed path, fixed metres per frame: low and fast (40%), high cruise (25%), low sharp S-turns (35%).
-  let i = 0, h = c.heading, x = c.pos.x, z = c.pos.z; const t0 = performance.now();
+  const calls = []; let i = 0, h = c.heading, x = c.pos.x, z = c.pos.z; const t0 = performance.now();
   await new Promise((done) => {
     W.on = true;
     W.step = () => {
       if (i >= FR) { W.on = false; W.step = null; done(); return; }
       const f = i / FR, alt = f < 0.4 ? 25 : f < 0.65 ? 250 : 40;
+      const dc = window.__city?.calls; if (dc != null) calls.push(dc);
       if (f >= 0.65) h += Math.sin(i * 0.12) * 0.09;
       x += Math.sin(h) * STEP; z += Math.cos(h) * STEP;
       const g = window.__robot.ctl.floor.y; c.pos.set(x, Math.max(g, 0) + alt, z); c.vel.set(Math.sin(h) * STEP * 60, 0, Math.cos(h) * STEP * 60); i++;
@@ -57,8 +58,9 @@ const res = await page.evaluate(async ([FR, STEP]) => {
   return { owners, stacks: W.stk, topUploads, frames: n, metres: n * STEP, wallSeconds: +((performance.now() - t0) / 1000).toFixed(1),
     uploadMB: +(sum('up') / 1e6).toFixed(2), uploadKBPerFrame: +(sum('up') / 1e3 / n).toFixed(1), maxUploadKBFrame: +(max('up') / 1e3).toFixed(0), framesUploadOver256KB: F.filter((f) => f.up > 256e3).length,
     uploadCallsPerFrame: +(sum('upCalls') / n).toFixed(1), programLinks: sum('comp'), framesWithCompile: F.filter((f) => f.comp).length,
-    jsMsMedian: +js[n >> 1].toFixed(2), jsMsP99: +js[Math.floor(n * 0.99)].toFixed(2), jsMsMax: +js[n - 1].toFixed(1), framesJsOver8ms: F.filter((f) => f.js > 8).length,
+    jsMsMedian: +js[n >> 1].toFixed(2), jsMsP95: +js[Math.floor(n * 0.95)].toFixed(2), framesJsOver16ms: F.filter((f) => f.js > 16.7).length, drawCallsMax: Math.max(...calls), drawCallsAvg: Math.round(calls.reduce((a, b) => a + b, 0) / (calls.length || 1)), jsMsP99: +js[Math.floor(n * 0.99)].toFixed(2), jsMsMax: +js[n - 1].toFixed(1), framesJsOver8ms: F.filter((f) => f.js > 8).length,
     heapGrowthKBPerFrame: +(sum('heap') / 1e3 / n).toFixed(1), longTasks: W.long, longestTaskMs: Math.round(W.longMs) };
 }, [FR, STEP]);
+const { owners, stacks, topUploads, ...brief } = res; if (!process.env.VERBOSE) Object.assign(res, { owners: undefined, stacks: undefined, topUploads: undefined });
 console.log(JSON.stringify({ label, area, ...res, consoleErrors: errors.length, errors: errors.slice(0, 3) }));
 await browser.close(); srv.close();
