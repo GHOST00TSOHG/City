@@ -157,3 +157,4 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Hands fix (all robots, shared S.build_hand): the four fingers now curl inward toward the thigh (curl rotation sign flipped for non-thumb digits); thumbs unchanged. Front render: `scout_v2.py -- --hands --out=scout-v2h-hands.png`.
 - Heavy v3 --kit run done (add-on pass + export to public/robot/heavy + turnaround), re-run after the hand fix (TRIS 70126 in Blender). Renders: heavy-v3h-34.png, heavy-v3h-closeup.png (hand).
 - Worker v3 rebuild in progress (worker_v2.py): faceted olive plates on a dark frame, pistons, lattice crane boom with ram + beacon, welder rig, forearm winch, work lights, boot treads, `--preview` mode.
+- Heavy test (TYPES=heavy): all PASS, 47/41 calls, 26,533 tris, 0 console errors. Test now takes TYPES=a,b env to run one robot at a time.

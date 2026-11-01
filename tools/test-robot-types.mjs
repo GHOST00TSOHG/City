@@ -17,7 +17,7 @@ check(m.v2?.v === 2 && m.v2.robot.type === 'scout' && m.v2.robot.paint.scout.she
 await p.evaluate(() => window.__robot.setDamage(0));
 const robotTris = () => p.evaluate(() => { let n = 0; window.__robot.model.root.traverse((o) => { if (!o.isMesh || !o.visible) return; const g = o.geometry, c = (g.index ? g.index.count : g.attributes.position.count) / 3; n += o.isInstancedMesh ? c * o.count : c; }); return n; });
 const stats = {};
-for (const t of ['scout', 'heavy', 'worker', 'glitch']) {
+for (const t of (process.env.TYPES || 'scout,heavy,worker,glitch').split(',')) {
   await p.evaluate(() => window.__robot.hangar(true));
   await p.click(`#hangar .types button[data-t="${t}"]`).catch(() => p.evaluate((t) => window.__robot.setType(t), t));
   await p.waitForFunction((t) => window.__robot.model.type === t, t, { timeout: 60000 });
