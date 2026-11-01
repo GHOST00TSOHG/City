@@ -179,3 +179,10 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Glitch v3c: dark proxy under a flush dark tile skin (1,405 shards, 11,240 tris), about 40 light edge cracks, a thin 4-streak dash trail, rim lights lowered, a lighter post RGB split. In game: 15,312 tris, garage 44 calls, world 38.
 - Tests: TYPES=worker,glitch all PASS, 0 console errors.
 - Renders: /workspace/robot-renders/{worker-v3d-34,worker-v3d-closeup,glitch-v3c-34,glitch-v3c-closeup}.png
+
+## Glitch v4 hero pass (2026-11-01)
+- Build: `tools/blender/glitch_v4.py` (`--preview` renders `glitch-v4-34/-closeup`, `--kit` exports). Sleek tall body: wasp waist, inverted-triangle chest, chevron visor slit, two swept blade fins, digitigrade legs on blade feet; glossy near-black armor, cyan (`glow`→visor) + magenta (`glow_m`→decalColor, new REGION in v2export.py) seams.
+- Glitch slices (stills only): left forearm + right shin bands bisected, offset sideways, with cyan/magenta ghost copies for hard RGB-split edges. Stage: cyan + magenta rims, emissive ground-glow disc.
+- Runtime: Glitch is now a mesh kit (`createKitRobot`) + 16-shard overlay (`createGlitchBody`) on the same rig; kit meshes hide while uDash > 0.5 during blink-dash. cubes.json removed. Paint dark (#16181f / #1d2029, visor #3ff4ff, decal #ff2fb0); height 2.3, sole -0.2.
+- Stats: kit 25,830 tris (budget 26k); TYPES=glitch PASS: garage 50 calls, world 44 calls, 25,036 robot tris, walk 3.57 m/s, 0 console errors.
+- Note: skeleton.json `height` metadata counts every slot option (3.884), unused at runtime.
