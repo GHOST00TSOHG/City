@@ -13,7 +13,7 @@ import addons as A
 
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 FAST = '--fast' in argv
-OUT = '/workspace/robot-renders/scout-concept-v2.png'
+OUT = '/workspace/robot-renders/' + next((a.split('=')[1] for a in argv if a.startswith('--out=')), 'scout-v2b.png')
 TAU = math.tau
 
 # ------------------------------------------------------------------ materials (Gundam tricolour, scout flavour)
@@ -112,6 +112,47 @@ def mirror(objs):
         if o in ARMOR: ARMOR.append(c)
     return out
 
+# ------------------------------------------------------------------ hands: wrist, palm, articulated fingers
+def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digit_m=None, thick=1.0):
+    """Wrist ball + faceted palm + `fingers` digits of 3 phalanges (thumb opposed). Segment names
+    hand_<side>_f<i>_<j> map 1:1 onto the rig's finger bones (Hand.<side>.F<i>.<j>)."""
+    V = Vector; k = size; out = []
+    lat = V((1, 0, 0)) - fwd * fwd.x; lat.normalize()
+    nrm = fwd.cross(lat).normalized()            # palm faces inward (-x for the left hand after the cross)
+    armor_m = armor_m or WHITE; digit_m = digit_m or FRAME
+    out.append(cyl(f'wrist_{side}', wr - fwd * 0.012 * k, wr + fwd * 0.02 * k, 0.026 * k * thick, STEEL, n=16))
+    pa = wr + fwd * 0.02 * k
+    palm = loft(f'palm_{side}', [(0, 0, 0, 0.036 * k * thick, 0.02 * k), (0.045 * k, 0, 0, 0.044 * k * thick, 0.022 * k), (0.075 * k, 0, 0, 0.042 * k * thick, 0.018 * k)], digit_m, n=8, e=2.0)
+    place(palm, pa, pa + fwd); _roll_to(palm, lat); out.append(palm)
+    back = loft(f'handguard_{side}', [(0.005 * k, 0, 0, 0.04 * k * thick, 0.026 * k), (0.07 * k, 0, 0, 0.046 * k * thick, 0.024 * k)], armor_m, n=4, e=2.0, arc=(0.3, 2.84), thick=0.006 * k)
+    place(back, pa, pa + fwd); _roll_to(back, lat); out.append(back)
+    seg = [0.032, 0.024, 0.02]; rad = 0.0085 * thick
+    spread = [(-0.032, 0.0), (-0.011, 0.0), (0.011, 0.0), (0.032, 0.0)]
+    if fingers == 3: spread = [(-0.026, 0.0), (0.026, 0.0)]; seg = [0.04, 0.032, 0.028]; rad = 0.014 * thick
+    digits = [(pa + fwd * 0.075 * k + lat * dx * k * thick, fwd, 0) for dx, _ in spread]
+    # opposed thumb from the palm side
+    tb = pa + fwd * 0.025 * k + lat * (-0.04 * k * thick if fingers == 5 else 0) + nrm * 0.015 * k
+    digits.append((tb, (fwd * 0.5 + nrm * 0.75).normalized(), 1))
+    for i, (b, d, thumb) in enumerate(digits):
+        for j, L in enumerate(seg):
+            d = (Quaternion_axis(lat, -curl * (0.7 if thumb else 1.0)) @ d).normalized() if j or thumb else d
+            e2 = b + d * L * k
+            out.append(cyl(f'hand_{side}_f{i}_{j}', b, e2, rad * k * (1 - 0.12 * j), digit_m if j < 2 else armor_m, n=8))
+            bpy.ops.mesh.primitive_uv_sphere_add(radius=rad * k * 1.15, location=b, segments=10, ring_count=6)
+            kn = bpy.context.active_object; kn.name = f'knuckle_{side}_{i}_{j}'; kn.data.materials.append(STEEL); ALL.append(kn); out.append(kn)
+            b = e2
+    return out
+
+def Quaternion_axis(axis, ang):
+    from mathutils import Quaternion
+    return Quaternion(axis, ang)
+
+def _roll_to(o, lat):
+    """Spin a placed part about its own axis so its local +x lines up with `lat` (palm width across the hand)."""
+    M = o.matrix_world; z = M.col[2].xyz.normalized(); x = M.col[0].xyz.normalized()
+    want = (lat - z * lat.dot(z)).normalized(); ang = math.atan2(z.dot(x.cross(want)), x.dot(want))
+    o.matrix_world = M @ Matrix.Rotation(ang, 4, 'Z')
+
 # ------------------------------------------------------------------ SCOUT v2: tall, lean sprinter, reverse-jointed legs
 def build():
     V = Vector
@@ -133,11 +174,11 @@ def build():
     # --- upper body, leaning forward ~9 deg about the hips
     up = []
     up.append(loft('torso_core', [(1.22, 0, 0.0, 0.13, 0.095), (1.40, 0, -0.01, 0.20, 0.13), (1.58, 0, 0, 0.21, 0.13), (1.66, 0, 0.01, 0.13, 0.095)], FRAME, armor=False))
-    up.append(loft('chest_plate', [(1.34, 0, -0.035, 0.18, 0.13), (1.46, 0, -0.07, 0.245, 0.155), (1.58, 0, -0.06, 0.25, 0.15), (1.66, 0, -0.02, 0.17, 0.115)], BLUE, arc=(-2.75, -0.39), thick=0.024))
-    up.append(loft('chest_inner', [(1.38, 0, -0.08, 0.07, 0.13), (1.50, 0, -0.115, 0.09, 0.14), (1.60, 0, -0.095, 0.075, 0.12)], FRAME, arc=(-2.1, -1.04), thick=0.02))
-    up.append(loft('abdomen', [(1.20, 0, -0.03, 0.10, 0.08), (1.30, 0, -0.05, 0.13, 0.095), (1.38, 0, -0.05, 0.15, 0.10)], WHITE, arc=(-2.6, -0.54), thick=0.018))
-    up.append(loft('collar', [(1.62, 0, 0.0, 0.16, 0.12), (1.68, 0, 0.01, 0.12, 0.10)], YEL, arc=(-3.0, -0.14), thick=0.014))
-    up.append(loft('back_plate', [(1.34, 0, 0.03, 0.15, 0.11), (1.50, 0, 0.04, 0.19, 0.13), (1.63, 0, 0.02, 0.15, 0.11)], WHITE, arc=(0.35, 2.79), thick=0.02))
+    up.append(loft('chest_plate', [(1.34, 0, -0.035, 0.18, 0.13), (1.46, 0, -0.07, 0.245, 0.155), (1.58, 0, -0.06, 0.25, 0.15), (1.66, 0, -0.02, 0.17, 0.115)], BLUE, n=4, e=2.0, arc=(-2.75, -0.39), thick=0.026))
+    up.append(loft('chest_inner', [(1.38, 0, -0.08, 0.07, 0.13), (1.50, 0, -0.115, 0.09, 0.14), (1.60, 0, -0.095, 0.075, 0.12)], FRAME, n=4, e=2.0, arc=(-2.1, -1.04), thick=0.02))
+    up.append(loft('abdomen', [(1.20, 0, -0.03, 0.10, 0.08), (1.30, 0, -0.05, 0.13, 0.095), (1.38, 0, -0.05, 0.15, 0.10)], WHITE, n=4, e=2.0, arc=(-2.6, -0.54), thick=0.02))
+    up.append(loft('collar', [(1.62, 0, 0.0, 0.16, 0.12), (1.68, 0, 0.01, 0.12, 0.10)], YEL, n=8, e=2.0, arc=(-3.0, -0.14), thick=0.016))
+    up.append(loft('back_plate', [(1.34, 0, 0.03, 0.15, 0.11), (1.50, 0, 0.04, 0.19, 0.13), (1.63, 0, 0.02, 0.15, 0.11)], WHITE, n=4, e=2.0, arc=(0.35, 2.79), thick=0.022))
     for x in (-0.06, 0.06):   # intake glow slits under the chest vents
         g = loft(f'intake_{x}', [(1.49, x, -0.225, 0.035, 0.01), (1.525, x, -0.23, 0.035, 0.01)], GLOW, e=4, armor=False); up.append(g)
     # thrusters (twin backpack nacelles, angled back)
@@ -168,15 +209,13 @@ def build():
     pr.matrix_world = p.matrix_world @ Matrix.Translation((0, 0, -0.01)); arm.append(pr)
     sh, el, wr = V((0.33, 0.0, 1.46)), V((0.35, 0.03, 1.17)), V((0.35, -0.07, 0.93))
     arm.append(cyl('upperarm_L', sh, el, 0.038, FRAME))
-    u = loft('upperarm_armor_L', [(0, 0, 0, 0.052, 0.05), (0.16, 0, 0, 0.058, 0.055), (0.26, 0, 0, 0.05, 0.048)], WHITE, e=3); place(u, sh, el); arm.append(u)
+    u = loft('upperarm_armor_L', [(0, 0, 0, 0.046, 0.044), (0.10, 0, 0, 0.062, 0.058), (0.26, 0, 0, 0.05, 0.046)], WHITE, n=8, e=2.0); place(u, sh, el); arm.append(u)
+    ua = loft('upperarm_plate_L', [(0.02, 0, 0, 0.066, 0.062), (0.12, 0, 0, 0.07, 0.066), (0.2, 0, 0, 0.058, 0.054)], BLUE, n=4, e=2.0, arc=(-0.8, 0.8), thick=0.014); place(ua, sh, el); arm.append(ua)
+    eg = loft('elbow_guard_L', [(0, 0, 0, 0.05, 0.03), (0.06, 0, 0, 0.04, 0.025), (0.09, 0, 0, 0.01, 0.01)], RED, n=6, e=2.0); place(eg, el + V((0, 0.03, 0.03)), el + V((0, 0.09, -0.04))); arm.append(eg)
     arm.append(joint('elbow_L', el, (1, 0, 0), 0.04, 0.07))
-    f = loft('forearm_armor_L', [(0, 0, 0, 0.05, 0.05), (0.06, 0, 0.0, 0.068, 0.066), (0.17, 0, 0.0, 0.072, 0.07), (0.23, 0, 0, 0.055, 0.055)], WHITE, e=3.2); place(f, el, wr); arm.append(f)
-    fg = loft('forearm_guard_L', [(0.03, 0, 0, 0.074, 0.072), (0.16, 0, 0, 0.08, 0.078), (0.21, 0, 0, 0.07, 0.068)], BLUE, arc=(-0.9, 0.9), thick=0.014); place(fg, el, wr); arm.append(fg)
-    hand = loft('hand_L', [(0, 0, 0, 0.045, 0.04), (0.06, 0, 0, 0.055, 0.04), (0.11, 0, 0.0, 0.048, 0.034)], FRAME, e=3.5, armor=False)
-    hd = (wr - el).normalized(); place(hand, wr, wr + hd * 0.1); arm.append(hand)
-    for i in range(4):
-        b = wr + hd * 0.085 + V((-0.02 + i * 0.013, -0.02, 0))
-        arm.append(cyl(f'finger_L{i}', b, b + hd * 0.06 + V((0, -0.015, 0)), 0.01, STEEL, n=10))
+    f = loft('forearm_armor_L', [(0, 0, 0, 0.05, 0.05), (0.06, 0, 0.0, 0.068, 0.066), (0.17, 0, 0.0, 0.074, 0.07), (0.25, 0, 0, 0.05, 0.05)], WHITE, n=8, e=2.0); place(f, el, wr); arm.append(f)
+    fg = loft('forearm_guard_L', [(0.03, 0, 0, 0.074, 0.072), (0.16, 0, 0, 0.08, 0.078), (0.21, 0, 0, 0.07, 0.068)], BLUE, n=4, e=2.0, arc=(-0.9, 0.9), thick=0.018); place(fg, el, wr); arm.append(fg)
+    arm += build_hand('L', wr, (wr - el).normalized(), fingers=5, size=1.7, curl=0.35)
     arm = [a for a in arm if a] + [o for o in ALL if o.name.startswith(('shoulder_L', 'elbow_L'))]
     arm = list(dict.fromkeys(arm))
     up += arm + mirror(arm)
@@ -185,13 +224,13 @@ def build():
     hip, knee, ank, ball = V((0.12, -0.01, 0.96)), V((0.15, -0.20, 0.60)), V((0.15, 0.13, 0.25)), V((0.15, 0.02, 0.06))
     leg.append(joint('hip_L', hip, (1, 0, 0), 0.06, 0.09))
     leg.append(cyl('thigh_frame_L', hip, knee, 0.045, FRAME))
-    th = loft('thigh_armor_L', [(0.02, 0, 0, 0.07, 0.072), (0.12, 0, -0.005, 0.085, 0.085), (0.30, 0, 0, 0.072, 0.07), (0.39, 0, 0, 0.055, 0.055)], WHITE, e=3.0); place(th, hip, knee); leg.append(th)
+    th = loft('thigh_armor_L', [(0.02, 0, 0, 0.07, 0.072), (0.12, 0, -0.005, 0.085, 0.085), (0.30, 0, 0, 0.072, 0.07), (0.39, 0, 0, 0.055, 0.055)], WHITE, n=10, e=2.2); place(th, hip, knee); leg.append(th)
     tp = loft('thigh_plate_L', [(0.06, 0, 0, 0.088, 0.088), (0.22, 0, 0, 0.092, 0.09), (0.33, 0, 0, 0.075, 0.074)], BLUE, arc=(1.2, 3.1), thick=0.014); place(tp, hip, knee); leg.append(tp)
     leg.append(joint('knee_L', knee, (1, 0, 0), 0.055, 0.1))
     kc = loft('kneecap_L', [(0, 0, 0, 0.07, 0.03), (0.05, 0, -0.01, 0.075, 0.04), (0.12, 0, 0, 0.04, 0.02)], RED, e=3.5); place(kc, knee + V((0, -0.05, 0.05)), knee + V((0, -0.07, -0.08))); leg.append(kc)
     leg.append(cyl('shin_frame_L', knee, ank, 0.04, FRAME))
     sa = loft('shin_armor_L', [(0.03, 0, 0, 0.075, 0.07), (0.12, 0, 0.0, 0.09, 0.08), (0.36, 0, 0, 0.07, 0.065), (0.47, 0, 0, 0.055, 0.05)], WHITE, e=3.0); place(sa, knee, ank); leg.append(sa)
-    sg = loft('shin_blade_L', [(0.02, 0, 0, 0.095, 0.085), (0.14, 0, 0, 0.1, 0.09), (0.40, 0, 0, 0.078, 0.07)], WHITE, arc=(-2.6, -0.54), thick=0.016); place(sg, knee, ank); leg.append(sg)
+    sg = loft('shin_blade_L', [(0.02, 0, 0, 0.095, 0.085), (0.14, 0, 0, 0.1, 0.09), (0.40, 0, 0, 0.078, 0.07)], WHITE, n=4, e=2.0, arc=(-2.6, -0.54), thick=0.02); place(sg, knee, ank); leg.append(sg)
     keel = loft('shin_keel_L', [(0.0, 0, 0, 0.012, 0.03), (0.10, 0, 0, 0.016, 0.05), (0.34, 0, 0, 0.012, 0.035), (0.44, 0, 0, 0.006, 0.01)], RED, e=2.2)
     place(keel, knee + V((0, -0.085, 0.0)), ank + V((0, -0.075, 0.0))); leg.append(keel)
     spike = loft('knee_spike_L', [(0, 0, 0, 0.045, 0.03), (0.06, 0, 0, 0.03, 0.02), (0.11, 0, 0, 0.004, 0.004)], WHITE, e=2.6)
@@ -273,22 +312,22 @@ def addon_pass():
     yield 0.1
     # Boxcutter: panel lines, recesses and ports on the big plates (front = -Y, sides L/R)
     others = [o for o in bpy.data.objects if o.type == 'MESH']
-    plan = [('chest_plate', 'F', 0.5, 0.30, 0.006, 0.12, 0.006, 'BOX', 0.06), ('chest_plate', 'F', 0.5, 0.80, 0.30, 0.006, 0.005, 'BOX', 0.06),
-            ('chest_inner', 'F', 0.5, 0.55, 0.10, 0.006, 0.004, 'BOX', 0.05),
-            ('abdomen', 'F', 0.5, 0.5, 0.20, 0.006, 0.005, 'BOX', 0.05), ('abdomen', 'F', 0.5, 0.5, 0.006, 0.07, 0.005, 'BOX', 0.05),
-            ('back_plate', 'B', 0.5, 0.5, 0.006, 0.2, 0.005, 'BOX', 0.06), ('back_plate', 'B', 0.3, 0.6, 0.03, 0, 0.006, 'CIRCLE', 0.06), ('back_plate', 'B', 0.7, 0.6, 0.03, 0, 0.006, 'CIRCLE', 0.06),
-            ('skirt_front', 'F', 0.5, 0.5, 0.006, 0.12, 0.005, 'BOX', 0.06), ('skirt_front', 'F', 0.5, 0.75, 0.22, 0.006, 0.005, 'BOX', 0.06),
-            ('helmet', 'B', 0.5, 0.5, 0.006, 0.12, 0.004, 'BOX', 0.05)]
+    plan = [('chest_plate', 'F', 0.5, 0.30, 0.012, 0.12, 0.012, 'BOX', 0.06), ('chest_plate', 'F', 0.5, 0.80, 0.30, 0.012, 0.012, 'BOX', 0.06),
+            ('chest_inner', 'F', 0.5, 0.55, 0.10, 0.012, 0.010, 'BOX', 0.05),
+            ('abdomen', 'F', 0.5, 0.5, 0.20, 0.012, 0.012, 'BOX', 0.05), ('abdomen', 'F', 0.5, 0.5, 0.012, 0.07, 0.012, 'BOX', 0.05),
+            ('back_plate', 'B', 0.5, 0.5, 0.012, 0.2, 0.012, 'BOX', 0.06), ('back_plate', 'B', 0.3, 0.6, 0.03, 0, 0.012, 'CIRCLE', 0.06), ('back_plate', 'B', 0.7, 0.6, 0.03, 0, 0.012, 'CIRCLE', 0.06),
+            ('skirt_front', 'F', 0.5, 0.5, 0.012, 0.12, 0.012, 'BOX', 0.06), ('skirt_front', 'F', 0.5, 0.75, 0.22, 0.012, 0.012, 'BOX', 0.06),
+            ('helmet', 'B', 0.5, 0.5, 0.012, 0.12, 0.010, 'BOX', 0.05)]
     for s in ('L', 'R'):
         out = 'R' if s == 'L' else 'L'  # outer side view (our +x is the robot's left; Blender RIGHT view looks from +x)
         out = 'R' if s == 'L' else 'L'
-        plan += [(f'thigh_armor_{s}', out, 0.5, 0.5, 0.006, 0.22, 0.005, 'BOX', 0.06), (f'thigh_armor_{s}', out, 0.5, 0.7, 0.08, 0.04, 0.006, 'BOX', 0.06),
-                 (f'shin_blade_{s}', 'F', 0.5, 0.55, 0.006, 0.25, 0.005, 'BOX', 0.06), (f'shin_blade_{s}', 'F', 0.5, 0.3, 0.09, 0.006, 0.005, 'BOX', 0.06),
-                 (f'shin_armor_{s}', out, 0.5, 0.5, 0.025, 0, 0.006, 'CIRCLE', 0.05), (f'shin_armor_{s}', out, 0.5, 0.3, 0.006, 0.15, 0.005, 'BOX', 0.05),
-                 (f'forearm_armor_{s}', out, 0.5, 0.5, 0.006, 0.12, 0.004, 'BOX', 0.05), (f'forearm_guard_{s}', out, 0.5, 0.5, 0.05, 0.006, 0.004, 'BOX', 0.05),
-                 (f'upperarm_armor_{s}', out, 0.5, 0.5, 0.06, 0.006, 0.004, 'BOX', 0.05),
-                 (f'pauldron_{s}', 'F', 0.5, 0.5, 0.006, 0.08, 0.005, 'BOX', 0.06), (f'pauldron_{s}', out, 0.5, 0.6, 0.12, 0.006, 0.005, 'BOX', 0.06),
-                 (f'meta_armor_{s}', out, 0.5, 0.5, 0.006, 0.1, 0.004, 'BOX', 0.05)]
+        plan += [(f'thigh_armor_{s}', out, 0.5, 0.5, 0.012, 0.22, 0.012, 'BOX', 0.06), (f'thigh_armor_{s}', out, 0.5, 0.62, 0.05, 0.03, 0.012, 'BOX', 0.12),
+                 (f'shin_blade_{s}', 'F', 0.5, 0.55, 0.012, 0.12, 0.012, 'BOX', 0.12), (f'shin_blade_{s}', 'F', 0.5, 0.3, 0.09, 0.012, 0.012, 'BOX', 0.06),
+                 (f'shin_armor_{s}', out, 0.5, 0.5, 0.025, 0, 0.012, 'CIRCLE', 0.05), (f'shin_armor_{s}', out, 0.5, 0.6, 0.012, 0.09, 0.012, 'BOX', 0.05),
+                 (f'forearm_armor_{s}', out, 0.5, 0.5, 0.012, 0.12, 0.010, 'BOX', 0.05), (f'forearm_guard_{s}', out, 0.5, 0.5, 0.05, 0.012, 0.010, 'BOX', 0.05),
+                 (f'upperarm_armor_{s}', out, 0.5, 0.5, 0.06, 0.012, 0.010, 'BOX', 0.05),
+                 (f'pauldron_{s}', 'F', 0.5, 0.5, 0.012, 0.08, 0.012, 'BOX', 0.06), (f'pauldron_{s}', out, 0.5, 0.6, 0.12, 0.012, 0.012, 'BOX', 0.06),
+                 (f'meta_armor_{s}', out, 0.5, 0.5, 0.012, 0.1, 0.010, 'BOX', 0.05)]
     if FAST: plan = plan[:4]
     bpy.context.preferences.view.smooth_view = 0
     for nm, face, u, v, w, h, d, shape, tol in plan:
@@ -299,13 +338,21 @@ def addon_pass():
     for o in ARMOR:
         if o.name in bpy.data.objects:
             A.hops_weighted_normal(o); A.apply_all(o)
+    # crisp hard-surface shading: smooth inside a plate, sharp at chamfers, facets and cut walls
     for o in bpy.data.objects:
-        if o.type == 'MESH':
-            for p in o.data.polygons: p.use_smooth = True
+        if o.type != 'MESH': continue
+        _sel = A._select([o], o)
+        try: bpy.ops.mesh.customdata_custom_splitnormals_clear()
+        except Exception: pass
+        bm = bmesh.new(); bm.from_mesh(o.data)
+        for f in bm.faces: f.smooth = True
+        for e in bm.edges: e.smooth = not (len(e.link_faces) == 2 and e.calc_face_angle(0) > 0.52)
+        bm.to_mesh(o.data); bm.free()
 
 # ------------------------------------------------------------------ concept render
-def render(path, cam_az=-0.72, cam_el=0.12, res=(1200, 1500)):
+def render(path, cam_az=-0.72, cam_el=0.12, res=(1200, 1500), tgt=(0, 0, 1.0), dist=4.9, lens=70, setup=True):
     sc = bpy.context.scene
+    if not setup: return shoot(path, cam_az, cam_el, res, tgt, dist, lens)
     for o in bpy.data.objects: o.hide_set(False); o.hide_render = o.name.startswith(('Cutter', '_bc'))
     bpy.ops.mesh.primitive_plane_add(size=30, location=(0, 0, 0)); fl = bpy.context.active_object
     fm = mat('floor', (0.012, 0.013, 0.016), 0.62); fm.node_tree.nodes['Principled BSDF'].inputs['Specular IOR Level'].default_value = 0.15; fl.data.materials.append(fm)
@@ -319,8 +366,13 @@ def render(path, cam_az=-0.72, cam_el=0.12, res=(1200, 1500)):
     light('fill', (2.6, -1.6, 1.4), 90, 3.0, (0.75, 0.85, 1.0))
     light('rim', (1.4, 2.8, 2.6), 650, 1.5, (0.4, 0.75, 1.0))
     light('rim2', (-2.0, 2.4, 1.2), 400, 1.5, (1.0, 0.5, 0.35))
-    cam = bpy.data.cameras.new('cam'); cam.lens = 70; co = bpy.data.objects.new('cam', cam); sc.collection.objects.link(co)
-    tgt = Vector((0, 0, 1.0)); dist = 4.9
+    shoot(path, cam_az, cam_el, res, tgt, dist, lens)
+
+def shoot(path, cam_az, cam_el, res, tgt, dist, lens):
+    sc = bpy.context.scene
+    co = sc.camera or bpy.data.objects.new('cam', bpy.data.cameras.new('cam'))
+    if co.name not in sc.collection.objects: sc.collection.objects.link(co)
+    co.data.lens = lens; tgt = Vector(tgt)
     co.location = tgt + Vector((math.sin(cam_az) * dist, -math.cos(cam_az) * dist, dist * math.sin(cam_el)))
     co.rotation_euler = (tgt - co.location).to_track_quat('-Z', 'Y').to_euler(); sc.camera = co
     sc.render.engine = 'CYCLES'; sc.cycles.device = 'CPU'; sc.cycles.samples = 24 if FAST else 128; sc.cycles.use_denoising = True
@@ -336,6 +388,7 @@ def main():
     print('TRIS', tris, 'OBJECTS', len([o for o in bpy.data.objects if o.type == 'MESH']), flush=True)
     bpy.ops.wm.save_as_mainfile(filepath='/workspace/private/scout_v2.blend')
     render(OUT)
+    render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.1, 0.95), dist=2.0, lens=60, setup=False)
 
 _gen = None
 def _run():
