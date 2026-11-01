@@ -17,7 +17,7 @@ import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
 import { createCollision } from './robot/collision';
-import { buildLandmarks, cullUnderLandmarks } from './area/landmarks';
+import { buildLandmarks, cullUnderLandmarks, flattenUnderLandmarks, treesOutsideLandmarks, blockGrassUnderLandmarks } from './area/landmarks';
 import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
@@ -118,13 +118,18 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const group = new THREE.Group(); group.name = 'area:' + id;
     // Landmarks first: their footprints decide which generated buildings are never built (once per area load).
     const origin = (areaDefs as Record<string, any>)[id]?.origin as { lat: number; lon: number } | undefined;
-    const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [] } : await buildLandmarks(id, origin, terrain, renderer);
+    const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [], pads: [] } : await buildLandmarks(id, origin, terrain, renderer);
+    // Seat each landmark: level the ground under its pad to its base height (before the terrain mesh, roads, trees and grass sample it),
+    // and keep trees and grass out of the pad.
+    const grassMask = mask ? parseGroundMask(mask) : null;
+    const lmTrees = treesOutsideLandmarks(area.trees as number[], landmarks.pads);
+    if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
     const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
-    const trees = await buildTrees(area.trees as number[], terrain, id === 'keywest'); // palms only in Key West
-    const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
+    const trees = await buildTrees(lmTrees.flat, terrain, id === 'keywest'); // palms only in Key West
+    const grass = buildGrass(terrain, grassMask);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     const roads = buildRoads(area, terrain, roadMat);
     group.add(buildTerrain(terrain, groundMat, style), roads, buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
