@@ -75,7 +75,7 @@ createScene(canvas, areaId).then(async (app) => {
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
   const sfx = createRobotAudio();
-  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setGait(d.run.kind); ctl.setLand(d.land.kind); ctl.setSpecial(d.motion.special, d.specialDur); ctl.setFlight(d.flight.launch); thrust.configure(d.flight); sfx.setType(t); };
+  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setGait(d.run.kind); ctl.setLand(d.land.kind); sfx.powerUp(); ctl.setSpecial(d.motion.special, d.specialDur); ctl.setFlight(d.flight.launch); thrust.configure(d.flight); sfx.setType(t); };
   applyType(save.robot.type);
   robot.onSwap = () => { thrust.attach(robot.nozzles); joints = robot.joints; };
   idle(() => TYPE_KEYS.forEach((t) => robot.preload(t)));
@@ -90,19 +90,20 @@ createScene(canvas, areaId).then(async (app) => {
   ctl.onImpact = (p, k) => { fx.impact(p, k); sfx.hit(); };
   // landings scaled by fall speed (s 0..1): Heavy slam = crack decal + dust ring + shockwave + shake, Scout = thruster puff (controller), Worker = steam + hiss hook, Glitch = violet reform pulse
   ctl.onLandFx = (kind, p, s) => {
-    if (kind === 'slam') { fx.impact(p, 0.4 + 1.0 * s); fx.kick(0.35 + 0.9 * s); sfx.hit(); }
-    else if (kind === 'knee') { fx.impact(p, 0.18 + 0.3 * s); sfx.hit(); }
-    else if (kind === 'quad') { thrust.steam(p, s); fx.kick(0.15 + 0.3 * s); sfx.hook('worker-land-hiss'); }
+    sfx.land(s);
+    if (kind === 'slam') { fx.impact(p, 0.4 + 1.0 * s); fx.kick(0.35 + 0.9 * s); }
+    else if (kind === 'knee') { fx.impact(p, 0.18 + 0.3 * s); }
+    else if (kind === 'quad') { thrust.steam(p, s); fx.kick(0.15 + 0.3 * s); sfx.steam(); }
     else if (kind === 'voxel') { fx.impact(p, 0.25 + 0.3 * s); }
   };
   ctl.onScrape = (p, v, k) => thrust.scrape(p, v, k);
-  ctl.onBall = (ph) => { sfx.hook('heavy-transform'); fx.kick(ph === 'closed' || ph === 'open' ? 0.3 : 0.12); }; // clunks as the armour starts folding, locks shut, starts unfolding, locks open
-  ctl.onHop = (a, b, phase) => { if (phase === 'depart') robot.trail(a, b); };
+  ctl.onBall = (ph) => { if (ph === 'fold') sfx.transform('fold'); else if (ph === 'unfold') sfx.transform('unfold'); fx.kick(ph === 'closed' ? 0.5 : ph === 'open' ? 0.35 : 0.14); }; // snap-lock shake at 'closed' // clunks as the armour starts folding, locks shut, starts unfolding, locks open
+
   ctl.onSpecial = (kind, phase) => { if (phase === 'start') sfx.special(kind); if (phase === 'hit') fx.kick(kind === 'groundpound' ? 1 : 0.35); };
-  let lastStep = 0, lastBurst = 0;
+  let lastStep = 0, lastBurst = 0, wasCloud = false;
   const stepFx = () => { // footfalls every half gait cycle; heavier types shake the camera
     const n = Math.floor(ctl.phase / Math.PI), a = ctl.anim;
-    if (n !== lastStep && (a === 'walk' || a === 'run') && ctl.mode === 'GROUND') { sfx.step(); const m = TYPES[save.robot.type].motion.mass; if (m > 1.5) fx.kick(0.12 * m); }
+    if (n !== lastStep && (a === 'walk' || a === 'run') && ctl.mode === 'GROUND' && ctl.form < 0.5 && ctl.cloud < 0.5) { sfx.step(); const m = TYPES[save.robot.type].motion.mass; if (m > 1.5) fx.kick(0.12 * m); }
     lastStep = n; if (ctl.burstOn > 0.5 && lastBurst <= 0.5) sfx.boost(); lastBurst = ctl.burstOn;
   };
   let robotMode = qs.get('mode') !== 'free';
@@ -117,7 +118,7 @@ createScene(canvas, areaId).then(async (app) => {
   const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
     (t) => switchType(t), () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
   const setHangar = (on: boolean) => {
-    cust.setOpen(on); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
+    cust.setOpen(on); if (!on) sfx.powerUp(); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
     if (on) { placeHangar(); robot.root.visible = true; robot.root.quaternion.identity(); app.setFocus(ctl.pos); } else if (robotMode) heroDrop();
   };
   let hdrag = false, hx = 0;
@@ -187,7 +188,7 @@ createScene(canvas, areaId).then(async (app) => {
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); sfx.glitchThrust(save.robot.type === 'glitch' ? ctl.thrust : 0, dt); hud.update(dt, ctl); stepFx(); }
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); { const fl = ctl.mode === 'ROCKETS'; sfx.thrusters(fl, ctl.thrust, dt); sfx.roll(save.robot.type === 'heavy' && ctl.form >= 0.97 && ctl.mode === 'GROUND', Math.hypot(ctl.vel.x, ctl.vel.z) / Math.max(1, ctl.tuning.run)); sfx.cloud(ctl.cloud > 0.5); if (ctl.cloud > 0.5 !== wasCloud) { wasCloud = ctl.cloud > 0.5; sfx.glitch(wasCloud ? 'dissolve' : 'reform'); } } hud.update(dt, ctl); stepFx(); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;

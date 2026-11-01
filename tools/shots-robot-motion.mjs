@@ -18,7 +18,7 @@ for (const t of TYPES) {
   if (MODES.includes('run')) {
     await p.evaluate(() => { const r = window.__robot; r.hangar(false); r.dropIn(0); }); await p.waitForTimeout(2500);
     await press('KeyW', true); await press('ShiftLeft', true); await p.waitForTimeout(2600);
-    const info = await p.evaluate(() => { const c = window.__robot.ctl; return { anim: c.anim, mph: +(Math.hypot(c.vel.x, c.vel.z)).toFixed(1), ball: +c.ball.toFixed(2), gallop: +c.gallop.toFixed(2) }; });
+    const info = await p.evaluate(() => { const c = window.__robot.ctl; return { anim: c.anim, mph: +(Math.hypot(c.vel.x, c.vel.z)).toFixed(1), form: +c.form.toFixed(2), cloud: +c.cloud.toFixed(2) }; });
     await p.screenshot({ path: `test-results/run-${t}.png`, clip: { x: 240, y: 160, width: 800, height: 560 } });
     const s = []; for (let i = 0; i < 6; i++) { await p.waitForTimeout(400); s.push(await stat()); }
     out[t].run = { ...info, fps: +(s.reduce((a, x) => a + x.fps, 0) / s.length).toFixed(1), calls: Math.max(...s.map((x) => x.calls)) };

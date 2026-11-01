@@ -1,0 +1,32 @@
+{
+ "scout": [
+  "boost",
+  "footstep_01",
+  "footstep_02",
+  "footstep_03",
+  "hit"
+ ],
+ "heavy": [
+  "boost",
+  "footstep_01",
+  "footstep_02",
+  "footstep_03",
+  "hit",
+  "special_groundpound"
+ ],
+ "worker": [
+  "boost",
+  "footstep_01",
+  "footstep_02",
+  "footstep_03",
+  "hit"
+ ],
+ "glitch": [
+  "boost",
+  "footstep_01",
+  "footstep_02",
+  "footstep_03",
+  "hit",
+  "special_blinkdash"
+ ]
+}

@@ -39,7 +39,7 @@ export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean
   /** flight: launch = take-off wind-up 0..1 (crouch), flyT = s since the rockets lit, thrust = throttle 0..1 */
   launch?: number; flyT?: number; thrust?: number;
   /** ground speed m/s (stride-matches the mocap), gallop / ball / slide = style blends 0..1 from the controller, hop = Glitch hop phase 0..1 (0 = not hopping) */
-  gs?: number; gallop?: number; ball?: number; slide?: number; hop?: number; vox?: number;
+  gs?: number; gallop?: number; ball?: number; slide?: number; hop?: number; vox?: number; form?: number; cloud?: number; bodyYaw?: number;
   /** landing by fall speed: kind from types.ts, seconds since touch-down, strength 0..1, planned duration */
   landKind?: LandKind; landT?: number; landS?: number; landDur?: number }
 export type LandKind = 'none' | 'slam' | 'knee' | 'quad' | 'voxel';
@@ -74,7 +74,8 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
   let mc = 0, u = 0, uIdle = 0; const qm = new THREE.Quaternion(), qt = new THREE.Quaternion(), qs = new THREE.Quaternion(), qi = new THREE.Quaternion(), eo = new THREE.Euler();
   const sstep = (x: number, a: number, c: number) => { const t = Math.max(0, Math.min(1, (x - a) / (c - a))); return t * t * (3 - 2 * t); };
   const grp = (n: string) => (n.includes('Arm') ? G.amp.arms : /Leg|Foot/.test(n) ? G.amp.legs : G.amp.spine);
-  const ovr = (name: string, x: number, y: number, z: number, w: number) => { const o = b[name]; if (!o || w <= 0.001) return; qt.copy(rest.get(o)!).multiply(qs.setFromEuler(eo.set(x, y, z))); o.quaternion.slerp(qt, Math.min(1, w)); };
+  const FOLD = ['Spine', 'Head', 'LeftArm', 'RightArm', 'LeftUpLeg', 'RightUpLeg'];
+  const ovr = (name: string, x: number, y: number, z: number, w: number, order: 'XYZ' | 'YXZ' = 'XYZ') => { const o = b[name]; if (!o || w <= 0.001) return; eo.set(x, y, z, order); qt.copy(rest.get(o)!).multiply(qs.setFromEuler(eo)); o.quaternion.slerp(qt, Math.min(1, w)); };
   function mocap(p: PoseInput, dt: number) {
     const C = clips(); if (!C) return 0;
     const loc = (p.anim === 'walk' || p.anim === 'run') && !p.landKind, gs = p.gs ?? 0;
@@ -214,23 +215,40 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: Fl
     set('LeftFoot', lft[0], lft[1], lft[2], k); set('RightFoot', rft[0], rft[1], rft[2], k);
     const bobM = mocap(p, dt); if (b.Hips) b.Hips.position.y += bobM;
     // ---- per-type run / slide / landing overlays (blend weights come from the controller)
-    const gl = p.gallop ?? 0, bl = p.ball ?? 0, sl = p.slide ?? 0, ph2 = Math.sin(p.phase);
-    if (style === 'heavy' && b.Head) { const h = b.Head; const p0 = (h.userData.p0 ??= h.position.clone()) as THREE.Vector3, sH = sstep(bl, 0.2, 0.6); h.position.set(p0.x, p0.y - 0.3 * sH, p0.z + 0.04 * sH); h.scale.setScalar(1 - 0.35 * sH); } // head retracts into the chest dome
-    if (bl > 0) { // Heavy: staged transform into the armoured ball (0 standing .. 1 closed): arms tuck, then legs fold, head retracts, spine curls, plates close
-      const sA = sstep(bl, 0, 0.45), sL = sstep(bl, 0.2, 0.75), sS = sstep(bl, 0.4, 0.95), sHd = sstep(bl, 0.2, 0.6);
+    const fm = p.form ?? 0, sl = p.slide ?? 0, ph2 = Math.sin(p.phase), bl = style === 'heavy' ? fm : 0, hv = style === 'scout' ? fm : 0, gl = style === 'medic' ? fm : 0;
+    // foldable bones go back to their rest offset / scale every frame, then the active transformation moves them (staged by the form progress 0..1)
+    for (const n of FOLD) { const o = b[n]; if (!o) continue; const p0 = (o.userData.p0 ??= o.position.clone()) as THREE.Vector3; o.position.copy(p0); o.scale.set(1, 1, 1); }
+    const fold = (n: string, sc: number, tx: number, ty: number, tz: number, w: number) => { const o = b[n]; if (!o || w <= 0) return; const p0 = o.userData.p0 as THREE.Vector3; o.position.set(p0.x + (tx - p0.x) * w, p0.y + (ty - p0.y) * w, p0.z + (tz - p0.z) * w); o.scale.setScalar(1 + (sc - 1) * w); };
+    if (bl > 0) { // Heavy: arms AND legs fold fully into the torso, leaving one giant ball (staged: arms tuck, limbs sink in, legs fold, head retracts, spine curls)
+      const sA = sstep(bl, 0, 0.45), sL = sstep(bl, 0.2, 0.75), sS = sstep(bl, 0.4, 0.95), sHd = sstep(bl, 0.2, 0.6), sInA = sstep(bl, 0.4, 0.88), sInL = sstep(bl, 0.5, 0.95);
       ovr('LeftArm', -1.2, 0.5, 0.3, sA); ovr('RightArm', -1.2, -0.5, -0.3, sA); ovr('LeftForeArm', -1.7, 0, 0, sA); ovr('RightForeArm', -1.7, 0, 0, sA);
       ovr('LeftUpLeg', -2.0, 0, 0.1, sL); ovr('RightUpLeg', -2.0, 0, -0.1, sL); ovr('LeftLeg', 2.3, 0, 0, sL); ovr('RightLeg', 2.3, 0, 0, sL); ovr('LeftFoot', -1.6, 0, 0, sL); ovr('RightFoot', -1.6, 0, 0, sL);
-      ovr('Spine', 0.75, 0, 0, sS); ovr('Head', 0.5, 0, 0, sHd); if (b.Hips) b.Hips.position.y -= 0.18 * sstep(bl, 0.3, 1);
+      ovr('Spine', 0.75, 0, 0, sS); ovr('Head', 0.5, 0, 0, sHd);
+      fold('LeftArm', 0.22, 0.12, 0.3, 0.05, sInA); fold('RightArm', 0.22, -0.12, 0.3, 0.05, sInA); fold('LeftUpLeg', 0.3, 0.07, 0.2, 0.0, sInL); fold('RightUpLeg', 0.3, -0.07, 0.2, 0.0, sInL);
+      fold('Head', 0.65, 0, 0.3, 0, sHd); fold('Spine', 1, 0, -0.3, 0.02, sS); if (b.Hips) b.Hips.position.y -= 0.62 * sstep(bl, 0.3, 1); // the dome settles over the pelvis; the ball sits on the ground
     }
-    if (gl > 0) { ovr('Spine', 1.0, 0, 0, gl); ovr('Head', -0.7, 0, 0, gl); ovr('Hips', 0.22, 0, 0, gl); ovr('LeftArm', -1.0 + 0.7 * ph2, 0, 0.16, gl); ovr('RightArm', -1.0 + 0.7 * ph2, 0, -0.16, gl); ovr('LeftForeArm', -0.35 - 0.3 * ph2, 0, 0, gl); ovr('RightForeArm', -0.35 - 0.3 * ph2, 0, 0, gl); if (b.Hips) b.Hips.position.y -= 0.16 * gl; } // Worker: four-limbed gallop
-    if (sl > 0) { ovr('Hips', 0, 0, 0, 0); ovr('Spine', -0.32, 0, 0, sl); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl); ovr('LeftLeg', 2.0, 0, 0, sl); ovr('RightUpLeg', -0.5, 0, -0.14, sl); ovr('RightLeg', 0.25, 0, 0, sl);
-      ovr('LeftFoot', -0.4, 0, 0, sl); ovr('RightFoot', 0.2, 0, 0, sl); ovr('LeftArm', 0.3, 0, 0.95, sl); ovr('RightArm', 0.3, 0, -0.95, sl); if (b.Hips) b.Hips.position.y -= 0.34 * sl; } // Scout: thruster-assisted slide
+    if (hv > 0) { // Scout: low hover-sprint form: legs fold back into the thruster pods, arms tuck, body flattens
+      const sA = sstep(hv, 0, 0.4), sL = sstep(hv, 0.15, 0.7), sS = sstep(hv, 0.3, 0.9);
+      ovr('LeftArm', 0.45, 0, 0.1, sA); ovr('RightArm', 0.45, 0, -0.1, sA); ovr('LeftForeArm', -0.15, 0, 0, sA); ovr('RightForeArm', -0.15, 0, 0, sA);
+      ovr('LeftUpLeg', 1.75, 0, 0.05, sL); ovr('RightUpLeg', 1.75, 0, -0.05, sL); ovr('LeftLeg', 2.45, 0, 0, sL); ovr('RightLeg', 2.45, 0, 0, sL); ovr('LeftFoot', 0.6, 0, 0, sL); ovr('RightFoot', 0.6, 0, 0, sL);
+      ovr('Spine', 1.15, 0, 0, sS); ovr('Head', -0.95, 0, 0, sS); ovr('Hips', 0.15, 0, 0, sS);
+      fold('LeftUpLeg', 0.72, 0.1, -0.02, 0.02, sL); fold('RightUpLeg', 0.72, -0.1, -0.02, 0.02, sL); fold('LeftArm', 0.88, 0.26, 0.34, -0.04, sA); fold('RightArm', 0.88, -0.26, 0.34, -0.04, sA);
+      if (b.Hips) b.Hips.position.y -= 0.5 * sS;
+    }
+    if (sl > 0) { ovr('Spine', -0.32, 0, 0, sl * (1 - hv * 0.6)); ovr('Head', 0.25, 0, 0, sl); ovr('LeftUpLeg', -1.55, 0, 0.12, sl * (1 - hv)); ovr('LeftLeg', 2.0, 0, 0, sl * (1 - hv)); ovr('RightUpLeg', -0.5, 0, -0.14, sl * (1 - hv)); ovr('RightLeg', 0.25, 0, 0, sl * (1 - hv));
+      ovr('LeftFoot', -0.4, 0, 0, sl * (1 - hv)); ovr('RightFoot', 0.2, 0, 0, sl * (1 - hv)); ovr('LeftArm', 0.3, 0, 0.95, sl * (1 - hv)); ovr('RightArm', 0.3, 0, -0.95, sl * (1 - hv)); if (b.Hips) b.Hips.position.y -= 0.34 * sl * (1 - hv); } // Scout: thruster-assisted slide (rides on the hover form)
+    if (gl > 0) { // Worker: gorilla knuckle-run (docs/WORKER-GALLOP.md): body yawed to the path (root, controller bodyYaw), shoulders lead off-axis, limbs straight and reaching toward the travel direction
+      const by = p.bodyYaw ?? 0, tw = 0.3, w = sstep(gl, 0, 0.8), ll2 = Math.sin(p.phase), rr2 = Math.sin(p.phase + 2.2), ord = 'YXZ' as const;
+      ovr('Hips', 0.2, 0, 0, w, ord); ovr('Spine', 0.95, tw, 0, w, ord); ovr('Head', -0.85, -tw - 0.1, 0, w, ord);
+      ovr('LeftArm', -1.28 + 0.42 * ll2, -(by + tw), 0.1, w, ord); ovr('RightArm', -1.28 + 0.42 * rr2, -(by + tw), -0.1, w, ord); ovr('LeftForeArm', -0.06, 0, 0, w); ovr('RightForeArm', -0.06, 0, 0, w);
+      ovr('LeftUpLeg', 0, by * 0.6 * -1, 0, w * 0.5, ord); ovr('RightUpLeg', 0, by * 0.6 * -1, 0, w * 0.5, ord); if (b.Hips) b.Hips.position.y -= 0.2 * w;
+    }
     if (style === 'medic') { const rat = gl * 0.9 + (p.anim === 'run' ? 0.35 : 0); if (rat > 0.02) for (const n of ['LeftForeArm', 'RightForeArm', 'Spine'] as const) { const o = b[n]; if (o) { o.rotateX(Math.sin(p.t * 53 + n.length) * 0.05 * rat); o.rotateZ(Math.sin(p.t * 67 + n.length * 3) * 0.035 * rat); } } } // tools rattle
     if ((p.hop ?? 0) > 0 && b.Hips) b.Hips.position.y -= 0.16 * Math.sin(Math.min(1, p.hop! * 1.6) * Math.PI) * (1 - Math.min(1, p.hop!)); // Glitch: crouch into the hop
     // fingers: relaxed curl in idle/walk, fist on boost / special; thumb curls less
     // medic: open flat hands while the palm jets fire, back to fists (palms to the thighs) on landing
     openC += (open - openC) * (1 - Math.exp(-dt * 10));
-    const want = Math.max(open ? 0 : p.fist ?? 0, sp > 0 ? 1 : 0, p.anim === 'fall' || p.anim === 'roll' ? 0.8 : 0, style === 'medic' && p.anim === 'land' ? 1 : 0);
+    const want = Math.max(open ? 0 : p.fist ?? 0, sp > 0 ? 1 : 0, p.anim === 'fall' || p.anim === 'roll' ? 0.8 : 0, (style === 'medic' && (p.anim === 'land' || (p.form ?? 0) > 0.4)) ? 1 : 0);
     fistC += (want - fistC) * (1 - Math.exp(-dt * 14));
     const cu = (M.curl + (1.25 - M.curl) * fistC) * (1 - openC) - openC * 0.08 + (moving ? Math.sin(p.phase * 2) * 0.04 : Math.sin(p.t * 1.3) * 0.03);
     for (const f of fingers) { const th = (f as string).includes('F9_') /* thumb */; set(f, 0, 0, 0, 1); const o = b[f]!; o.rotateZ(((f as string)[0] === 'L' ? -1 : 1) * (th ? 0.55 : 1) * cu); } // palms face the thighs: curl toward the body midline

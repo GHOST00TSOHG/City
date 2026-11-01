@@ -3,7 +3,8 @@ import SKEL from './skeleton.json';
 import { makePoser, type Bones, type RobotLook, type RobotModel, type PoseInput, REGIONS } from './model';
 import { TYPES, SLOT_KEYS, skeleton, type RobotType, type SlotBuild } from './types';
 import { createGlitchBody, type ShardData } from './glitch';
-import { loadKit, buildSkinned, createKitUniforms, type Kit } from './kit';
+import { loadKit, buildSkinned, createKitUniforms, plateKey, type Kit } from './kit';
+import { createTransformFx, plateHash, type PlateRec } from './transform';
 
 export type KitU = ReturnType<typeof createKitUniforms>;
 export interface TypedRobot extends RobotModel { type: RobotType; uniforms: KitU; joints: THREE.Object3D[]; trail?: (a: THREE.Vector3, b: THREE.Vector3) => void }
@@ -37,9 +38,23 @@ function rig(type: RobotType) {
 export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: KitU): TypedRobot {
   const R = rig(type);
   const pist = kit.meta.pistons.flatMap((p) => [p.objA, p.objB]).map((n) => { const b = new THREE.Bone(); b.name = n; R.arm.add(b); R.list.push(b); return b; });
+  // one bone per armour plate (child of the plate's own bone, at the plate centre) so transformations can move plates individually;
+  // its bind inverse is T(-centre), so at rest the plate is exactly where it was authored (bone-local, identity-inverse convention for the rest)
+  const plates: PlateRec[] = [], inverses = new Map<THREE.Bone, THREE.Matrix4>(), cen = new THREE.Vector3(), pc = new THREE.Vector3();
+  for (const n of kit.nodes) {
+    const pb = R.by.get(n.bone); if (!pb || /Hand|F\d_|Foot$/.test(n.bone) || type === 'glitch') continue;
+    for (const m of n.meshes) {
+      const g = m.geo; g.computeBoundingBox(); const bb = g.boundingBox!, sz = bb.getSize(new THREE.Vector3()), tris = (g.index ? g.index.count : g.attributes.position.count) / 3;
+      if (tris < 8 || Math.max(sz.x, sz.y, sz.z) < 0.05) continue;
+      const c = bb.getCenter(new THREE.Vector3()), b = new THREE.Bone(); b.name = plateKey(n, m); b.position.copy(c); pb.add(b); R.list.push(b); inverses.set(b, new THREE.Matrix4().makeTranslation(-c.x, -c.y, -c.z));
+      plates.push({ bone: b, c, out: new THREE.Vector3(), ext: 0, h: plateHash(plates.length), size: Math.min(1, Math.max(sz.x, sz.y, sz.z) / 0.4) });
+    }
+  }
   R.root.updateMatrixWorld(true);
-  // identity inverses: kit vertices are authored in bone-local space, so skinning = bone.matrixWorld * v
-  const skel = new THREE.Skeleton(R.list, R.list.map(() => new THREE.Matrix4())), index = new Map(R.list.map((b, i) => [b.name, i]));
+  cen.set(0, 0, 0); { const sp = R.by.get('Spine')!; sp.getWorldPosition(cen); cen.y += 0.25; }
+  for (const p of plates) { p.bone.getWorldPosition(pc); p.out.copy(pc).sub(cen); p.ext = Math.min(1, p.out.length() / 1.1); p.out.normalize(); }
+  const skel = new THREE.Skeleton(R.list, R.list.map((b) => inverses.get(b) ?? new THREE.Matrix4())), index = new Map(R.list.map((b, i) => [b.name, i]));
+  const xfx = createTransformFx(type, R.root, R.by, plates);
   const meshes = new Map<string, THREE.SkinnedMesh>();
   let build = buildOf(look);
   const rebuild = () => {
@@ -92,8 +107,8 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
       kit.mats.decal.userData.uCol.value.set(look.decalColor);
       u.glow.value.set(look.visor);
     },
-    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.ball ?? 0) < 0.9) clampFeet(s.anim); aimPistons(); },
-    dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); },
+    animate(s: PoseInput, dt: number) { pose(s, dt); if ((s.form ?? 0) < 0.25) clampFeet(s.anim); xfx.update(s.form ?? 0, dt); aimPistons(); },
+    dispose() { for (const m of meshes.values()) m.geometry.dispose(); skel.dispose(); xfx.dispose(); },
   };
   model.setLook({}); aimPistons();
   (model as any).kitReport = kit.report;
@@ -112,7 +127,7 @@ export function createGlitchRobot(kit: Kit, data: ShardData, look: RobotLook, u:
     trail: (a: THREE.Vector3, b: THREE.Vector3) => G.trail(a, b),
     animate(s, dt) {
       base.animate(s, dt); G.update(s, dt, list);
-      const hide = G.uniforms.uDash.value > 0.5; for (const m of bodyMeshes) m.visible = !hide; // blink-dash: the body dissolves into shards
+      const hide = G.uniforms.uDash.value > 0.5 || G.cloudOn; for (const m of bodyMeshes) m.visible = !hide; // blink-dash: the body dissolves into shards
     },
     dispose() { base.dispose(); G.dispose(); },
   };

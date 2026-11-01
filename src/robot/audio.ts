@@ -1,65 +1,77 @@
 import type { RobotType } from './types';
 
 /**
- * Per-type robot SFX (public/audio/robots/<type>/<type>_<name>.{ogg,m4a}, see LICENSES.md there).
- * One master gain; every clip plays at 1.0 (levels are mastered in the files). Only *_idle_loop loops.
- * Footsteps 01–03 are round-robin. Lazy: nothing is fetched until the first user gesture unlocks audio.
+ * Per-type robot SFX. Files: public/audio/robots/<type>/<type>_<slot>.{ogg,m4a}; docs/AUDIO-SLOTS.md lists every slot with its exact trigger timing.
+ * One master gain; every clip plays at 1.0 (levels are mastered in the files). Robots are SILENT standing still (no idle loop).
+ * Only slots listed in public/audio/robots/manifest.json (tools/audio-manifest.mjs) are ever fetched, so a slot whose file Echo has not
+ * delivered yet is simply silent: no request, no 404, no console error. Looping slots: thruster_burn_loop, roll_loop, thrust_hum, cloud_loop.
+ * Lazy: nothing is fetched until the first user gesture unlocks audio.
  */
 const EXT = (() => { try { return new Audio().canPlayType('audio/ogg; codecs="vorbis"') ? 'ogg' : 'm4a'; } catch { return 'm4a'; } })();
 const STEPS = ['footstep_01', 'footstep_02', 'footstep_03'];
-/**
- * Named hooks for Glitch's thruster (low hum loop + soft crackle one-shots). The files are Echo's and are NOT in the repo yet
- * (public/audio/robots/glitch/glitch_thrust_hum.{ogg,m4a}, glitch_thrust_crackle.{ogg,m4a}). The hooks are wired and silent until
- * the names are added to HAVE (so a missing file never costs a 404). Nothing is synthesised here.
- */
-export const GLITCH_THRUST_HOOKS = { hum: 'glitch-thrust-hum', crackle: 'glitch-thrust-crackle' } as const;
-const HOOK_FILE: Record<string, string> = { 'glitch-thrust-hum': 'thrust_hum', 'glitch-thrust-crackle': 'thrust_crackle' };
-const HAVE = new Set<string>([]);
-/** Other named hooks (silent until the file is added): worker-land-hiss = public/audio/robots/worker/worker_land_hiss.{ogg,m4a}. */
-HOOK_FILE['worker-land-hiss'] = 'land_hiss';
-/** heavy-transform = mechanical clunks of the armour folding into / out of the ball: public/audio/robots/heavy/heavy_transform.{ogg,m4a} (not in the repo yet; silent until added to HAVE). */
-HOOK_FILE['heavy-transform'] = 'transform'; // add 'glitch-thrust-hum' / 'glitch-thrust-crackle' when Echo's files land
+const LOOPS = new Set(['thruster_burn_loop', 'roll_loop', 'thrust_hum', 'cloud_loop']);
+/** Every slot name the game can play (documentation + preload list). */
+export const SLOTS = ['footstep_01', 'footstep_02', 'footstep_03', 'power_up', 'boost', 'hit', 'land_light', 'land_heavy', 'transform', 'unfold', 'thruster_ignite', 'thruster_burn_loop', 'thruster_cutoff',
+  'roll_loop', 'land_hiss', 'thrust_hum', 'thrust_crackle', 'dissolve', 'cloud_loop', 'reform', 'special_groundpound', 'special_blinkdash'] as const;
+/** The landing strength (0..1) at or above which the _heavy variant plays. */
+export const LAND_HEAVY_AT = 0.5;
 
 export function createRobotAudio(base = `${import.meta.env.BASE_URL}audio/robots/`) {
-  let hum: AudioBufferSourceNode | null = null, humGain: GainNode | null = null, humBusy = false, crackT = 0;
-  let ctx: AudioContext | null = null, master: GainNode | null = null, type: RobotType | null = null, idle: AudioBufferSourceNode | null = null, rr = 0, volume = 1;
+  let ctx: AudioContext | null = null, master: GainNode | null = null, type: RobotType | null = null, rr = 0, volume = 1, crackT = 0;
+  let have: Record<string, string[]> | null = null; const haveP = fetch(`${base}manifest.json`).then((r) => (r.ok ? r.json() : {})).then((j) => (have = j)).catch(() => (have = {}));
   const bufs = new Map<string, Promise<AudioBuffer | null>>();
+  const loops = new Map<string, { src: AudioBufferSourceNode; gain: GainNode }>(), loopBusy = new Set<string>();
+  const exists = (t: RobotType, n: string) => !!have?.[t]?.includes(n);
   const load = (t: RobotType, n: string) => {
     const k = `${t}/${n}`;
+    if (!exists(t, n)) return Promise.resolve(null); // missing slot: silent, never fetched
     if (!bufs.has(k)) bufs.set(k, fetch(`${base}${t}/${t}_${n}.${EXT}`).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(r.status))).then((a) => ctx!.decodeAudioData(a)).catch(() => null));
     return bufs.get(k)!;
   };
-  const play = async (n: string, loop = false, g?: GainNode) => {
+  const play = async (n: string, opts: { loop?: boolean; gain?: GainNode; rate?: number } = {}) => {
     if (!ctx || !master || !type) return null;
     const t = type, b = await load(t, n); if (!b || t !== type) return null;
-    const s = ctx.createBufferSource(); s.buffer = b; s.loop = loop && (n.endsWith('idle_loop') || n === 'thrust_hum'); s.connect(g ?? master); s.start(); return s;
+    const s = ctx.createBufferSource(); s.buffer = b; s.loop = !!opts.loop && LOOPS.has(n); if (opts.rate) s.playbackRate.value = opts.rate; s.connect(opts.gain ?? master); s.start(); return s;
   };
-  const startIdle = async () => { idle?.stop(); idle = null; idle = await play('idle_loop', true); };
-  const unlock = () => {
-    if (ctx) { void ctx.resume(); return; }
-    ctx = new AudioContext(); master = ctx.createGain(); master.gain.value = volume; master.connect(ctx.destination);
-    if (type) void startIdle();
+  /** Start / retarget / stop a looping slot (gain 0..1, optional playback rate); stops cleanly when level <= 0.02. */
+  const loop = (n: string, level: number, rate = 1) => {
+    if (!ctx || !master || !type) return;
+    const L = loops.get(n);
+    if (level > 0.02 && !L && !loopBusy.has(n) && exists(type, n)) { loopBusy.add(n); const g = ctx.createGain(); g.gain.value = level; g.connect(master); void play(n, { loop: true, gain: g, rate }).then((src) => { loopBusy.delete(n); if (src) loops.set(n, { src, gain: g }); else g.disconnect(); }); }
+    else if (L) { if (level <= 0.02) { L.src.stop(); L.gain.disconnect(); loops.delete(n); } else { L.gain.gain.value = level; L.src.playbackRate.value = rate; } }
   };
+  const stopLoops = () => { for (const [, L] of loops) { L.src.stop(); L.gain.disconnect(); } loops.clear(); };
+  const unlock = () => { if (ctx) { void ctx.resume(); return; } ctx = new AudioContext(); master = ctx.createGain(); master.gain.value = volume; master.connect(ctx.destination); };
   addEventListener('pointerdown', unlock, { once: false, passive: true }); addEventListener('keydown', unlock, { passive: true });
+  let thrOn = false, rollAt = 0;
   return {
-    setType(t: RobotType) { if (t === type) return; type = t; if (ctx) { for (const n of [...STEPS, 'boost', 'hit']) void load(t, n); void startIdle(); } },
+    setType(t: RobotType) { if (t === type) return; stopLoops(); type = t; thrOn = false; if (ctx) void haveP.then(() => { for (const n of [...STEPS, 'boost', 'hit', 'power_up', 'land_light', 'land_heavy']) void load(t, n); }); },
     set volume(v: number) { volume = v; if (master) master.gain.value = v; },
     step() { void play(STEPS[rr++ % 3]); },
+    /** Big surge + roar on the super-fast rocket kick (BURST start). */
     boost() { void play('boost'); },
     hit() { void play('hit'); },
-    /** Glitch thruster level 0..1: hum loop follows it, crackle one-shots while it is on. No-ops until the files exist (HAVE). */
-    glitchThrust(level: number, dt = 0) {
-      if (!ctx || !master || type !== 'glitch') return;
-      if (HAVE.has('glitch-thrust-hum')) {
-        if (level > 0.05 && !hum && !humBusy) { humBusy = true; humGain = ctx.createGain(); humGain.connect(master); void play(HOOK_FILE['glitch-thrust-hum'], true, humGain).then((s) => { hum = s; humBusy = false; }); }
-        if (humGain) humGain.gain.value = level;
-        if (level <= 0.05 && hum) { hum.stop(); hum = null; humGain = null; }
-      }
-      if (HAVE.has('glitch-thrust-crackle') && level > 0.05) { crackT -= dt; if (crackT < 0) { crackT = 0.15 + Math.random() * 0.4; void play(HOOK_FILE['glitch-thrust-crackle']); } }
+    /** One-shot when the robot spawns or is selected / activated in the garage. */
+    powerUp() { void haveP.then(() => play('power_up')); },
+    /** Landing by strength 0..1: _light below LAND_HEAVY_AT, _heavy at or above it. */
+    land(strength: number) { void play(strength >= LAND_HEAVY_AT ? 'land_heavy' : 'land_light'); },
+    /** Transformation: 'fold' start (the clip carries the clunks and the lock), 'unfold' start. */
+    transform(phase: 'fold' | 'unfold') { void play(phase === 'fold' ? 'transform' : 'unfold'); },
+    /** Thrusters (flying only): ignite one-shot when the rockets light, burn loop follows the throttle, cutoff one-shot when they stop. Glitch: hum + crackle instead. */
+    thrusters(flying: boolean, level: number, dt: number) {
+      if (!type) return;
+      if (flying && !thrOn) { thrOn = true; if (type !== 'glitch') void play('thruster_ignite'); } else if (!flying && thrOn) { thrOn = false; if (type !== 'glitch') void play('thruster_cutoff'); }
+      if (type === 'glitch') { loop('thrust_hum', flying ? Math.max(0.15, level) : 0); if (flying && level > 0.05) { crackT -= dt; if (crackT < 0) { crackT = 0.15 + Math.random() * 0.4; void play('thrust_crackle'); } } }
+      else loop('thruster_burn_loop', flying ? 0.3 + 0.7 * level : 0);
     },
-    /** Play a named hook if Echo's file exists (see HAVE); otherwise no-op (no 404). */
-    hook(name: string) { if (HAVE.has(name) && HOOK_FILE[name]) void play(HOOK_FILE[name]); },
+    /** Heavy: rolling loop while the ball moves, pitch follows speed (speed01 = ground speed / run speed; ~0.8..1.2 playback rate). */
+    roll(on: boolean, speed01: number) { loop('roll_loop', on ? Math.min(1, 0.3 + speed01) : 0, 0.8 + 0.4 * Math.min(1.2, speed01)); rollAt = on ? 1 : 0; },
+    /** Worker: hydraulic steam hiss on the four-limb landing. */
+    steam() { void play('land_hiss'); },
+    /** Glitch voxel states: 'dissolve' when the cloud starts, 'reform' when it re-forms solid; cloud_loop while it runs as a cloud. */
+    glitch(phase: 'dissolve' | 'reform') { void play(phase); },
+    cloud(on: boolean) { loop('cloud_loop', on ? 0.7 : 0); },
     special(kind: string) { if (kind !== 'none') void play(`special_${kind}`); },
-    setIdle(on: boolean) { if (!on) { idle?.stop(); idle = null; } else if (!idle) void startIdle(); },
+    get rolling() { return rollAt > 0; },
   };
 }

@@ -7,26 +7,22 @@ Every file = procedural synthesis written for this project (own work) + processe
 | scout/scout_footstep_01 | yes (build_robots_v2.py) | Kenney impactPlate_light_000.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | scout/scout_footstep_02 | yes (build_robots_v2.py) | Kenney impactPlate_light_001.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | scout/scout_footstep_03 | yes (build_robots_v2.py) | Kenney impactPlate_light_002.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
-| scout/scout_idle_loop | yes (build_robots_v2.py) | Kenney computerNoise_000.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | scout/scout_boost | yes (build_robots_v2.py) | Kenney thrusterFire_000.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | scout/scout_hit | yes (build_robots_v2.py) | Kenney impactMetal_light_002.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactPlate_light_003.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | heavy/heavy_footstep_01 | yes (build_robots_v2.py) | Kenney impactMetal_heavy_001.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | heavy/heavy_footstep_02 | yes (build_robots_v2.py) | Kenney impactMetal_heavy_002.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | heavy/heavy_footstep_03 | yes (build_robots_v2.py) | Kenney impactMetal_heavy_003.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
-| heavy/heavy_idle_loop | yes (build_robots_v2.py) | Kenney spaceEngineLow_001.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | heavy/heavy_boost | yes (build_robots_v2.py) | Kenney thrusterFire_001.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | heavy/heavy_hit | yes (build_robots_v2.py) | Kenney impactMetal_003.ogg (https://kenney.nl/assets/sci-fi-sounds); Kenney impactPlate_heavy_002.ogg (https://kenney.nl/assets/impact-sounds); Kenney lowFrequency_explosion_001.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | heavy/heavy_special_groundpound | yes (build_robots_v2.py) | Kenney impactMetal_heavy_004.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMining_000.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMining_001.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMining_002.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMining_003.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactPlate_heavy_000.ogg (https://kenney.nl/assets/impact-sounds); Kenney lowFrequency_explosion_000.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | worker/worker_footstep_01 | yes (build_robots_v2.py) | Kenney footstep_concrete_000.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactTin_medium_001.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | worker/worker_footstep_02 | yes (build_robots_v2.py) | Kenney footstep_concrete_001.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactTin_medium_002.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | worker/worker_footstep_03 | yes (build_robots_v2.py) | Kenney footstep_concrete_002.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactTin_medium_003.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
-| worker/worker_idle_loop | yes (build_robots_v2.py) | Kenney engineCircular_001.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | worker/worker_boost | yes (build_robots_v2.py) | Kenney engineCircular_003.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | worker/worker_hit | yes (build_robots_v2.py) | Kenney impactMetal_medium_002.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactTin_medium_004.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | glitch/glitch_footstep_01 | yes (build_robots_v2.py) | Kenney impactGlass_light_000.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMetal_light_001.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | glitch/glitch_footstep_02 | yes (build_robots_v2.py) | Kenney impactGlass_light_001.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMetal_light_002.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | glitch/glitch_footstep_03 | yes (build_robots_v2.py) | Kenney impactGlass_light_002.ogg (https://kenney.nl/assets/impact-sounds); Kenney impactMetal_light_003.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
-| glitch/glitch_idle_loop | yes (build_robots_v2.py) | Kenney forceField_002.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | glitch/glitch_boost | yes (build_robots_v2.py) | Kenney forceField_001.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |
 | glitch/glitch_hit | yes (build_robots_v2.py) | Kenney impactMetal_light_004.ogg (https://kenney.nl/assets/impact-sounds) | own work + CC0 1.0 |
 | glitch/glitch_special_blinkdash | yes (build_robots_v2.py) | Kenney laserLarge_002.ogg (https://kenney.nl/assets/sci-fi-sounds) | own work + CC0 1.0 |

@@ -20,7 +20,7 @@ export interface TypeDef {
   /** per-type flight: thruster look, takeoff wind-up, hover bob (thrust.ts, controller.ts, makePoser) */
   flight: FlightProfile;
   /** mocap blend + amplitude (model.ts makePoser), the run style the controller drives, and the landing style scaled by fall speed */
-  gait: GaitProfile; run: { kind: 'ball' | 'sprint' | 'gallop' | 'hop' }; land: { kind: LandKind };
+  gait: GaitProfile; run: { kind: 'ball' | 'sprint' | 'gallop' | 'cloud' }; land: { kind: LandKind };
 }
 /**
  * style picks the takeoff / hover / cruise / landing poses. Flames: core (white-hot) -> mid -> edge colours, len/width
@@ -70,7 +70,7 @@ export const TYPES: Record<RobotType, TypeDef> = {
     label: 'Glitch', blurb: 'Special. A calm human face in a voxel skin that drifts away as a cube cloud. Blink-dash (Q).', height: 2.0, sole: -0.1, tris: 30_000,
     motion: { mass: 0.6, bob: 0.6, sway: 0.5, stride: 1.15, arms: 1.2, limp: 0, hunch: 0.1, curl: 0.5, special: 'blinkdash' }, specialDur: 0.6,
     flight: { style: 'cubes', flame: 1, width: 1, core: '#d9b8ff', mid: '#8a3cff', edge: '#ff2fb0', pulse: 0, dust: 0.35, launch: 0.1, bob: 0.035, smoke: 0, plume: 'cubes' },
-    gait: { wMoc: 0.8, idleW: 0, landW: 0, maxRate: 2.2, amp: { arms: 1, legs: 1, spine: 0.9 }, bob: 0.6 }, run: { kind: 'hop' }, land: { kind: 'voxel' },
+    gait: { wMoc: 0.8, idleW: 0, landW: 0, maxRate: 2.2, amp: { arms: 1, legs: 1, spine: 0.9 }, bob: 0.6 }, run: { kind: 'cloud' }, land: { kind: 'voxel' },
     slots: { helmet: ['bare', 'crest', 'halo'], arms: ['cables', 'pistons', 'plated'], bionics: ['spine', 'vents', 'ring'], legs: ['bare', 'plated', 'pistons'], thrusters: ['none', 'jets', 'ring'], boots: ['flat', 'plated', 'hover'] },
     names: { 'helmet.bare': 'Bare head', crest: 'Cube crest', halo: 'Cube halo', cables: 'Cables', 'arms.pistons': 'Pistons', 'arms.plated': 'Plated', spine: 'Spine', vents: 'Vents', ring: 'Ring', 'thrusters.ring': 'Ring jets', 'legs.bare': 'Bare', 'legs.plated': 'Plated', 'legs.pistons': 'Pistons', none: 'None', jets: 'Jets', flat: 'Flat', 'boots.plated': 'Plated', hover: 'Hover' },
     paint: { shell: '#e8e7e4', joints: '#1a1b20', torso: '#cfc8c0', shorts: '#b4b6bb', backpack: '#2a2c33', visor: '#b38cff', decalColor: '#f4f2f6' },
