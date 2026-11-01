@@ -205,59 +205,71 @@ Automatic world audit plus load-time fixes (no per-object hand edits; the bake d
 - **Shared pure modules** (no runtime imports, so node can load them): `src/area/terrainCore.ts` (terrain decode/sample, re-exported by data.ts), `src/area/cleanup.ts` (`cleanArea`, `auditWorld`, thresholds `T`), `src/area/dockPlan.ts`.
 - **`cleanArea(area, terrain)`** (called in `scene.ts buildContent`, idempotent): clips roads outside the baked terrain grid (Sandy Hook had ~900 road pieces and 171 buildings hanging in the void), builds causeways (ground + grass shoulders, `cover` set) under short wet road runs, plans bridges for long ones (deck + ramps via `RoadPlan.y`, pier bents to the seabed), drops buildings ≥35% in water / on roads / overlapping a bigger building, fills small wet corners, terraces a floor `pad` and a foundation `fy` per building (buildings.ts, interiors.ts, collision.ts use them), raises pools on a skirt, culls trees/lamps in water, inside buildings or on road cores, builds seawall segments (marching squares on the 0 m contour where the bank is ≥1 m or a road is within 5 m) and sand beaches elsewhere.
 - **Meshes:** `src/area/waterfront.ts` (bridges, parapets, bents, seawalls: 1 draw), `src/area/docks.ts` (procedural docks from every pier/boardwalk polygon: plank-shader decking that follows the ground on land, timber pilings to the seabed, cleats, rubber bumpers, ladders, moored boats with bobbing: instanced, 7 draws). Roads accept `RoadPlan`s (`buildRoads(..., plans)`), `surfaceAt` returns deck height on bridges. `pools+piers` mesh is now `buildPools` only.
-- Test hook: `__setCam(pos, look)`; `tools/world/shots.mjs` (needs `npm run build && npm run preview`) writes `previews/map-cleanup/*.png` + `results.json`.
+- `node tools/world/audit.mjs --prev` re-measures the previous-after baseline (legacy docks, solid decks, no overpasses); `--after` is the current state.
+- Test hook: `__setCam(pos, look)`, `__ground(x, z, y)`; `tools/world/shots.mjs` (needs `npm run build && npm run preview`) writes `previews/map-cleanup/*.png` + `results.json`.
 
-### BEFORE → AFTER (issues per area)
+### BEFORE → AFTER (issues per area; follow-up run)
+BEFORE = the previous AFTER (PR #31 first run). `tools/world/audit-prev.json` re-measures it for the new checks (`--prev`: legacy docks, solid decks, no overpasses); the building rows are the recorded first-run numbers (219 sunk, 2 floating). New AFTER = `tools/world/audit-after.json`.
 | Issue | keywest | bayshore | sandyhook | newark | passaic | total |
 |---|---|---|---|---|---|---|
-| buildingInWater | 37 → 0 | 0 → 0 | 171 → 0 | 0 → 0 | 2 → 0 | **210 → 0** |
-| buildingFloating | 0 → 2 | 0 → 0 | 0 → 0 | 9 → 0 | 29 → 0 | **38 → 2** |
-| buildingSunk | 430 → 1 | 79 → 28 | 27 → 6 | 4258 → 152 | 1544 → 32 | **6338 → 219** |
-| buildingOverlap | 3 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 4 → 0 | **7 → 0** |
-| buildingOnRoad | 25 → 0 | 0 → 0 | 0 → 0 | 8 → 0 | 11 → 0 | **44 → 0** |
-| roadFloating | 79 → 0 | 13 → 0 | 818 → 0 | 0 → 0 | 12 → 0 | **922 → 0** |
-| bridgeUnsupported | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | **0 → 0** |
-| treeBadlyPlaced | 887 → 0 | 46 → 0 | 143 → 0 | 32 → 0 | 32 → 0 | **1140 → 0** |
-| propBadlyPlaced | 1 → 0 | 4 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | **5 → 0** |
-| shorelineGap | 729 → 0 | 451 → 0 | 768 → 0 | 457 → 0 | 429 → 0 | **2834 → 0** |
-| nonFlatWater | 39 → 0 | 0 → 0 | 0 → 0 | 2 → 0 | 1 → 0 | **42 → 0** |
-| pierUnsupported | 213 → 0 | 78 → 0 | 58 → 0 | 0 → 0 | 6 → 0 | **355 → 0** |
+| buildingFloating | 2 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | **2 → 0** |
+| buildingSunk | 1 → 0 | 28 → 0 | 6 → 0 | 152 → 0 | 32 → 0 | **219 → 0** |
+| bridgeNoClearance (new) | 31 → 0 | 6 → 0 | 3 → 0 | 0 → 0 | 7 → 0 | **47 → 0** |
+| overpassMissing (new) | 1 → 0 | 0 → 0 | 0 → 0 | 13 → 0 | 13 → 0 | **27 → 0** |
+| pilingThroughDeck (new) | 11062 → 0 | 3566 → 0 | 5462 → 0 | 0 → 0 | 542 → 0 | **20632 → 0** |
+| pilingMisplaced (new) | 818 → 0 | 399 → 0 | 268 → 0 | 0 → 0 | 32 → 0 | **1517 → 0** |
+| bridgeSolidBelow (new) | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | 0 → 0 | **0 → 0** |
+| every other check | 0 → 0 | | | | | **0 → 0** |
+(The first-run table above in git history lists the original raw-bake BEFORE counts. `bridgeSolidBelow` is 0 in the baseline only because old decks were <2.2 m high, so the audit cannot flag them; the old `surfaceAt` had no height argument and treated every deck as solid ground by construction.)
 
 ### Browser check (Chromium + SwiftShader WebGL2, `?mode=free`; fps not representative)
+`node tools/world/shots.mjs` (needs `npm run build && npm run preview`). Views: aerial, street, docks, bridge, under (camera beneath the span, plus a `__ground` probe: floor under the deck vs on it), overpass, seawall.
 | Area | View | Draw calls | Console errors |
 |---|---|---|---|
 | keywest | aerial | 46 | 0 |
-| keywest | duval | 30 | 0 |
+| keywest | duval | 29 | 0 |
 | keywest | docks | 28 | 0 |
 | keywest | bridge | 48 | 0 |
+| keywest | under | 28 | 0 |
+| keywest | overpass | 30 | 0 |
 | keywest | seawall | 35 | 0 |
 | bayshore | aerial | 37 | 0 |
 | bayshore | street | 29 | 0 |
 | bayshore | docks | 37 | 0 |
 | bayshore | bridge | 37 | 0 |
+| bayshore | under | 32 | 0 |
 | bayshore | seawall | 29 | 0 |
 | sandyhook | aerial | 30 | 0 |
 | sandyhook | street | 29 | 0 |
 | sandyhook | docks | 23 | 0 |
 | sandyhook | bridge | 26 | 0 |
+| sandyhook | under | 33 | 0 |
 | sandyhook | seawall | 31 | 0 |
 | newark | aerial | 31 | 0 |
 | newark | street | 34 | 0 |
-| newark | seawall | 30 | 0 |
+| newark | bridge | 31 | 0 |
+| newark | under | 31 | 0 |
+| newark | overpass | 38 | 0 |
+| newark | seawall | 31 | 0 |
 | passaic | aerial | 43 | 0 |
 | passaic | dock | 36 | 0 |
 | passaic | docks | 42 | 0 |
-| passaic | bridge | 41 | 0 |
+| passaic | bridge | 29 | 0 |
+| passaic | under | 37 | 0 |
+| passaic | overpass | 38 | 0 |
 | passaic | seawall | 31 | 0 |
 
-Max draw calls 48 in free-cam views (86–91 in the earlier robot-mode run); budget is 150. 0 console errors in every view.
+Max draw calls 48; console errors 0 in every view. Budget is 150.
 
-### Known issues / next steps
-- Audit caveats: shoreline, bridge-support and pier-support checks verify that the fix is *applied* (walls/bents/pilings exist), not how it looks. Real islands are not special-cased: a building is only flagged when ≥35% of its footprint samples are under water, so island buildings pass.
-- Remaining after: 219 buildings sunk >0.5 m (steep Newark/Passaic lots, plinth capped at 1.2 m) and 2 Key West buildings floating 0.1–0.2 m; tune `T`/pad rules in cleanup.ts.
-- No layer data in the bake, so overpasses (road over road) are not detected; add `bridge`/`layer` tags to `tools/bake` and plan them like water bridges.
-- Bridge deck is also the walk/flight floor (`surfaceAt` has no height argument), so you cannot walk or fly under a bridge; add a y argument.
+### Follow-up (this run) and known issues
+- **Sunk/floating (0 now):** pools are levelled *before* buildings are fitted (they used to lower terrain under a finished foundation, floating two Key West houses); the floor `pad` is never more than 0.45 m under the highest ground, so steep lots get a tall foundation (`fy` reaches the lowest ground) instead of sinking. The old 1.2 m plinth cap is gone. Check Newark/Passaic hillside houses by eye on a real GPU: foundations can show several metres of wall on the downhill side.
+- **Docks:** pilings now stop inside the deck slab (`deck - 0.12`, underside is `deck - 0.32`), edge ones are inset 0.32 m and verified to lie inside the deck outline, shared corners deduped, interior bents stay on the 5 m grid. Audit: `pilingThroughDeck` (top above the deck surface) and `pilingMisplaced` (outside every deck or not reaching the seabed). `pierUnsupported` now needs min(2, wet samples) pilings.
+- **Open under bridges:** `createSurface(...).surfaceAt(x, z, y)` (cleanup.ts, used by ground.ts) returns the highest surface not above `y + 0.9`; without `y` it keeps the old highest-surface behaviour. `scene.ground` / `world.floorAt` / fly controls pass the query height, so a deck is floor only when you are on it, and the terrain / sea beneath is floor under it. Water-bridge decks are now 3.0 m (roads) / 2.6 m (paths) so there is ≥1.9 m of headroom for a robot or a small boat. Audit: `bridgeNoClearance`, `bridgeSolidBelow`. Not done: the deck does not block flight from below (`blocked` only knows roofs), so a flying robot can pass up through a deck.
+- **Overpasses:** the bake already stores `b` (OSM bridge=yes) and `l` (layer>0) on roads, so no re-fetch was needed (`Road.b/l` typed in data.ts). `planOverpasses` (cleanup.ts) takes every elevated way that is not over water, finds where it crosses a ground road, and raises the deck to 5.2 m over it (3.0 m over open ground when nothing modelled crosses; footpaths without a crossing stay on the ground; ways <8 m are skipped) with smoothstep ramps from the way's ends, plus bents every ~10 m nudged off the road underneath. Same `Bridge` record (`kind: 'overpass'`), so waterfront.ts draws deck, parapets and bents. Newark 28, Passaic 15, Key West 1. Audit: `overpassMissing` (elevated road crosses a ground road but was not raised) and `bridgeUnsupported` with a 22 m bent spacing for overpasses.
+- Bridge soffits are lit from above only, so they read black from underneath. A light underside colour or an emissive floor would help.
+- Overpass columns are plain boxes; no abutment walls or crash barriers.
+- Audit caveats: shoreline, bridge-support and pier-support checks verify that the fix is *applied*, not how it looks. Islands are not special-cased: a building is only flagged when ≥35% of its footprint is under water.
 - Cleanup runs on the main thread at area build (a few hundred ms); could move into `area.worker.ts`.
-- Seawall tops are a fixed 0.5–1.3 m; the bank behind can be higher (Newark). Bake-side fix (carve/level banks in `tools/bake`) would look better than the runtime wall.
+- Seawall tops are a fixed 0.5–1.3 m; the bank behind can be higher (Newark). A bake-side bank fix would look better.
 - Existing Playwright specs (`npm run test:smoke`) time out at their 60 s `__city.ready` wait on this machine; area load takes ~40 s headless both on `main` and on this branch (measured), so it is not a regression. Run them on a faster box or raise the timeout.
 - gitleaks is not installed on this machine; run it before merge.

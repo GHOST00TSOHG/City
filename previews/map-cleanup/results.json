@@ -1,12 +1,12 @@
 {
- "generated": "2026-11-01T08:44:35.418Z",
+ "generated": "2026-11-01T09:27:57.487Z",
  "renderer": "chromium headless, SwiftShader WebGL2 (fps not representative)",
  "views": [
   {
    "area": "keywest",
    "view": "aerial",
    "drawCalls": 46,
-   "triangles": 4213702,
+   "triangles": 4180606,
    "seaLevelY": [
     0,
     0
@@ -18,8 +18,8 @@
   {
    "area": "keywest",
    "view": "duval",
-   "drawCalls": 30,
-   "triangles": 4086199,
+   "drawCalls": 29,
+   "triangles": 4052581,
    "seaLevelY": [
     0,
     0
@@ -32,7 +32,7 @@
    "area": "keywest",
    "view": "docks",
    "drawCalls": 28,
-   "triangles": 4030899,
+   "triangles": 3996987,
    "seaLevelY": [
     0,
     0
@@ -45,7 +45,7 @@
    "area": "keywest",
    "view": "bridge",
    "drawCalls": 48,
-   "triangles": 4244794,
+   "triangles": 4211698,
    "seaLevelY": [
     0,
     0
@@ -56,9 +56,41 @@
   },
   {
    "area": "keywest",
+   "view": "under",
+   "drawCalls": 28,
+   "triangles": 4045699,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "probe": {
+    "under": 0,
+    "onDeck": 2.6,
+    "deck": 2.6,
+    "gy": 0
+   },
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-under.png"
+  },
+  {
+   "area": "keywest",
+   "view": "overpass",
+   "drawCalls": 30,
+   "triangles": 4041521,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/keywest-overpass.png"
+  },
+  {
+   "area": "keywest",
    "view": "seawall",
    "drawCalls": 35,
-   "triangles": 4140445,
+   "triangles": 4107349,
    "seaLevelY": [
     0,
     0
@@ -71,7 +103,7 @@
    "area": "bayshore",
    "view": "aerial",
    "drawCalls": 37,
-   "triangles": 2661755,
+   "triangles": 2649595,
    "seaLevelY": [
     0,
     0
@@ -84,7 +116,7 @@
    "area": "bayshore",
    "view": "street",
    "drawCalls": 29,
-   "triangles": 2656940,
+   "triangles": 2644780,
    "seaLevelY": [
     0,
     0
@@ -97,7 +129,7 @@
    "area": "bayshore",
    "view": "docks",
    "drawCalls": 37,
-   "triangles": 2661755,
+   "triangles": 2649595,
    "seaLevelY": [
     0,
     0
@@ -110,7 +142,7 @@
    "area": "bayshore",
    "view": "bridge",
    "drawCalls": 37,
-   "triangles": 2661755,
+   "triangles": 2649595,
    "seaLevelY": [
     0,
     0
@@ -121,9 +153,28 @@
   },
   {
    "area": "bayshore",
+   "view": "under",
+   "drawCalls": 32,
+   "triangles": 3004784,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "probe": {
+    "under": 0,
+    "onDeck": 2.6,
+    "deck": 2.6,
+    "gy": 0
+   },
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/bayshore-under.png"
+  },
+  {
+   "area": "bayshore",
    "view": "seawall",
    "drawCalls": 29,
-   "triangles": 2654353,
+   "triangles": 2642193,
    "seaLevelY": [
     0,
     0
@@ -136,7 +187,7 @@
    "area": "sandyhook",
    "view": "aerial",
    "drawCalls": 30,
-   "triangles": 3533826,
+   "triangles": 3520258,
    "seaLevelY": [
     0,
     0
@@ -149,7 +200,7 @@
    "area": "sandyhook",
    "view": "street",
    "drawCalls": 29,
-   "triangles": 3533643,
+   "triangles": 3520075,
    "seaLevelY": [
     0,
     0
@@ -162,7 +213,7 @@
    "area": "sandyhook",
    "view": "docks",
    "drawCalls": 23,
-   "triangles": 3529245,
+   "triangles": 3515677,
    "seaLevelY": [
     0,
     0
@@ -175,7 +226,7 @@
    "area": "sandyhook",
    "view": "bridge",
    "drawCalls": 26,
-   "triangles": 3532191,
+   "triangles": 3518623,
    "seaLevelY": [
     0,
     0
@@ -186,9 +237,28 @@
   },
   {
    "area": "sandyhook",
+   "view": "under",
+   "drawCalls": 33,
+   "triangles": 5924409,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "probe": {
+    "under": 0,
+    "onDeck": 2.6,
+    "deck": 2.6,
+    "gy": 0
+   },
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/sandyhook-under.png"
+  },
+  {
+   "area": "sandyhook",
    "view": "seawall",
    "drawCalls": 31,
-   "triangles": 3533705,
+   "triangles": 3520137,
    "seaLevelY": [
     0,
     0
@@ -201,7 +271,7 @@
    "area": "newark",
    "view": "aerial",
    "drawCalls": 31,
-   "triangles": 1993402,
+   "triangles": 2003314,
    "seaLevelY": [
     0,
     0
@@ -214,7 +284,7 @@
    "area": "newark",
    "view": "street",
    "drawCalls": 34,
-   "triangles": 2030047,
+   "triangles": 2039959,
    "seaLevelY": [
     0,
     0
@@ -225,9 +295,54 @@
   },
   {
    "area": "newark",
+   "view": "bridge",
+   "drawCalls": 31,
+   "triangles": 1997700,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/newark-bridge.png"
+  },
+  {
+   "area": "newark",
+   "view": "under",
+   "drawCalls": 31,
+   "triangles": 5962863,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "probe": {
+    "under": 36.937145473607835,
+    "onDeck": 42.75468647480012,
+    "deck": 42.75468647480012,
+    "gy": 36.77714547360784
+   },
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/newark-under.png"
+  },
+  {
+   "area": "newark",
+   "view": "overpass",
+   "drawCalls": 38,
+   "triangles": 4586302,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/newark-overpass.png"
+  },
+  {
+   "area": "newark",
    "view": "seawall",
-   "drawCalls": 30,
-   "triangles": 1975562,
+   "drawCalls": 31,
+   "triangles": 2079184,
    "seaLevelY": [
     0,
     0
@@ -240,7 +355,7 @@
    "area": "passaic",
    "view": "aerial",
    "drawCalls": 43,
-   "triangles": 1218524,
+   "triangles": 1223312,
    "seaLevelY": [
     0,
     0
@@ -253,7 +368,7 @@
    "area": "passaic",
    "view": "dock",
    "drawCalls": 36,
-   "triangles": 1188526,
+   "triangles": 1193314,
    "seaLevelY": [
     0,
     0
@@ -266,7 +381,7 @@
    "area": "passaic",
    "view": "docks",
    "drawCalls": 42,
-   "triangles": 4129845,
+   "triangles": 4181115,
    "seaLevelY": [
     0,
     0
@@ -278,8 +393,8 @@
   {
    "area": "passaic",
    "view": "bridge",
-   "drawCalls": 41,
-   "triangles": 1163863,
+   "drawCalls": 29,
+   "triangles": 1093847,
    "seaLevelY": [
     0,
     0
@@ -290,9 +405,41 @@
   },
   {
    "area": "passaic",
+   "view": "under",
+   "drawCalls": 37,
+   "triangles": 4612985,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "probe": {
+    "under": 6.620468309392129,
+    "onDeck": 11.851666575670246,
+    "deck": 11.83374987840653,
+    "gy": 6.620468309392129
+   },
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-under.png"
+  },
+  {
+   "area": "passaic",
+   "view": "overpass",
+   "drawCalls": 38,
+   "triangles": 5430563,
+   "seaLevelY": [
+    0,
+    0
+   ],
+   "consoleErrors": 0,
+   "errors": [],
+   "screenshot": "previews/map-cleanup/passaic-overpass.png"
+  },
+  {
+   "area": "passaic",
    "view": "seawall",
    "drawCalls": 31,
-   "triangles": 1097026,
+   "triangles": 1120494,
    "seaLevelY": [
     0,
     0
