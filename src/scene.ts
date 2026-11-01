@@ -123,7 +123,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     // and keep trees and grass out of the pad.
     const grassMask = mask ? parseGroundMask(mask) : null;
     const lmTrees = treesOutsideLandmarks(area.trees as number[], landmarks.pads);
-    if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads, 14), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
+    if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
     const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);

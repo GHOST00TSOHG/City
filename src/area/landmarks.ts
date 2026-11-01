@@ -178,7 +178,8 @@ export function padPlanDist(pd: LandmarkPad, x: number, z: number) {
 function padDist(pd: LandmarkPad, x: number, z: number) { return padPlanDist(pd, x, z); }
 
 /** True when (x, z) lies inside a pad's flatten blend zone (used to resample roads more densely there). */
-export function inLandmarkFlattenBlend(pads: LandmarkPad[], x: number, z: number, cell: number, blend = 14) {
+export const LANDMARK_BLEND_M = 32;
+export function inLandmarkFlattenBlend(pads: LandmarkPad[], x: number, z: number, cell: number, blend = LANDMARK_BLEND_M) {
   const pad = cell * 0.75;
   for (const pd of pads) {
     if (x < pd.minX - blend - pad - 2 || x > pd.maxX + blend + pad + 2 || z < pd.minZ - blend - pad - 2 || z > pd.maxZ + blend + pad + 2) continue;
@@ -194,7 +195,7 @@ export function inLandmarkFlattenBlend(pads: LandmarkPad[], x: number, z: number
 export function flattenUnderLandmarks(
   t: { nx: number; nz: number; cell: number; x0: number; z0: number; h: Float32Array },
   pads: LandmarkPad[],
-  blend = 14,
+  blend = LANDMARK_BLEND_M,
   keepFlat?: (x: number, z: number) => boolean,
 ) {
   if (!pads.length) return 0;
