@@ -207,6 +207,13 @@ export function cleanArea(area: AreaData, t: Terrain): CleanResult {
   const rp = planRoads(roads, t, true);
   Object.assign(st, { causewaysBuilt: rp.stats.causeways, bridgesBuilt: rp.stats.bridges, bridgeMetres: Math.round(rp.stats.bridgeLen), pierBents: rp.stats.pierBents, causewayVerts: rp.stats.filledVerts });
 
+  // pools first: they level terrain, which buildings must then be fitted to
+  // 1b) pools sit on a level pad
+  for (const p of area.pools) {
+    const pts = ringOf(p); if (pts.length < 3) continue; let lo = Infinity; for (const [x, z] of pts) lo = Math.min(lo, t.heightAt(x, z));
+    const y = Math.max(lo, 0.2); vertsNear(t, pts, 1.5, (vi) => { if (t.h[vi] > y - 0.01 && t.h[vi] < y + 1.5) t.h[vi] = y; }); bump('poolsLevelled');
+  }
+
   // 2) buildings: in water -> remove (or fill a wet corner), road / building overlap -> remove, then snap to ground
   const infos = binfo(area.buildings), ri = roadIndex(roads), drop = new Set<number>();
   const tiny = (q: BInfo) => q.b.m > 0; // elevated parts float on purpose
@@ -245,17 +252,11 @@ export function cleanArea(area: AreaData, t: Terrain): CleanResult {
   for (const q of kept) { // pass B: floor + foundation from the final terrain, so nothing floats or sinks
     if (tiny(q)) { buildings.push(q.b); continue; }
     const hs = groundAt(q), lo = hs[0], hi = hs[hs.length - 1];
-    const pad = Math.max(hs[Math.floor(hs.length * 0.35)], Math.min(hi - 0.45, lo + 1.2), 0.2);
+    const pad = Math.max(hs[Math.floor(hs.length * 0.35)], hi - 0.45, 0.2); // floor never lower than 0.45 m under the highest ground: steep lots get a tall foundation (fy) instead of sinking
     buildings.push({ ...q.b, pad, fy: Math.min(lo, pad) - 0.3 });
     bump('buildingsSnapped');
   }
   st.buildingsKept = buildings.length; st.buildingsRemoved = area.buildings.length - buildings.length;
-
-  // 3) pools sit on a level pad
-  for (const p of area.pools) {
-    const pts = ringOf(p); if (pts.length < 3) continue; let lo = Infinity; for (const [x, z] of pts) lo = Math.min(lo, t.heightAt(x, z));
-    const y = Math.max(lo, 0.2); vertsNear(t, pts, 1.5, (vi) => { if (t.h[vi] > y - 0.01 && t.h[vi] < y + 1.5) t.h[vi] = y; }); bump('poolsLevelled');
-  }
 
   // 4) props: no trees or lamps in water, inside buildings or on a road core
   const bg = new Grid(32), bl = buildings.map((b) => ringOf(b.r[0] ?? []));
