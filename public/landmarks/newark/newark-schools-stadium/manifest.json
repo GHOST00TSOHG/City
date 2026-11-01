@@ -1,0 +1,56 @@
+{
+  "id": "newark-schools-stadium",
+  "name": "Newark Schools Stadium",
+  "area": "newark",
+  "file": "newark-schools-stadium.glb",
+  "lat": 40.76998321,
+  "lon": -74.18452951,
+  "headingDeg": 344.7,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": {
+    "tris": [
+      8736,
+      5116,
+      2654
+    ],
+    "switchM": [
+      150,
+      600
+    ]
+  },
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "stadium footprint, pitch, track, bleachers, ticket building, support building, baseball fields",
+      "source": "https://www.openstreetmap.org/way/446152545",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "two metal bleacher sections, 5,600 seats, 2011 stadium on the 1925 site",
+      "source": "https://en.wikipedia.org/wiki/Newark_Schools_Stadium",
+      "author": "Wikipedia contributors",
+      "license": "CC BY-SA 4.0"
+    },
+    {
+      "what": "30-foot arches along Bloomfield Avenue and a clock tower with the ticket office",
+      "source": "https://www.nj.com/sports/njsports/2009/07/construction_of_new_super_site.html",
+      "author": "The Star-Ledger / NJ.com",
+      "license": "published description; dimensions only, no image used"
+    },
+    {
+      "what": "arched columns, clock tower and ticket booth, 5,600 seats, synthetic field",
+      "source": "https://www.eiassoc.com/project/newark-schools-stadium/",
+      "author": "EI Associates",
+      "license": "published project description; no image used"
+    },
+    {
+      "what": "400 metre track, arch-wall entrance, home and away bleachers, ticket office",
+      "source": "https://www.epicbuilds.com/portfolio/newark-public-schools-stadium/",
+      "author": "Epic Management",
+      "license": "published project description; no image used"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}

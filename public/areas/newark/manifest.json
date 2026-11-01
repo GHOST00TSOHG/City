@@ -1,50 +1,51 @@
 {
   "area": "newark",
   "grid": {
-    "nx": 275,
-    "nz": 404,
+    "nx": 370,
+    "nz": 641,
     "m": 8
   },
-  "waterPolys": 9,
+  "waterPolys": 14,
   "counts": {
-    "buildings": 10249,
-    "roads": 1860,
-    "pools": 2,
-    "piers": 0,
-    "trees": 17874,
-    "treesMapped": 131,
-    "treesStreet": 3434,
-    "treesScattered": 14309,
-    "lamps": 2630,
-    "lampsInferred": 2555
+    "buildings": 16160,
+    "roads": 5558,
+    "pools": 4,
+    "piers": 18,
+    "trees": 31932,
+    "treesMapped": 154,
+    "treesStreet": 7081,
+    "treesScattered": 24697,
+    "lamps": 5642,
+    "lampsInferred": 5567
   },
   "buildingSources": {
-    "osm": 7866,
-    "overture": 2383,
-    "parts": 1,
-    "outlinesReplacedByParts": 1
+    "osm": 13639,
+    "overture": 2521,
+    "parts": 26,
+    "outlinesReplacedByParts": 12
   },
   "masks": "none",
   "heightSource": {
-    "default": 2375,
-    "overture": 6852,
-    "roof:flat-fallback": 397,
-    "levels:tag": 1022
+    "overture": 10290,
+    "roof:flat-fallback": 681,
+    "default": 4218,
+    "levels:tag": 1643,
+    "height:tag": 9
   },
   "roofs": {
-    "gabled": 7260,
-    "hipped": 1960,
-    "flat": 938,
-    "skillion": 91
+    "flat": 2292,
+    "gabled": 11043,
+    "hipped": 2629,
+    "skillion": 196
   },
   "sizes": {
     "area.json": {
-      "bytes": 2387126,
-      "gzip": 709525
+      "bytes": 4205000,
+      "gzip": 1277919
     },
     "terrain.bin": {
-      "bytes": 333324,
-      "gzip": 93309
+      "bytes": 711534,
+      "gzip": 210106
     }
   }
 }

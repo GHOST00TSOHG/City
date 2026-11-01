@@ -1,0 +1,58 @@
+{
+  "id": "branch-brook-park-pavilion",
+  "name": "Ballantine Gate",
+  "area": "newark",
+  "file": "branch-brook-park-pavilion.glb",
+  "lat": 40.771081,
+  "lon": -74.173518,
+  "headingDeg": 111.7,
+  "scale": 1.0,
+  "elevationM": null,
+  "lod": { "tris": [5772, 2100, 2100], "switchM": [150, 600] },
+  "footprint": [
+    [40.77126964, -74.17346509],
+    [40.77091641, -74.1736507],
+    [40.77088695, -74.17355294],
+    [40.77124017, -74.17336734]
+  ],
+  "fictional": false,
+  "attribution": [
+    {
+      "what": "Lake Street and Ballantine Parkway corner",
+      "source": "https://www.openstreetmap.org/way/1049904856",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "Ballantine Parkway bearing into the park",
+      "source": "https://www.openstreetmap.org/way/157547170",
+      "author": "OpenStreetMap contributors",
+      "license": "ODbL"
+    },
+    {
+      "what": "gate 40 ft wide and 11 ft high, two one-story brick and limestone pavilions",
+      "source": "https://branchbrookpark.org/uploads/1/3/1/7/131747681/essex_county_branch_brook_park_-_national_registrar_of_historic_places_inventory_nomination_form_nov1980.pdf",
+      "author": "National Register of Historic Places nomination, Branch Brook Park (November 1980)",
+      "license": "public domain"
+    },
+    {
+      "what": "pedestrian arches, plinth, belt courses, eave overhang, hip roofs",
+      "source": "https://branchbrookpark.org/uploads/1/3/1/7/131747681/bbp_clr_vol4_2_-_structures_in_the_park.pdf",
+      "author": "Branch Brook Park Cultural Landscape Report, Volume 4 part 2 (2005), section 25",
+      "license": "published report"
+    },
+    {
+      "what": "street-face reference photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Ballantine_gate_BBPk_jeh.JPG",
+      "author": "Jim.henderson",
+      "license": "CC0"
+    },
+    {
+      "what": "street-face reference photo",
+      "source": "https://commons.wikimedia.org/wiki/File:Ballantine_Gates_@_Branch_Brook_Park.JPG",
+      "author": "Dinopup",
+      "license": "CC BY-SA 3.0"
+    }
+  ],
+  "modelLicense": "Own work by Jonn (BlvckFish), licensed to the City project"
+}

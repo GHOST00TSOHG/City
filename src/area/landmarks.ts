@@ -18,6 +18,8 @@ export interface LandmarkManifest {
 }
 /** World-space xz outline a landmark claims; generated buildings that touch it (plus margin) are not built. */
 export interface LandmarkFootprint { id: string; pts: [number, number][]; margin: number; minX: number; maxX: number; minZ: number; maxZ: number }
+/** World-space pad a landmark stands on: its plan outline (OSM footprint or rotated model box) and the height its base sits at. */
+export interface LandmarkPad { id: string; pts: [number, number][]; y: number; minX: number; maxX: number; minZ: number; maxZ: number }
 /** World-space collision triangles (flat xyz triples) from each landmark's <slug>_COL mesh. */
 export interface LandmarkCollider { tris: Float32Array; minX: number; maxX: number; minZ: number; maxZ: number }
 
@@ -29,11 +31,11 @@ let index: Promise<Record<string, string[]>> | null = null;
 /** Area origins come from the baked area manifest (same point the bake projected from). */
 export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer) {
   const group = new THREE.Group(); group.name = 'landmarks';
-  const colliders: LandmarkCollider[] = [], footprints: LandmarkFootprint[] = [];
-  if (!origin) return { group, colliders, footprints };
+  const colliders: LandmarkCollider[] = [], footprints: LandmarkFootprint[] = [], pads: LandmarkPad[] = [];
+  if (!origin) return { group, colliders, footprints, pads };
   index ??= fetch(BASE + 'landmarks/index.json').then((r) => (r.ok ? r.json() : {}), () => ({}));
   const slugs = (await index)[areaId] ?? [];
-  if (!slugs.length) return { group, colliders, footprints };
+  if (!slugs.length) return { group, colliders, footprints, pads };
   ktx2 ??= new KTX2Loader().setTranscoderPath(BASE + 'basis/').detectSupport(renderer);
   const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
   const k = (Math.PI / 180) * R, c = Math.cos((origin.lat * Math.PI) / 180);
@@ -58,23 +60,76 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       lod.scale.setScalar(m.scale ?? 1);
       const x = (m.lon - origin.lon) * k * c, z = -(m.lat - origin.lat) * k;
       lod.position.set(x, 0, z); lod.updateMatrixWorld(true);
-      // Sit on the lowest ground under the footprint (origin = lowest street-side point, spec §1).
       const box = new THREE.Box3().setFromObject(levels[0]);
-      let y = Infinity;
-      for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) y = Math.min(y, terrain.heightAt(sx, sz));
-      lod.position.y = m.elevationM ?? Math.max(y, 0); lod.updateMatrixWorld(true);
+      let groundY = Infinity;
+      for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) groundY = Math.min(groundY, terrain.heightAt(sx, sz));
+      const baseY = m.elevationM ?? Math.max(groundY, 0);
+      lod.position.y = baseY; lod.updateMatrixWorld(true);
+      tuneLandmarkMaterials(lod, m.id);
+      if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
       group.add(lod);
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
-      if (m.cullMarginM !== false) {
-        const pts: [number, number][] = m.footprint?.length! >= 3
+      const pts: [number, number][] = m.footprint?.length! >= 3
           ? m.footprint!.map(([la, lo]) => [(lo - origin.lon) * k * c, -(la - origin.lat) * k])
           : ([[local.min.x, local.min.z], [local.max.x, local.min.z], [local.max.x, local.max.z], [local.min.x, local.max.z]] as const)
               .map(([px, pz]) => { const v = new THREE.Vector3(px, 0, pz).applyMatrix4(lod.matrixWorld); return [v.x, v.z] as [number, number]; });
-        footprints.push(makeFootprint(m.id, pts, Math.max(0, m.cullMarginM ?? 4)));
-      }
+      // the pad is the union of the outline and the model's own plan box (a tower or steps can overhang an OSM outline)
+      const boxPts = ([[local.min.x, local.min.z], [local.max.x, local.min.z], [local.max.x, local.max.z], [local.min.x, local.max.z]] as const)
+        .map(([px, pz]) => { const v = new THREE.Vector3(px, 0, pz).applyMatrix4(lod.matrixWorld); return [v.x, v.z] as [number, number]; });
+      const f = makeFootprint(m.id, pts, 0), fb = makeFootprint(m.id, boxPts, 0);
+      pads.push({ id: m.id, pts: boxPts, y: baseY, minX: Math.min(f.minX, fb.minX), maxX: Math.max(f.maxX, fb.maxX), minZ: Math.min(f.minZ, fb.minZ), maxZ: Math.max(f.maxZ, fb.maxZ) });
+      if (m.cullMarginM !== false) footprints.push(makeFootprint(m.id, pts, Math.max(0, m.cullMarginM ?? 4)));
     } catch (e) { console.warn('[City] landmark failed', areaId, slug, e); }
   }
-  return { group, colliders, footprints };
+  return { group, colliders, footprints, pads };
+}
+
+/** Night readability tweaks for landmark glTF materials (emissive-* slots). */
+function tuneLandmarkMaterials(root: THREE.Object3D, id: string) {
+  const lampBoost = id === 'newark-schools-stadium' ? 1.2 : 1 // glb lamp emission is already doubled (f7c3be6);
+  root.traverse((n) => {
+    const mesh = n as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    for (const mat of mats) {
+      const m = mat as THREE.MeshStandardMaterial;
+      if (!m?.emissive) continue;
+      const name = m.name ?? '';
+      if (name === 'emissive-lamp') {
+        m.emissiveIntensity = (m.emissiveIntensity || 1) * lampBoost;
+        m.emissive.multiplyScalar(1.15);
+      } else if (name === 'emissive-windows') m.emissiveIntensity = (m.emissiveIntensity || 1) * 1.1;
+    }
+  });
+}
+
+/** Flood banks: lamp-head vertices of LOD0 (above 12 m) clustered on a 30 m grid, one point light per cluster
+ *  (max 6), parented to the LOD object itself so the lights never pop when the mesh level switches. */
+function attachStadiumFloodLights(lod: THREE.Object3D) {
+  const lod0 = lod.children.find((c) => /_LOD0$/.test(c.name)) ?? lod;
+  lod.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(lod.matrixWorld).invert(), v = new THREE.Vector3();
+  const cells = new Map<string, { x: number; y: number; z: number; n: number }>();
+  lod0.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    if (!mats.some((m) => (m as THREE.Material).name === 'emissive-lamp')) return;
+    const pos = mesh.geometry.getAttribute('position'), m = new THREE.Matrix4().multiplyMatrices(inv, mesh.matrixWorld);
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(m); if (v.y < 12) continue;
+      const k = Math.round(v.x / 30) + ',' + Math.round(v.z / 30), c = cells.get(k) ?? { x: 0, y: 0, z: 0, n: 0 };
+      c.x += v.x; c.y += v.y; c.z += v.z; c.n++; cells.set(k, c);
+    }
+  });
+  const banks = [...cells.values()].sort((a, b) => b.n - a.n).slice(0, 6);
+  if (!banks.length) return;
+  const g = new THREE.Group(); g.name = 'stadium-flood-lights';
+  for (const c of banks) {
+    const light = new THREE.PointLight(0xfff1dc, 900, 160, 1.6);
+    light.position.set(c.x / c.n, c.y / c.n - 1, c.z / c.n); g.add(light);
+  }
+  lod.add(g);
 }
 
 function toCollider(mesh: THREE.Mesh, parent: THREE.Matrix4): LandmarkCollider {
@@ -161,4 +216,95 @@ function polysTouch(a: P[], b: P[], margin: number) {
     }
   }
   return false;
+}
+
+/** Drops generated trees (flat stride-5 array, dm) standing inside any landmark footprint, so the city's tree
+ *  scatter never grows through a landmark's stands, roof or field. Runs once per area build. */
+export function cullTreesUnderLandmarks(trees: number[], fps: LandmarkFootprint[]) {
+  if (!fps.length) return trees;
+  const out: number[] = [];
+  for (let i = 0; i + 4 < trees.length; i += 5) {
+    const x = trees[i] / 10, z = trees[i + 1] / 10;
+    const hit = fps.some((f) => x >= f.minX && x <= f.maxX && z >= f.minZ && z <= f.maxZ && inPoly(f.pts, x, z));
+    if (!hit) out.push(trees[i], trees[i + 1], trees[i + 2], trees[i + 3], trees[i + 4]);
+  }
+  return out;
+}
+
+/** Signed-ish distance (m) from (x, z) to a pad outline: <= 0 inside, else the distance to the nearest edge. */
+export function padPlanDist(pd: LandmarkPad, x: number, z: number) {
+  if (inPoly(pd.pts, x, z)) return 0;
+  let d = Infinity; for (let i = 0, j = pd.pts.length - 1; i < pd.pts.length; j = i++) d = Math.min(d, segDist2([x, z], pd.pts[j], pd.pts[i]));
+  return Math.sqrt(d);
+}
+function padDist(pd: LandmarkPad, x: number, z: number) { return padPlanDist(pd, x, z); }
+
+/** True when (x, z) lies inside a pad's flatten blend zone (used to resample roads more densely there). */
+export const LANDMARK_BLEND_M = 32;
+export function inLandmarkFlattenBlend(pads: LandmarkPad[], x: number, z: number, cell: number, blend = LANDMARK_BLEND_M) {
+  const pad = cell * 0.75;
+  for (const pd of pads) {
+    if (x < pd.minX - blend - pad - 2 || x > pd.maxX + blend + pad + 2 || z < pd.minZ - blend - pad - 2 || z > pd.maxZ + blend + pad + 2) continue;
+    if (padPlanDist(pd, x, z) - pad < blend) return true;
+  }
+  return false;
+}
+
+/** Flattens the terrain heightfield under every landmark pad to the landmark's base height (so it is neither buried in a slope nor
+ *  floating over a dip), blending back to the original ground over `blend` m around it. Run once per area load, BEFORE the terrain
+ *  mesh, roads, trees and grass are built (they all sample the same heights). Idempotent: running it twice gives the same heights.
+ *  `keepFlat` skips cells (e.g. baked road mask) so pavement is re-draped on the original bed instead of tearing away from lowered ground. */
+export function flattenUnderLandmarks(
+  t: { nx: number; nz: number; cell: number; x0: number; z0: number; h: Float32Array },
+  pads: LandmarkPad[],
+  blend = LANDMARK_BLEND_M,
+  keepFlat?: (x: number, z: number) => boolean,
+) {
+  if (!pads.length) return 0;
+  const orig = t.h.slice(), pad = t.cell * 0.75;
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const pd of pads) { minX = Math.min(minX, pd.minX); maxX = Math.max(maxX, pd.maxX); minZ = Math.min(minZ, pd.minZ); maxZ = Math.max(maxZ, pd.maxZ); }
+  const ix0 = Math.max(0, Math.floor((minX - blend - pad - t.x0) / t.cell)), ix1 = Math.min(t.nx - 1, Math.ceil((maxX + blend + pad - t.x0) / t.cell));
+  const iz0 = Math.max(0, Math.floor((minZ - blend - pad - t.z0) / t.cell)), iz1 = Math.min(t.nz - 1, Math.ceil((maxZ + blend + pad - t.z0) / t.cell));
+  let n = 0;
+  for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+    const x = t.x0 + ix * t.cell, z = t.z0 + iz * t.cell, i = iz * t.nx + ix;
+    if (keepFlat?.(x, z)) continue;
+    let wMax = 0, yFlat = orig[i];
+    for (const pd of pads) {
+      if (x < pd.minX - blend - pad || x > pd.maxX + blend + pad || z < pd.minZ - blend - pad || z > pd.maxZ + blend + pad) continue;
+      const d = padPlanDist(pd, x, z) - pad;
+      if (d >= blend) continue;
+      const w = d <= 0 ? 1 : 1 - (d / blend) * (d / blend) * (3 - 2 * (d / blend));
+      if (w > wMax) { wMax = w; yFlat = pd.y; }
+    }
+    if (wMax > 0) { t.h[i] = orig[i] + (yFlat - orig[i]) * wMax; n++; }
+  }
+  return n;
+}
+
+/** Drops trees whose trunk stands inside (or within `margin` m of) a landmark pad. `flat` is the baked tree list (5 numbers per tree, x / z in dm). */
+export function treesOutsideLandmarks(flat: number[], pads: LandmarkPad[], margin = 3) {
+  if (!pads.length) return { flat, removed: 0 };
+  const out: number[] = []; let removed = 0;
+  for (let i = 0; i + 4 < flat.length; i += 5) {
+    const x = flat[i] / 10, z = flat[i + 1] / 10;
+    if (pads.some((pd) => x > pd.minX - margin && x < pd.maxX + margin && z > pd.minZ - margin && z < pd.maxZ + margin && padDist(pd, x, z) <= margin)) { removed++; continue; }
+    out.push(flat[i], flat[i + 1], flat[i + 2], flat[i + 3], flat[i + 4]);
+  }
+  return { flat: out, removed };
+}
+
+/** Marks every grass-mask cell inside (or within `margin` m of) a landmark pad as blocked, so no grass grows through the floor. */
+export function blockGrassUnderLandmarks(mask: { nx: number; nz: number; cell: number; x0: number; z0: number; bits: Uint8Array }, pads: LandmarkPad[], margin = 1.5) {
+  let n = 0;
+  for (const pd of pads) {
+    const ix0 = Math.max(0, Math.floor((pd.minX - margin - mask.x0) / mask.cell)), ix1 = Math.min(mask.nx - 1, Math.ceil((pd.maxX + margin - mask.x0) / mask.cell));
+    const iz0 = Math.max(0, Math.floor((pd.minZ - margin - mask.z0) / mask.cell)), iz1 = Math.min(mask.nz - 1, Math.ceil((pd.maxZ + margin - mask.z0) / mask.cell));
+    for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
+      if (padDist(pd, mask.x0 + ix * mask.cell, mask.z0 + iz * mask.cell) > margin + mask.cell * 0.71) continue;
+      const j = iz * mask.nx + ix; mask.bits[j >> 3] |= 1 << (j & 7); n++;
+    }
+  }
+  return n;
 }

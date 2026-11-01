@@ -1,6 +1,6 @@
 # Cathedral Basilica of the Sacred Heart
 
-Exterior only. Area `newark`. Hero triangle budget. Built 2026-10-31.
+Exterior only. Area `newark`. Hero triangle budget. First build 2026-10-31. Detail upgrade 2026-11-01.
 
 French Gothic Revival church by Branch Brook Park. Twin west towers with pyramidal roofs, a copper fleche over the crossing, a west rose and two transept roses, nave and aisle roofs, and a chevet. The rectory and the north annex on the OSM ring are not part of this mesh.
 
@@ -8,26 +8,25 @@ French Gothic Revival church by Branch Brook Park. Twin west towers with pyramid
 
 | LOD | Triangles | Materials |
 |---|---|---|
-| LOD0 | 16727 | 2 (`cathedral-basilica-sacred-heart-main`, `emissive-windows`) |
-| LOD1 | 7932 | 2, same textures |
-| LOD2 | 1464 | 2, same textures |
+| LOD0 | 27653 | 4 |
+| LOD1 | 8062 | 4 |
+| LOD2 | 1606 | 4 |
 
-`cathedral-basilica-sacred-heart_COL` sits under LOD0: 484 triangles, no material. Do not draw it.
+Materials, shared by every LOD: `cathedral-basilica-sacred-heart-main` (sandstone), `cathedral-basilica-sacred-heart-metal` (copper and bronze), `emissive-windows` (transmissive stained glass), `emissive-lamp` (warm uplight fixtures).
 
-Textures: one 2048 atlas (baseColor, normal, ORM) plus one 1024 stained-glass image used as baseColor and emissive. LOD1 and LOD2 reuse them. KTX2 in the glb: ETC1S on the colour and glass images, UASTC on the normal and on the ORM (occlusion in R, roughness in G, metal in B). gltf-transform 4.5 keeps non-colour data on UASTC so the metal and roughness channels stay intact.
+`cathedral-basilica-sacred-heart_COL` sits under LOD0: 484 triangles, position only (no normals, no UVs, no material). Do not draw it.
 
-Files: `.glb` 0.94 MB, `.blend` 0.69 MB. Source PNGs are in `art/landmarks/newark/cathedral-basilica-sacred-heart/textures/`.
+Textures: one 2048 atlas (baseColor ETC1S, normal UASTC, ORM ETC1S) plus one 1024 stained-glass image (ETC1S, baseColor and emissive). LOD1 and LOD2 reuse them. The sandstone albedo carries weathering and colour variation. Metal uses the copper and bronze parts of the same atlas with metallic 1 and roughness 0.34. Glass transmission is 0.72, roughness 0.08, emission strength 1.15 so the colour reads as light from inside the reveal.
 
-Nodes: `cathedral-basilica-sacred-heart_LOD0`, `_LOD1`, `_LOD2`. Children `masonry-lodN` and `windows-lodN`. Collision is `cathedral-basilica-sacred-heart_COL`.
 
-Window emission strength in the glb is 0.45. Night glow is driven by the material name `emissive-windows`.
+Nodes: `cathedral-basilica-sacred-heart_LOD0`, `_LOD1`, `_LOD2`. Children `masonry-lodN`, `metal-lodN`, `windows-lodN`, `uplights-lodN`. Collision is `cathedral-basilica-sacred-heart_COL`.
 
 ## Placement
 
 - lat `40.75489715`, lon `-74.17846736`
-- headingDeg `201.7` (west front faces south-southwest)
+- headingDeg `196.35` (west front faces south-southwest, along the OSM long axis)
 
-The OSM outer way's long axis lies 16.25° east of true north, apse toward the north-northeast. The central west wall, between the tower chamfers, faces 201.7°. The origin is the centre of the 365 ft mass from those tower tips, on that axis. See `art/landmarks/newark/cathedral-basilica-sacred-heart/refs.md`.
+The OSM outer way's long axis lies about 16.25° east of true north, so the front, opposite that axis, faces 196.35°. An earlier 201.7° followed a short chamfer on the west wall and sat about 5.4° off the building. The origin is still the centre of the 365 ft mass from the west tower tips. See `art/landmarks/newark/cathedral-basilica-sacred-heart/refs.md`.
 
 ## Sources
 

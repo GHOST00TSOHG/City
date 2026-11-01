@@ -40,7 +40,13 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | CI: Playwright smoke in CI | bot/websmith-ci | (unclaimed) | open | |
 | Jonn directions for the rebuild | bot/websmith-jonn-directions | Grok Bot (Websmith) | PR open | 2026-10-31 |
-| Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-10-31 |
+| Landmark: Cathedral Basilica of the Sacred Heart (`newark` / `cathedral-basilica-sacred-heart`) | jonn/newark-cathedral-basilica | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | merged | 2026-10-31 |
+| Landmark upgrade: Cathedral Basilica stonework, glass, night, heading | jonn/newark-cathedral-basilica-upgrade | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
+| Landmark: Newark Schools Stadium takeover fixes (PR #19 round 2) | bot/websmith-stadium | Grok Bot (Websmith) | PR open | 2026-11-01 |
+| Landmark: Branch Brook Park set — Laurel Wood Boulder Bridge (`branch-brook-park-bridge`) and Ballantine Gate entrance pavilions (`branch-brook-park-pavilion`) | jonn/newark-branch-brook-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
+| Landmark: Branch Brook Park Octagon Shelter (`newark` / `branch-brook-park-octagon-shelter`) | jonn/newark-branch-brook-park-octagon-shelter | Grok Bot for Jonn (BlvckFish) | PR open | 2026-11-01 |
+| Landmark: clear vegetation + flatten terrain under footprints | bot/websmith-landmarks-terrain | Grok Bot (Websmith) | PR open | 2026-11-01 |
+| Landmark: Military Park, Wars of America + park pavilion (`newark` / `wars-of-america`, `military-park-pavilion`) | jonn/newark-military-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
@@ -203,3 +209,7 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 - Height fix: `buildRoads(...).surface.surfaceAt(x,z)` (segment spatial hash) returns the asphalt/sidewalk top; `ground()` and `world.floorAt` use it, so the robot/camera stand on the road instead of the terrain under it. `__ground(x,z)` for tests; `tests/roads.spec.ts`.
 ## Palms (bot/websmith-no-nj-palms)
 - Bug: bake scatter gave wood/wetland cells a 25% palm chance even with `palmShare: 0`. Fixed in `tools/bake/bake.mjs`; runtime guard `buildTrees(..., palms = id === 'keywest')` turns any baked palm in NJ into broadleaf (no re-bake needed). `stats.palms` / `__stats()`; `tests/palms.spec.ts`.
+## Landmarks terrain (bot/websmith-landmarks-terrain)
+- `src/area/landmarks.ts`: each landmark gets a world-space **pad** (rotated model plan box); `flattenUnderLandmarks` levels the heightfield to the pad base with a 14 m smooth blend; `treesOutsideLandmarks` and `blockGrassUnderLandmarks` keep scatter off the pad (+ margin). Placement uses `position.y = baseY - box.min.y` so the mesh sits on the flattened ground, not buried or floating.
+- **Roads / paving:** flatten skips ground-mask road cells and baked paved landcover; `buildRoads` resamples every 2 m inside the pad blend zone; `redrapeRoadGeometry` snaps the road mesh to the height query after flatten.
+- `tools/shots-landmarks.mjs`: WebKit before/after stills (stadium origin, cathedral, street).
