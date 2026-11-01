@@ -1,0 +1,52 @@
+{
+  "area": "metro",
+  "grid": {
+    "nx": 528,
+    "nz": 766,
+    "m": 8
+  },
+  "waterPolys": 22,
+  "counts": {
+    "buildings": 28568,
+    "roads": 8310,
+    "pools": 13,
+    "piers": 27,
+    "trees": 52580,
+    "treesMapped": 267,
+    "treesStreet": 12266,
+    "treesScattered": 40047,
+    "lamps": 9346,
+    "lampsInferred": 9259
+  },
+  "buildingSources": {
+    "osm": 25802,
+    "overture": 2766,
+    "parts": 31,
+    "outlinesReplacedByParts": 16
+  },
+  "masks": "none",
+  "heightSource": {
+    "overture": 19307,
+    "roof:flat-fallback": 1126,
+    "default": 8391,
+    "levels:tag": 555,
+    "height:tag": 9,
+    "overture:floors": 306
+  },
+  "roofs": {
+    "flat": 3741,
+    "gabled": 20021,
+    "hipped": 4358,
+    "skillion": 448
+  },
+  "sizes": {
+    "area.json": {
+      "bytes": 7143156,
+      "gzip": 2149509
+    },
+    "terrain.bin": {
+      "bytes": 1213368,
+      "gzip": 352365
+    }
+  }
+}
