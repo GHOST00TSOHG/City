@@ -226,7 +226,7 @@ def fx_dressing(shards):
     import bmesh
     rnd = random.Random(3)
     cy = mat('ghost_c', (0, 0, 0), 0.5, 0, (0.0, 0.9, 1.0), 3); mg = mat('ghost_m', (0, 0, 0), 0.5, 0, (1.0, 0.05, 0.6), 3)
-    for o in []:  # v3: RGB split moved to post (glitch_post.py) / runtime shader
+    for o in []:  # v3: RGB split removed (old slice effect dropped in v5b)
         for m, dx in ((cy, 0.012), (mg, -0.012)):
             g = o.copy(); g.data = o.data.copy(); g.data.materials.clear(); g.data.materials.append(m)
             for p in g.data.polygons: p.material_index = 0

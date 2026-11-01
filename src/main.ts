@@ -81,7 +81,7 @@ createScene(canvas, areaId).then(async (app) => {
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
   const sfx = createRobotAudio();
-  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setSpecial(d.motion.special, d.specialDur); sfx.setType(t); };
+  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setSpecial(d.motion.special, d.specialDur); ctl.setFlight(d.flight.launch); thrust.configure(d.flight); sfx.setType(t); };
   applyType(save.robot.type);
   robot.onSwap = () => { thrust.attach(robot.nozzles); joints = robot.joints; };
   idle(() => TYPE_KEYS.forEach((t) => robot.preload(t)));

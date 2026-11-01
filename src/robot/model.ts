@@ -38,7 +38,9 @@ export interface RobotModel {
   animate(s: PoseInput, dt: number): void;
   dispose(): void;
 }
-export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number; fist?: number; special?: number; damage?: number }
+export interface PoseInput { anim: RobotAnim; phase: number; speed: number; lean: number; bank: number; crouch: number; t: number; fist?: number; special?: number; damage?: number;
+  /** flight: launch = take-off wind-up 0..1 (crouch), flyT = s since the rockets lit, thrust = throttle 0..1 */
+  launch?: number; flyT?: number; thrust?: number }
 /** Per-type body mechanics (types.ts TYPES[t].motion). mass slows blends and deepens the plant; sway = hip roll; limp = right-leg hitch. */
 export interface MotionProfile { mass: number; bob: number; sway: number; stride: number; arms: number; limp: number; hunch: number; curl: number; special: 'none' | 'groundpound' | 'blinkdash' }
 export const DEFAULT_MOTION: MotionProfile = { mass: 1, bob: 1, sway: 1, stride: 1, arms: 1, limp: 0, hunch: 0, curl: 0.35, special: 'none' };
@@ -48,9 +50,10 @@ export const BONES = ['Hips', 'Spine', 'Head', 'LeftArm', 'LeftForeArm', 'RightA
 export type Bones = Partial<Record<(typeof BONES)[number], THREE.Object3D>> & Record<string, THREE.Object3D | undefined>;
 
 /** Procedural pose: Euler targets (x pitch, z roll) per bone; damped so state changes blend. */
-export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION) {
+export type FlightStyle = 'scout' | 'heavy' | 'medic' | 'cubes' | 'generic';
+export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION, style: FlightStyle = 'generic') {
   const fingers = Object.keys(b).filter((n) => /^(Left|Right)F\d_\d$/.test(n)) as (keyof Bones)[];
-  let fistC = 0;
+  let fistC = 0, openC = 0;
   const rest = new Map<THREE.Object3D, THREE.Quaternion>();
   for (const o of Object.values(b)) if (o) rest.set(o, o.quaternion.clone());
   const cur = new Map<string, THREE.Vector3>(); const q = new THREE.Quaternion(), e = new THREE.Euler();
@@ -89,6 +92,44 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION) {
         lu = [-2.0, 0, 0]; ru = [-2.0, 0, 0]; ll = [2.3, 0, 0]; rl = [2.3, 0, 0]; spine = [0.7, 0, 0]; head = [0.4, 0, 0];
         la = [-1.2, 0, 0.3]; ra = [-1.2, 0, -0.3]; lf = [-1.6, 0, 0]; rf = [-1.6, 0, 0]; break;
     }
+    // per-type flight: take-off wind-up, hover and cruise poses (generic poses above are the fallback)
+    const air = p.anim === 'hover' || p.anim === 'fly', fl = p.flyT ?? 0, th = p.thrust ?? 0;
+    let open = 0;
+    if ((p.launch ?? 0) > 0) { // crouch-and-launch: Heavy sinks deep and slow, the others dip
+      const d = style === 'heavy' ? 1 : style === 'scout' ? 0.45 : 0.6, cr = Math.sin(Math.min(1, p.launch!) * Math.PI * 0.5) * d;
+      lu = [-1.0 * cr, 0, 0.12]; ru = [-1.0 * cr, 0, -0.12]; ll = [1.7 * cr, 0, 0]; rl = [1.7 * cr, 0, 0]; lft = [-0.7 * cr, 0, 0]; rft = lft.slice();
+      spine = [0.5 * cr, 0, 0]; la = [0.5 * cr, 0, 0.35 * cr + 0.1]; ra = [0.5 * cr, 0, -0.35 * cr - 0.1]; bob = -0.34 * cr;
+      if (style === 'medic') open = p.launch!;
+    } else if (air && style !== 'generic') {
+      const hv = p.anim === 'hover', w = Math.sin(p.t * 2.4), up = Math.max(0, 1 - fl / 0.5); // up = lift-off burst just after launch
+      if (style === 'scout') { // agile: leans into it, one knee tucked, arms out like a skier; banks hard
+        if (hv) { lu = [-0.5, 0, 0.06]; ru = [0.1, 0, -0.06]; ll = [1.0, 0, 0]; rl = [0.45, 0, 0]; la = [0.25, 0, 0.7 + w * 0.05]; ra = [0.25, 0, -0.7 - w * 0.05]; lf = [-0.5, 0, 0]; rf = [-0.5, 0, 0]; spine = [0.22, 0, 0]; bob = w * 0.03; }
+        else { lu = [0.1, 0, 0.04]; ru = [-0.35, 0, -0.04]; ll = [0.3, 0, 0]; rl = [0.8, 0, 0]; la = [0.5, 0, 0.35]; ra = [0.5, 0, -0.35]; lf = [-0.2, 0, 0]; rf = [-0.2, 0, 0]; head = [-0.9 * p.lean, 0, 0]; }
+        spine[2] += p.bank * 0.6; head[2] -= p.bank * 0.3; la[2] += p.bank * 0.4; ra[2] += p.bank * 0.4;
+        if (up > 0) { lu[0] -= 0.6 * up; ll[0] += 0.9 * up; ru[0] -= 0.6 * up; rl[0] += 0.9 * up; }
+      } else if (style === 'heavy') { // weighty: wide stance, knees soft, fists down at the sides; slow heavy bob
+        const hb = Math.sin(p.t * 1.5);
+        lu = [-0.25, 0, 0.22]; ru = [-0.25, 0, -0.22]; ll = [0.5, 0, 0]; rl = [0.5, 0, 0]; lft = [0.25, 0, 0]; rft = [0.25, 0, 0];
+        la = [0.15, 0, 0.45]; ra = [0.15, 0, -0.45]; lf = [-0.55, 0, 0]; rf = [-0.55, 0, 0]; spine = [0.12 + hb * 0.03, 0, 0]; bob = hb * 0.09 - 0.05;
+        if (!hv) { la = [-0.4, 0, 0.35]; ra = [-0.4, 0, -0.35]; lf = [-1.1, 0, 0]; rf = [-1.1, 0, 0]; head = [-0.7 * p.lean, 0, 0]; lu = [0.05, 0, 0.18]; ru = [0.05, 0, -0.18]; ll = [0.35, 0, 0]; rl = [0.35, 0, 0]; }
+        if (up > 0) { ll[0] += 1.2 * up; rl[0] += 1.2 * up; lu[0] -= 0.7 * up; ru[0] -= 0.7 * up; }
+        spine[2] += p.bank * 0.25;
+      } else if (style === 'medic') { // upright, steady; hands open, palms down/back firing the green steering jets
+        const st = Math.sin(p.t * 1.9) * 0.04;
+        lu = [-0.12, 0, 0.06]; ru = [-0.04, 0, -0.06]; ll = [0.35, 0, 0]; rl = [0.25, 0, 0];
+        la = [0.45 + st, -0.2, 0.32 - p.bank * 0.4]; ra = [0.45 - st, 0.2, -0.32 - p.bank * 0.4]; lf = [-0.25, 0.9, 0]; rf = [-0.25, -0.9, 0];
+        spine = [0.02, 0, 0]; head = [-0.05, 0, 0]; bob = Math.sin(p.t * 1.6) * 0.02;
+        if (!hv) { la = [0.9, -0.2, 0.25]; ra = [0.9, 0.2, -0.25]; lf = [-0.1, 0.9, 0]; rf = [-0.1, -0.9, 0]; head = [-0.85 * p.lean, 0, 0]; ll = [0.3, 0, 0]; rl = [0.15, 0, 0]; }
+        open = 1;
+      } else { // Glitch: streamlined, arms close, legs together; the lower body streams away as cubes (glitch.ts)
+        const g = Math.sin(p.t * 2.1) * 0.03;
+        lu = [-0.05, 0, 0.02]; ru = [0.02, 0, -0.02]; ll = [0.2, 0, 0]; rl = [0.3, 0, 0]; lft = [0.5, 0, 0]; rft = [0.5, 0, 0];
+        la = [0.2, 0, 0.3 + g]; ra = [0.2, 0, -0.3 - g]; lf = [-0.3, 0, 0]; rf = [-0.3, 0, 0]; spine = [0.06, 0, 0]; bob = g;
+        if (!hv) { la = [0.35, 0, 0.12]; ra = [0.35, 0, -0.12]; lf = [-0.05, 0, 0]; rf = [-0.05, 0, 0]; head = [-0.9 * p.lean, 0, 0]; }
+      }
+      void th;
+    }
+    if (p.anim === 'land' && style === 'heavy') { bob *= 1.25; ll = ll.map((v) => v * 1.1); }
     // per-type mass layer: hip sway + counter-rotation, heel-to-toe roll, limp hitch, hunch, special moves
     const moving = p.anim === 'walk' || p.anim === 'run';
     if (moving) {
@@ -115,9 +156,11 @@ export function makePoser(b: Bones, M: MotionProfile = DEFAULT_MOTION) {
     set('LeftUpLeg', lu[0], lu[1], lu[2], k); set('RightUpLeg', ru[0], ru[1], ru[2], k); set('LeftLeg', ll[0], ll[1], ll[2], k); set('RightLeg', rl[0], rl[1], rl[2], k);
     set('LeftFoot', lft[0], lft[1], lft[2], k); set('RightFoot', rft[0], rft[1], rft[2], k);
     // fingers: relaxed curl in idle/walk, fist on boost / special; thumb curls less
-    const want = Math.max(p.fist ?? 0, sp > 0 ? 1 : 0, p.anim === 'fall' || p.anim === 'roll' ? 0.8 : 0);
+    // medic: open flat hands while the palm jets fire, back to fists (palms to the thighs) on landing
+    openC += (open - openC) * (1 - Math.exp(-dt * 10));
+    const want = Math.max(open ? 0 : p.fist ?? 0, sp > 0 ? 1 : 0, p.anim === 'fall' || p.anim === 'roll' ? 0.8 : 0, style === 'medic' && p.anim === 'land' ? 1 : 0);
     fistC += (want - fistC) * (1 - Math.exp(-dt * 14));
-    const cu = M.curl + (1.25 - M.curl) * fistC + (moving ? Math.sin(p.phase * 2) * 0.04 : Math.sin(p.t * 1.3) * 0.03);
+    const cu = (M.curl + (1.25 - M.curl) * fistC) * (1 - openC) - openC * 0.08 + (moving ? Math.sin(p.phase * 2) * 0.04 : Math.sin(p.t * 1.3) * 0.03);
     for (const f of fingers) { const th = (f as string).includes('F9_') /* thumb */; set(f, 0, 0, 0, 1); const o = b[f]!; o.rotateZ(((f as string)[0] === 'L' ? -1 : 1) * (th ? 0.55 : 1) * cu); } // palms face the thighs: curl toward the body midline
   };
 }

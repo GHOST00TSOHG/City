@@ -61,17 +61,18 @@ def export_kit(rtype, slots, budget=28500, screens=None, extra_meta=None):
         o.select_set(False)
     pre = {o.name: tris(o) for o in objs}; total = sum(pre.values())
     # decimate: small parts keep their shape, big shells take the cut
-    small = sum(t for t in pre.values() if t < 80); big = total - small
+    keep = lambda o: pre[o.name] < 80 or o.get('_keep')          # small parts and '_keep' parts (e.g. a face) are never decimated
+    small = sum(pre[o.name] for o in objs if keep(o)); big = total - small
     ratio = min(1.0, max(0.05, (budget - small) / max(big, 1)))
     for _ in range(3):
         if ratio >= 1: break
         for o in objs:
-            if pre[o.name] < 80: continue
+            if keep(o): continue
             m = o.modifiers.new('dec', 'DECIMATE'); m.ratio = ratio; m.use_collapse_triangulate = True
             bpy.context.view_layer.objects.active = o; o.select_set(True); bpy.ops.object.modifier_apply(modifier='dec'); o.select_set(False)
         now = sum(tris(o) for o in objs)
         if now <= budget: break
-        pre = {o.name: tris(o) for o in objs}; small = sum(t for t in pre.values() if t < 80)
+        pre = {o.name: tris(o) for o in objs}; small = sum(pre[o.name] for o in objs if keep(o))
         ratio = max(0.05, (budget - small) / max(now - small, 1))
     # regions
     regmats = {}
@@ -89,6 +90,7 @@ def export_kit(rtype, slots, budget=28500, screens=None, extra_meta=None):
         if key not in groups:
             e = bpy.data.objects.new('__'.join(key), None); sc.collection.objects.link(e)
             e.location = joint_world(o['bone']); groups[key] = e
+            bpy.context.view_layer.update()   # fresh empty: make matrix_world valid before re-parenting
         mw = o.matrix_world.copy(); o.parent = groups[key]; o.matrix_world = mw
     bpy.context.view_layer.update()
     for o in sc.objects: o.select_set(False)

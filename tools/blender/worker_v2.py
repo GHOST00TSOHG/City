@@ -1,6 +1,7 @@
-"""WORKER v3d: industrial combat mech. One scheme: olive armour, gunmetal joints, small hazard accents only.
+"""WORKER v4: combat medic / support mech. Olive armour, gunmetal joints, green heal accents (glow_m -> decalColor):
+back-mounted regen core, left forearm injector, right forearm heal emitter, green light strips, subtle green plus / pulse decals.
 Sloped/tapered armour plates with paneled insets (plate()), helmet sunk into a raised collar with a red visor slit,
-hydraulic pistons at every major joint, clawed feet, solid box-section crane with a heavy forged hook.
+hydraulic pistons at every major joint, clawed feet, sunk helmet with a red visor slit.
 Run: blender --enable-event-simulate -noaudio -P worker_v2.py -- [--fast] [--kit] [--preview]"""
 import bpy, bmesh, math, sys, os
 sys.path.insert(0, os.path.dirname(__file__))
@@ -11,12 +12,13 @@ import scout_v2 as S, addons as A
 V = Vector
 OLV = mat('armor_white', (0.05, 0.062, 0.024), 0.68, 0.08, wear=True)     # main olive armour
 YEL = mat('armor_blue', (0.036, 0.046, 0.018), 0.7, 0.1, wear=True)       # secondary olive (darker)
-ORA = mat('armor_red', (0.62, 0.36, 0.015), 0.55, wear=True)              # hazard accent ONLY (small)
+ORA = mat('armor_red', (0.03, 0.2, 0.06), 0.5, wear=True)                  # medic green accent ONLY (small)
+HEAL = mat('glow_m', (0, 0, 0), 0.3, 0, (0.15, 1.0, 0.3), 14)           # heal glow (decalColor)
 GRY = mat('armor_yellow', (0.035, 0.04, 0.047), 0.5, 0.3, wear=True)      # gunmetal sub-frame
 FR = mat('frame', (0.035, 0.037, 0.042), 0.5, 0.85)
 ST = mat('steel', (0.4, 0.4, 0.41), 0.32, 1.0)
 RUB = mat('rubber', (0.012, 0.012, 0.014), 0.85)
-LAMP = mat('glow', (0, 0, 0), 0.3, 0, (1.0, 0.55, 0.12), 14)
+LAMP = mat('glow', (0, 0, 0), 0.3, 0, (1.0, 0.12, 0.05), 14)
 LENS = mat('screen', (0, 0.01, 0.02), 0.1, 0, (1.0, 0.08, 0.02), 30)
 WORKER_SLOTS = {'helmet': ['boxcam', 'welder', 'lamp'], 'arms': ['claw', 'drill', 'welder'], 'bionics': ['tanks', 'battery', 'reel'],
                 'legs': ['cans', 'strut', 'ribbed'], 'thrusters': ['stacks', 'fans', 'rocket'], 'boots': ['stabilizer', 'wheels', 'clamp']}
@@ -67,6 +69,13 @@ def hazard(name, c, ax, half, n=4):
         x = -half[0] + (i + 0.5) * 2 * half[0] / n
         S._box(f'{name}_{i}', V(c) + ax[0] * x, ax, (half[0] / n, half[1], half[2]), ORA if i % 2 == 0 else FR, 0.1)
 
+def plus(name, c, ax, r=0.03, t=0.007):
+    """Green plus decal (not a red cross) on frame ax at c."""
+    S._box(name + '_h', V(c), ax, (r, 0.003, t), HEAL, 0.1); S._box(name + '_v', V(c), ax, (t, 0.003, r), HEAL, 0.1)
+
+def strip(name, a, b, r=0.006):
+    return cyl(name, V(a), V(b), r, HEAL, n=6)
+
 def _frame(a, b):
     d = (b - a).normalized(); x = V((1, 0, 0)); x = (x - d * x.dot(d)).normalized(); y = d.cross(x).normalized()
     return x, y, d
@@ -107,7 +116,8 @@ def arm(s):
     pbox(f'pauldron_{side}', (0.45 * s, 0.02, 1.79), (0.17, 0.19, 0.06), OLV, rx=0.0, ry=-0.45 * s, rz=0.0, taper=0.8, slope=0.78, out=(0.6 * s, 0, 1))
     for i in range(2):
         pbox(f'pauldron_lame{i}_{side}', (0.53 * s + 0.02 * i * s, 0.02, 1.68 - 0.06 * i), (0.03, 0.15 - 0.02 * i, 0.055), YEL, ry=-0.3 * s, taper=0.85, inset=False, out=(s, 0, 0))
-    hazard(f'hz_sh_{side}', V((0.45 * s, -0.17, 1.765)), _R(0, -0.45 * s, 0), (0.06, 0.006, 0.012), n=4)
+    if s > 0: plus(f'sh_plus_{side}', V((0.47 * s, -0.19, 1.77)), _R(0, -0.45 * s, 0), r=0.028, t=0.007)
+    else: hazard(f'hz_sh_{side}', V((0.45 * s, -0.17, 1.765)), _R(0, -0.45 * s, 0), (0.06, 0.006, 0.012), n=4)
     box(f'worklight_{side}', (0.4 * s, -0.12, 1.85), (0.025, 0.02, 0.016), FR, bev=0.2)
     box(f'worklight_lens_{side}', (0.4 * s, -0.141, 1.85), (0.018, 0.002, 0.01), LAMP, bev=0.3)
     sh, el, wr = V((0.43 * s, 0.02, 1.6)), V((0.46 * s, 0.07, 1.24)), V((0.45 * s, -0.04, 0.9))
@@ -124,14 +134,21 @@ def arm(s):
     plate(f'forearm_top_{side}', fm - y * 0.085, (x, y, d), (0.075, 0.022, 0.14), OLV, taper=0.7, out=-y)
     S._box(f'forearm_cuff_{side}', el.lerp(wr, 0.92), (x, y, d), (0.088, 0.088, 0.02), FR, bev=0.2)
     hyd(f'elbow_hyd_{side}', el.lerp(sh, 0.3) + y * 0.08, el.lerp(wr, 0.35) + y * 0.085, r=0.015)
-    if s < 0:  # right: welder rig, gunmetal body
-        cyl(f'welder_body_{side}', el.lerp(wr, 0.25) + V((-0.09, -0.06, 0)), el.lerp(wr, 0.92) + V((-0.1, -0.11, 0)), 0.024, GRY, n=14)
-        cyl(f'welder_nozzle_{side}', el.lerp(wr, 0.92) + V((-0.1, -0.11, 0)), el.lerp(wr, 1.06) + V((-0.1, -0.15, -0.03)), 0.012, ST, n=10, r2=0.007)
-        cyl(f'welder_tip_{side}', el.lerp(wr, 1.06) + V((-0.1, -0.15, -0.03)), el.lerp(wr, 1.09) + V((-0.1, -0.16, -0.035)), 0.006, LAMP, n=8)
-        hose(f'hose_w_{side}', [el + V((-0.09, 0.06, -0.02)), el.lerp(wr, 0.4) + V((-0.12, 0.0, 0)), el.lerp(wr, 0.25) + V((-0.09, -0.06, 0))], 0.009)
-    else:
-        cyl(f'winch_{side}', fm + x * 0.1 - y * 0.02, fm + x * 0.13 - y * 0.02, 0.035, GRY, n=16)
-        cyl(f'winch_drum_{side}', fm + x * 0.095 - y * 0.02, fm + x * 0.135 - y * 0.02, 0.022, ST, n=16)
+    strip(f'fa_strip_{side}', fm + x * 0.098 * s - d * 0.1, fm + x * 0.098 * s + d * 0.1)
+    if s < 0:  # right: heal emitter, gunmetal barrel with a green lens ring
+        c0, c1 = el.lerp(wr, 0.3) + V((-0.1, -0.07, 0)), el.lerp(wr, 0.95) + V((-0.11, -0.13, -0.02))
+        cyl(f'emitter_body_{side}', c0, c1, 0.032, GRY, n=16)
+        for u in (0.3, 0.55): cyl(f'emitter_fin_{u}_{side}', c0.lerp(c1, u), c0.lerp(c1, u + 0.05), 0.042, FR, n=8)
+        cyl(f'emitter_ring_{side}', c1, c1 + (c1 - c0).normalized() * 0.02, 0.03, HEAL, n=16)
+        cyl(f'emitter_lens_{side}', c1 + (c1 - c0).normalized() * 0.02, c1 + (c1 - c0).normalized() * 0.026, 0.02, ST, n=12)
+        hose(f'hose_w_{side}', [el + V((-0.09, 0.06, -0.02)), el.lerp(wr, 0.4) + V((-0.13, 0.0, 0)), c0], 0.009)
+    else:  # left: auto-injector, armoured canister with a glowing vial window and a steel needle
+        c0, c1 = fm + x * 0.11 - d * 0.1, fm + x * 0.11 + d * 0.12
+        cyl(f'inj_body_{side}', c0, c1, 0.03, GRY, n=14)
+        for u in (0.0, 1.0): cyl(f'inj_cap_{u}_{side}', c0.lerp(c1, u) - d * 0.012, c0.lerp(c1, u) + d * 0.012, 0.034, FR, n=8)
+        cyl(f'inj_vial_{side}', c0.lerp(c1, 0.25) - y * 0.0, c0.lerp(c1, 0.75), 0.032, HEAL, n=14)
+        for k in range(4): S._box(f'inj_cage_{k}_{side}', c0.lerp(c1, 0.5) + (x if k % 2 else -y) * (0.033 if k < 2 else -0.033), (x, y, d), (0.005, 0.005, 0.06), FR, bev=0.1)
+        cyl(f'inj_needle_{side}', c1, c1 + d * 0.09, 0.006, ST, n=8, r2=0.001)
     slot('arms', 'claw'); box(f'a_claw_{side}', tuple(el.lerp(wr, 0.6) + V((0.1 * s, 0, 0))), (0.02, 0.05, 0.1), ST)
     slot('arms', 'drill'); cyl(f'a_drill_{side}', el.lerp(wr, 0.5) + V((0.09 * s, -0.04, 0)), el.lerp(wr, 0.5) + V((0.09 * s, -0.25, 0)), 0.03, ST, r2=0.004)
     slot('arms', 'welder'); box(f'a_tank_{side}', tuple(el.lerp(wr, 0.4) + V((0.09 * s, 0.05, 0))), (0.03, 0.03, 0.08), GRY)
@@ -160,6 +177,7 @@ def leg(s):
     x, y, d = _frame(knee, ank); sm = knee.lerp(ank, 0.45)
     plate(f'shin_front_{side}', sm - y * 0.095, (x, y, d), (0.09, 0.026, 0.17), OLV, taper=0.6, out=-y)
     plate(f'shin_side_{side}', sm + x * 0.095 * s, (x, y, d), (0.022, 0.07, 0.15), YEL, taper=0.7, out=x * s)
+    strip(f'shin_strip_{side}', sm - y * 0.123 - d * 0.1, sm - y * 0.118 + d * 0.1, 0.005)
     plate(f'shin_calf_{side}', sm + y * 0.085, (x, y, d), (0.065, 0.024, 0.13), OLV, taper=0.65, out=y)
     hyd(f'shin_hyd_{side}', knee - x * 0.08 * s + y * 0.04, ank - x * 0.08 * s + y * 0.04 + d * -0.04, r=0.015)
     hose(f'hose_k_{side}', [knee + V((0.08 * s, 0.08, 0.06)), knee.lerp(ank, 0.5) + V((0.1 * s, 0.09, 0)), ank + V((0.08 * s, 0.07, 0.05))], 0.01)
@@ -207,30 +225,24 @@ def build():
         pbox(f'abplate_{s_}', (0.08 * s_, -0.17, 1.27), (0.075, 0.02, 0.06), YEL, rx=0.1, taper=0.8, out=(0, -1, 0))
     pbox('collar_front', (0, -0.18, 1.73), (0.15, 0.025, 0.06), YEL, rx=-0.4, taper=0.85, out=(0, -1, 0.4))
     pbox('collar_back', (0, 0.12, 1.86), (0.16, 0.025, 0.1), OLV, rx=0.25, taper=0.8, out=(0, 1, 0.3))
-    hazard('hz_chest', V((0.13, -0.232, 1.39)), _R(0, 0, -0.3), (0.05, 0.004, 0.01), n=4)
-    box('chest_light', (-0.17, -0.2, 1.62), (0.018, 0.01, 0.012), LAMP)
-    # back: gunmetal frame + crane
+    # pulse line across the right pec + green strips down the chest flanks
+    pulse = [(0.05, 1.42), (0.1, 1.42), (0.12, 1.47), (0.145, 1.37), (0.165, 1.42), (0.22, 1.42)]
+    for i in range(len(pulse) - 1):
+        (x0, z0), (x1, z1) = pulse[i], pulse[i + 1]; strip(f'pulse_{i}', (x0 - 0.12, -0.262, z0 + 0.2), (x1 - 0.12, -0.262, z1 + 0.2), 0.006)
+    for s_ in (1, -1): strip(f'chest_strip_{s_}', (0.33 * s_, -0.15, 1.58), (0.24 * s_, -0.17, 1.3), 0.008)
+    box('chest_light', (-0.17, -0.2, 1.62), (0.018, 0.01, 0.012), HEAL)
+    # back: gunmetal frame
     pbox('backframe', (0, 0.2, 1.48), (0.18, 0.05, 0.2), GRY, taper=0.85, out=(0, 1, 0))
-    cyl('crane_base', V((0.1, 0.25, 1.55)), V((0.1, 0.31, 1.55)), 0.085, GRY); box('crane_mount', (0.1, 0.27, 1.5), (0.09, 0.04, 0.1), FR)
-    A_, B_ = V((0.1, 0.3, 1.55)), V((0.3, 0.38, 2.35))
-    bx, by, bd = _frame(A_, B_)
-    plate('crane_boom', A_.lerp(B_, 0.5), (bx, by, bd), (0.05, 0.045, (B_ - A_).length / 2), OLV, taper=0.7, slope=0.85, out=-by)
-    for rx_ in (-0.058, 0.058): cyl(f'crane_chord_{rx_}', A_ + bx * rx_, B_ + bx * rx_ * 0.75, 0.02, GRY, n=10)
-    for i in range(1, 5): S._box(f'crane_web_{i}', A_.lerp(B_, i / 5), (bx, by, bd), (0.062 - 0.004 * i, 0.05, 0.012), FR, bev=0.2)
-    hazard('hz_boom', A_.lerp(B_, 0.9) - by * 0.047, (bx, by, bd), (0.035, 0.003, 0.012), n=4)
-    hyd('crane_ram', V((0.08, 0.25, 1.4)), A_.lerp(B_, 0.45) + V((0, -0.03, 0)), r=0.026)
-    box('crane_beacon', (0.3, 0.38, 2.4), (0.014, 0.014, 0.012), LAMP, bev=0.3)
-    J0, J1 = V((0.3, 0.38, 2.35)), V((0.33, -0.22, 2.42)); jx, jy, jd = _frame(J0, J1)
-    plate('crane_jib', J0.lerp(J1, 0.5), (jx, jy, jd), (0.04, 0.035, (J1 - J0).length / 2), OLV, taper=0.6, slope=0.85, out=(0, 0, 1))
-    joint('crane_knuckle', J0, (1, 0, 0), 0.06, 0.14, m=GRY)
-    hyd('crane_jib_ram', A_.lerp(B_, 0.7) + V((0, -0.05, 0)), J0.lerp(J1, 0.35) + V((0, 0, -0.045)), r=0.017)
-    # sheave head + twin cables + heavy hook block
-    cyl('crane_sheave', V((0.3, -0.23, 2.42)), V((0.36, -0.23, 2.42)), 0.035, GRY, n=16)
-    for dx in (-0.012, 0.012): cyl(f'crane_cable{dx}', V((0.33 + dx, -0.23, 2.39)), V((0.33 + dx, -0.23, 2.16)), 0.005, ST, n=6)
-    pbox('crane_block', (0.33, -0.23, 2.12), (0.045, 0.03, 0.05), GRY, taper=0.7, inset=False, out=(0, -1, 0))
-    cyl('crane_block_pin', V((0.28, -0.23, 2.14)), V((0.38, -0.23, 2.14)), 0.012, ST, n=10)
-    hazard('hz_block', V((0.33, -0.262, 2.1)), _R(0, 0, 0), (0.03, 0.003, 0.01), n=4)
-    hook('crane_hook', (0.33, -0.23, 2.07))
+    # back: armoured regen core (replaces the crane)
+    pbox('regen_housing', (0, 0.29, 1.5), (0.15, 0.06, 0.2), OLV, taper=0.8, slope=0.85, out=(0, 1, 0))
+    cyl('regen_core', V((0, 0.36, 1.33)), V((0, 0.36, 1.67)), 0.045, HEAL, n=16)
+    for z in (1.3, 1.7): cyl(f'regen_cap_{z}', V((0, 0.36, z - 0.03)), V((0, 0.36, z + 0.03)), 0.06, GRY, n=16)
+    for i in range(4): S._box(f'regen_slat_{i}', V((0, 0.405, 1.37 + i * 0.09)), _R(0, 0, 0), (0.055, 0.008, 0.012), FR, 0.2)
+    for s_ in (1, -1):
+        pbox(f'regen_fin_{s_}', (0.1 * s_, 0.34, 1.52), (0.02, 0.05, 0.17), GRY, ry=0.25 * s_, taper=0.7, inset=False, out=(s_, 0.5, 0))
+        strip(f'regen_strip_{s_}', (0.125 * s_, 0.36, 1.38), (0.125 * s_, 0.36, 1.64))
+        hose(f'hose_regen_{s_}', [V((0.06 * s_, 0.37, 1.69)), V((0.15 * s_, 0.3, 1.8)), V((0.3 * s_, 0.1, 1.72))], 0.014)
+    plus('regen_plus', (0, 0.355, 1.76), _R(0, 0, 0), r=0.025, t=0.006)
     hose('hose_back', [V((-0.12, 0.25, 1.62)), V((-0.2, 0.18, 1.72)), V((-0.32, 0.05, 1.68))], 0.016)
     slot('bionics', 'tanks')
     for s in (1, -1): cyl(f'b_tank_{s}', V((0.09 * s - 0.03, 0.27, 1.3)), V((0.09 * s - 0.03, 0.27, 1.5)), 0.05, GRY)
@@ -305,8 +317,8 @@ def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); yield 0.1
     if '--preview' in S.argv:
-        S.render(S.OUT.replace('.png', '-34.png'), tgt=(0, 0, 1.1), dist=5.8)
-        S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-0.5, cam_el=0.12, res=(1500, 1200), tgt=(-0.35, -0.15, 1.05), dist=1.6, lens=60, setup=False); return
+        if '--closeup' not in S.argv: S.render(S.OUT.replace('.png', '-34.png'), tgt=(0, 0, 1.1), dist=5.8)
+        S.render(S.OUT.replace('.png', '-closeup.png'), cam_az=-2.75, cam_el=0.15, res=(1500, 1200), tgt=(0.0, 0.3, 1.45), dist=2.6, lens=60, setup='--closeup' in S.argv); return
     if '--skel' in S.argv if 'worker' != 'scout' else '--skel' in argv:
         import v2export as X; X.write_skeleton('worker', [o for o in bpy.data.objects if o.type == 'MESH']); return
     yield from addon_pass()
@@ -314,7 +326,7 @@ def main():
     bpy.ops.wm.save_as_mainfile(filepath='/workspace/private/worker_v2.blend')
     import v2export as X
     X.turnaround('worker', tgt_z=1.1, dist=5.8, slots=WORKER_SLOTS)
-    if '--kit' in S.argv: X.export_kit('worker', WORKER_SLOTS)
+    if '--kit' in S.argv: X.export_kit('worker', WORKER_SLOTS, budget=25800)
 
 _gen = None
 def _run():

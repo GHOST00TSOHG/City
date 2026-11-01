@@ -106,7 +106,10 @@ export async function loadKit(type: RobotType, u: U, base = `${import.meta.env.B
       const geo = (c.geometry as THREE.BufferGeometry).clone().applyMatrix4(inv.clone().multiply(c.matrixWorld));
       for (const k of Object.keys(geo.attributes)) if (!['position', 'normal', 'uv', 'uv1'].includes(k)) geo.deleteAttribute(k);
       if (!geo.attributes.uv1 && geo.attributes.uv) geo.setAttribute('uv1', geo.attributes.uv.clone());
-      meshes.push({ geo, region: (c.material?.name ?? 'shell').replace(/\.\d+$/, '') });
+      let region = (c.material?.name ?? 'shell').replace(/\.\d+$/, '');
+      // Scout's kit has no decalColor material: its thruster intakes (small, glowing) take that slot, like Heavy's shin vents
+      if (type === 'scout' && region === 'visor' && /^intake/.test(c.name || o.name)) region = 'decalColor';
+      meshes.push({ geo, region });
     });
     nodes.push({ slot, opt, bone, meshes });
   }

@@ -355,3 +355,71 @@ Max draw calls 48; console errors 0 in every view (round 3 re-run). Budget is 15
 - Seawall tops are a fixed 0.5–1.3 m; the bank behind can be higher (Newark). A bake-side bank fix would look better.
 - Existing Playwright specs (`npm run test:smoke`) time out at their 60 s `__city.ready` wait on this machine; area load takes ~40 s headless both on `main` and on this branch (measured), so it is not a regression. Run them on a faster box or raise the timeout.
 - gitleaks is not installed on this machine; run it before merge.
+## Worker v4 healer (combat medic)
+- Crane removed. Back regen core (glowing green core, slats, fins, hoses to shoulders, green plus), right-forearm heal emitter, left-forearm injector (vial, cage, needle), green light strips on forearms/shins/chest, chest pulse line. No red cross. Hands kept, curled, palms in.
+- Palette: olive/gunmetal kept; accent (shorts slot) #2f8a3e, heal glow on decalColor #3dff6e (emissive), visor red #ff3020. All 7 paint slots recolourable.
+- Renders: /workspace/robot-renders/worker-v4-34.png, worker-v4-closeup.png (rear 3/4, regen core). `worker_v2.py -- --preview [--closeup]`.
+- Kit: 25,684 tris exported (budget=25800), 24,124 visible in garage. TYPES=worker: all PASS incl. new garage colour check (each slot click → colour appears in robot material uniforms), 0 console errors, garage 50 / world 44 draw calls.
+
+## Glitch v5 faithful rebuild (2026-11-01)
+- Source: tools/blender/glitch_v5.py, modelled on robot-refs/4-special-floating-cubes.png (geometry only, the image is never used as a texture). Renders: robot-renders/glitch-v5-34.png and glitch-v5-closeup.png (profile, head and shoulders).
+- Look: pale sculpted face plate (nose, closed downcast eyes, lips) on a downcast head; white/light-grey voxel skin over dark glossy machinery (spine, ribs, pistons, neck cables, skull ribs). Missing patches are heaviest on the back of the head, neck, shoulders and arms. Hands have curled fingers with the palms toward the thighs.
+- Runtime (src/robot/glitch.ts): the voxel skin is 1 instanced BoxGeometry draw from shards.json (`shard: 'cube'`). The drifting cube cloud is 1 instanced draw of 320 cubes, GPU-only: it rises, drifts, shrinks and respawns from the `emit` points. The CPU burst pool keeps the blink-dash burst. That makes 3 draws plus the kit. The cyan/magenta ghosts and octa shards are gone.
+- Garage colours: shell = Skin, shorts = Skin shade, torso = Face, joints = Machinery, backpack = Cables, visor = Glow, decalColor = Particles. Labels come from the new per-type `TypeDef.colourLabels`. Uniforms live in material.userData, so the colour check sees them.
+- Tris: 26,460 for the cubes plus 3,731 for the kit, 30.2k in total. The test counts 36.7k because it includes the 320-cube cloud and the 256-slot burst capacity.
+- TYPES=glitch: all PASS, all 7 colours ok, 0 console errors, 49 draw calls in the garage and 43 in the world.
+- Fix: v2export now updates the view layer after creating each bone empty. Before this, freshly created empties had an identity matrix_world, so parts got world-space locals and floated off the body.
+
+## Glitch v5b
+- Slim, lean body: torso/pelvis lofts x0.72/y0.82, legs ~0.7, arms ~0.8, machinery shrunk to match.
+- Fade-away: DROP torso 0.46 / leg 0.5 / foot 0.34 plus chest-side/back extra; 10% of non-head cubes peel off (lifted along normal, tumbled).
+- Smaller body cubes (0.021–0.028). Emitters across the whole body; runtime cloud 520 instances (1 draw), drifting away from the body axis (head points from head centre).
+- v2export: parts < 80 tris or `_keep` are never decimated, which fixes the missing in-game face.
+- Budget: 19,644 cube tris + 10,092 kit tris = 29.7k. TYPES=glitch passes 8/8 (49/43 calls). Front garage proof: city-shots/glitch-front-a.png.
+
+## Heavy v4 legs
+- heavy_v2.py: thicker thigh loft and plates, exposed knee hubs + bigger knee joint, ankle pistons, bigger ankle, wider/longer planted feet, splayed toes, longer heel/sole.
+- New `glow_m` heat vents on the shins (decalColor). Heavy had no decalColor surface before, so the colour check failed on the old kit too (pre-existing failure, verified A/B); it now passes.
+- Re-exported with the v2export keep fix: 28,203 tris. TYPES=heavy passes 8/8, 48 garage / 42 world calls. Render: robot-renders/heavy-v4-34.png.
+
+## Slice effect removed
+- Deleted glitch_v4.py (displaced slices) and glitch_post.py (RGB split / scanlines). The runtime had no slice code left; glitch.ts keeps only the dash dissolve and rare datamosh.
+
+## Heavy v5 (round)
+- heavy_v2.py v5: torso from 2-heavy-mech.png (dome chest loft, small sunk head with visor slit, cylindrical disc-sided shoulder pods, exposed waist of rings/pistons/cables); Hulkbuster-inspired limbs (rounded bicep/forearm lofts, big curled fists palms-in, rounded thigh/shin, kneecaps, big rounded feet with toes). Shin heat vents (decalColor) kept. J joints unchanged from v4.
+- Renders: robot-renders/heavy-v5-34.png, heavy-v5-closeup.png. Export 28.4k → 25.7k in game after strip. TYPES=heavy: colours 7/7 ok, 48 garage / 43 world calls.
+
+## Kit debris strip
+- tools/kit-strip-strays.mjs drops triangles outside the body box or with edges > 0.5 m (add-on debris that rendered as huge stretched streaks, visible in flight clips). Applied to scout/worker/heavy. Re-run after any --kit export.
+- Known pre-existing: scout fails the decalColor check (fails on the committed kit too) — scout has no decalColor surface.
+
+## Flight (per type)
+- FlightProfile in types.ts; poser take-off/hover/cruise/land per style; controller crouch-launch + landing burn; thrust.ts single instanced flame draw + sparks; medic backpack + palm nozzles; glitch cube-stream dissolve. Clips: tools/clips-robot-fly.mjs → /workspace/robot-clips/<type>-fly.mp4 (~12 s/frame on SwiftShader, ~23 min per type).
+
+## Mac / Claude Code run (2026-11-01)
+- From now on, build work runs through Claude Code on the Mac in ~/builds/City-gh, which gets the branch by git bundle from the box (the Mac has no GitHub login). The box pushes to GitHub.
+- Task for this run: render the four flight clips (heavy, worker, scout, glitch) in a real GPU browser into robot-clips/<type>-fly.mp4 (do NOT commit the mp4s); check Heavy's foot thrusters sit on the new round feet (typed.ts noz FootNozzle uses TYPES[type].sole; heavy sole -0.16 may need adjusting for v5 feet); fix Scout's missing decalColor surface so `TYPES=scout node tools/test-robot-types.mjs <port>` colour check passes.
+
+## Mac run results (2026-11-01, Claude Code on the Mac, real GPU)
+- **Heavy thrusters:** nozzles were 0.06 m above the ground and 0.11 m off the foot centre on the v5 round feet. Measured with skinned vertices; now `sole -0.32`, new optional per-type `soleZ` (heavy 0.08; local +z is world -z), so each flame starts at the sole, centred under the foot. Scout/Worker/Glitch unchanged.
+- **Scout decalColor:** thruster `intake_*` meshes (material `visor`) are mapped to `decalColor` at load time in `kit.ts` (no Blender re-export). Scout colour check 7/7.
+- **Clips:** `tools/clips-robot-fly.mjs` now runs headed Chrome (real GPU) by default, 24 fps via `CLIP_FPS=24` (about 35 s per type). `SWIFTSHADER=1` keeps the old box mode. `CLIP_OUT`, `FFMPEG` env. Output `robot-clips/<type>-fly.mp4` (gitignored). The Mac has no ffmpeg; use `FFMPEG=/tmp/ffm/node_modules/ffmpeg-static/ffmpeg` (npm `ffmpeg-static`).
+- **Clips reviewed:** Worker shows backpack jet + palm boosters; Heavy crouch-launch with big flames at the feet; Scout quick bursts and banking; Glitch cube stream, no fire. The flight path drifts out over the sea in all clips (Heavy ends on a roof).
+- **Full test** (`node tools/test-robot-types.mjs 5180`, all PASS, 0 console errors): scout garage 48 / world 43 calls, 26,166 tris; heavy 48 / 43, 25,711; worker 50 / 45, 23,663; glitch 49 / 44, 38,080 (includes cloud and burst capacity). Real-GPU HUD in the world: 60 fps, 45 calls.
+- Test shots now fall back to `test-results/shots` when `/workspace` is absent.
+- Clips: ~/builds/City-gh/robot-clips/{heavy,worker,scout,glitch}-fly.mp4
+
+## Robot assembly fix (2026-11-01, Claude Code on the Mac, real GPU)
+Luis: the robots in the world look "not put together" (loose / misaligned parts).
+- **Cause (two data bugs, no code bug):**
+  1. **Scout and Worker GLBs were exported before `v2export.py` got its view-layer fix (c4a93db).** Their bone-group empties carry the joint position but the meshes keep rest-pose *robot* coordinates with an identity child transform. `kit.ts` assumes bone-local vertices and skins with identity bind inverses, so every part was displaced a second time by its bone's world position (feet stayed down, thighs +0.98, chest +1.1, arms +1.6, head ~2x too high: the parts "floated apart"). Evidence: child local T was `[0,0,0]` for scout/worker but `[0,-boneY,0]` for heavy/glitch (exported after the fix); in game the scout/worker bounding boxes were ~2x the skeleton. Skeleton vs GLB node origins match for all four types (max 0.000; worker Right* are 3 cm off the Left mirror, harmless). `skeleton.json` was not the problem.
+  2. **Boolean-slice remnants.** The Hard Ops cuts in the add-on pass leave the cut-off pieces as `<part>.001...` objects whose bbox sprawls 4-60x past the part (scout `chest_plate.001-006`, `calf_vent_*.001-004`; worker `chest/thigh_L/shin_R.001-003`; heavy `chest/thigh_L/shin_L.001-003` + 4 more). In game these were the big loose blue sheets (scout), an olive dome over the worker's torso and stacked shells on the heavy, plus the stretched streaks. `kit-strip-strays.mjs` (edge > 0.5 m) treated the symptom and cut real faces: heavy `sole_L/R` (edge 0.87 m), `chest_band_0/1` (0.77 m) and the worker chest (0.70 m) are legitimate large faces (782/461/547 tris lost on scout/worker/heavy).
+- **Fix (all in the GLBs; `kit.ts`/`typed.ts` unchanged, heavy/glitch positions unchanged):**
+  - Restored the pre-strip GLBs (scout e60d8fe, worker 07fbb67, heavy ef3218a).
+  - `tools/kit-rebase.mjs scout worker`: empties at the game's rest bone positions, meshes offset by the opposite (bone-local, like the fixed exporter). Idempotent.
+  - `tools/kit-drop-debris.mjs scout heavy worker`: removes `<base>.NNN` meshes that exceed 3x the base's bbox volume and poke > 0.12 m outside it (14/13/9 meshes; Sphere.NNN bolts are kept).
+  - `tools/kit-strip-strays.mjs` rewritten: only vertices outside the body box or degenerate long slivers; now drops 0 / 11 / 2 tris (scout/heavy/worker). Order after any `--kit` export: **rebase (if the GLB is not bone-local) -> drop-debris -> strip-strays**. Glitch needs none of them (its 8 `m_*` limb cores are bone-local with their own rotations).
+  - New tri counts (body): scout 26,497, heavy 25,465, worker 23,747.
+- **Not changed, worth a look:** `types.ts` `sole` (scout -0.12, worker -0.14) vs the actual foot-mesh bottom relative to the foot bone (scout -0.25, worker -0.16, heavy -0.24, glitch -0.10); heavy was tuned to -0.32 on the Mac, which I left alone. `kit.json` `tris` and `skeleton.json` `height`/`sole` are stale/junk (they were taken from debris vertices) and unused at runtime.
+- **Tests:** `node tools/test-robot-types.mjs 5180` all PASS, 0 console errors, colour check ok for scout/heavy/worker/glitch (7/7 each). Calls garage/world: scout 48/43, heavy 48/43, worker 50/45, glitch 49/44. Tris: scout 25,467, heavy 23,322, worker 22,187, glitch 38,080.
+- **Screenshots:** `test-results/ingame-{scout,heavy,worker,glitch}.png` (world, 3/4 front, headed Chrome, Key West). Flight clips re-rendered into `robot-clips/` (not committed).

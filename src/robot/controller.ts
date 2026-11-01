@@ -20,6 +20,8 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   const pos = new THREE.Vector3(), vel = new THREE.Vector3();
   let heading = 0, mode: RobotMode = 'SKYDIVING', burst = 1, rollT = 0, landT = 0, airT = 0, phase = 0, t = 0;
   let lean = 0, bank = 0, yawRate = 0, power = 0, burstOn = 0, enabled = true, charging = false, hero = false;
+  // per-type take-off: launchT = s into the crouch wind-up (-1 idle), launchDur from TYPES[t].flight.launch; flyT = s on rockets
+  let launchT = -1, launchDur = 0, flyT = 0;
   let onImpact: ((p: THREE.Vector3, strength: number) => void) | null = null;
   // Z special: per-type move (ground-pound, blink-dash, ...); specialT = seconds since trigger, -1 = idle
   let specialKind = 'none', specialDur = 0.8, specialT = -1;
@@ -35,7 +37,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if (mode === 'GROUND') { vel.y = JUMP; mode = 'SKYDIVING'; airT = 0; anim = 'jump'; }
       else if (mode === 'SKYDIVING') mode = 'ROCKETS';
     }
-    if (e.code === 'KeyF' && !e.repeat) { if (mode === 'ROCKETS') mode = 'SKYDIVING'; else if (mode === 'SKYDIVING') mode = 'ROCKETS'; else if (mode === 'GROUND') { vel.y = 9; mode = 'ROCKETS'; } }
+    if (e.code === 'KeyF' && !e.repeat) { if (mode === 'ROCKETS') mode = 'SKYDIVING'; else if (mode === 'SKYDIVING') mode = 'ROCKETS'; else if (mode === 'GROUND' && launchT < 0) { if (launchDur > 0) launchT = 0; else { vel.y = 9; mode = 'ROCKETS'; } } }
     if (e.code === 'KeyZ' && !e.repeat && specialT < 0 && (mode === 'GROUND' || specialKind === 'blinkdash')) { specialT = 0; onSpecial?.(specialKind, 'start', pos); }
     if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   });
@@ -79,6 +81,8 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     /** Hero drop: straight down fast, ends in a crouched superhero landing with an impact callback. */
     heroDrop(x: number, y: number, z: number, h = 0) { this.spawn(x, y, z, h); vel.set(0, -45, 0); hero = true; airT = 1; },
     /** Per-type Z special (types.ts motion.special / specialDur). */
+    setFlight(launch: number) { launchDur = launch; launchT = -1; },
+    get flyT() { return flyT; },
     setSpecial(kind: string, dur: number) { specialKind = kind; specialDur = dur; specialT = -1; },
     get special() { return specialT; }, get phase() { return phase; },
     set onSpecial(f: ((kind: string, phase: 'start' | 'hit' | 'end', p: THREE.Vector3) => void) | null) { onSpecial = f; },
@@ -104,7 +108,16 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       right.crossVectors(camF, up).normalize();
       const iF = (k('KeyW') || k('ArrowUp') ? 1 : 0) - (k('KeyS') || k('ArrowDown') ? 1 : 0), iR = (k('KeyD') || k('ArrowRight') ? 1 : 0) - (k('KeyA') || k('ArrowLeft') ? 1 : 0);
       const iUp = k('Space') || k('KeyE') ? 1 : 0, iDown = k('KeyC') || k('KeyQ') || k('ControlLeft') ? 1 : 0, iBurst = k('ShiftLeft') || k('ShiftRight');
-      power += ((mode === 'ROCKETS' ? 0.35 + 0.65 * Math.max(iUp, Math.abs(iF) * 0.8, Math.hypot(vel.x, vel.z) / CRUISE) : 0) - power) * (1 - Math.exp(-dt * 10));
+      if (launchT >= 0) { // crouch-and-launch: jets spool up on the ground, then kick off
+        launchT += dt; vel.x *= Math.exp(-dt * 8); vel.z *= Math.exp(-dt * 8);
+        if (mode !== 'GROUND') launchT = -1;
+        else if (launchT >= launchDur) { vel.y = 9 + launchDur * 10; mode = 'ROCKETS'; launchT = -1; }
+      }
+      flyT = mode === 'ROCKETS' ? flyT + dt : 0;
+      const spool = launchT >= 0 ? 0.25 + 0.6 * Math.min(1, launchT / launchDur) : 0;
+      const kick = mode === 'ROCKETS' ? Math.max(0, 1 - flyT / 0.6) : 0; // full throttle off the pad
+      const flare = mode === 'ROCKETS' && pos.y - floor.y < 3 && vel.y < -0.5 ? 0.85 : 0; // landing burn
+      power += (Math.max(spool, kick, flare, mode === 'ROCKETS' ? 0.35 + 0.65 * Math.max(iUp, Math.abs(iF) * 0.8, Math.hypot(vel.x, vel.z) / CRUISE) : 0) - power) * (1 - Math.exp(-dt * 10));
       burstOn += ((mode === 'ROCKETS' && iBurst && burst > 0.02 ? 1 : 0) - burstOn) * (1 - Math.exp(-dt * 8));
       burst = Math.max(0, Math.min(1, burst + dt * (burstOn > 0.5 ? -0.22 : charging ? 0.55 : 0.1)));
 
@@ -196,7 +209,8 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         if (specialKind === 'blinkdash' && p0 < 0.42 && specialT >= 0.42) onSpecial?.(specialKind, 'hit', pos);
         if (specialT > specialDur) { specialT = -1; onSpecial?.(specialKind, 'end', pos); }
       }
-      model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn }, dt);
+      model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn,
+        launch: launchT >= 0 ? Math.min(1, launchT / Math.max(0.01, launchDur)) : 0, flyT, thrust: power }, dt);
 
       // chase camera: behind and above; pulls back with a wider FOV at speed, closer and narrower on foot
       const spd = vel.length(), sf = Math.min(1, spd / CRUISE);

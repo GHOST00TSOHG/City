@@ -36,6 +36,10 @@ export function createCustomizer(initType: RobotType, initial: RobotLook, damage
   const buildSlots = () => {
     const d = TYPES[type];
     slotsEl.innerHTML = SLOT_KEYS.map((k) => `<div class="grp"><label>${SLOT_LABEL[k]}</label><div class="opts" data-k="${k}">${d.slots[k].map((o) => `<button data-v="${o}">${d.names[`${k}.${o}`] ?? d.names[o] ?? o}</button>`).join('')}</div></div>`).join('');
+    for (const [k, label] of COLOURS) {
+      const l = el.querySelector(`.col[data-k="${k}"] label`)!, t = (d.colourLabels as Record<string, string> | undefined)?.[k] ?? label;
+      l.firstChild!.textContent = t; l.querySelector('input')!.setAttribute('aria-label', `${t} colour`);
+    }
   };
   const dmgLabel = el.querySelector('.dmg b') as HTMLElement, dmgBar = el.querySelector('.dmg u') as HTMLElement, repairBtn = el.querySelector('[data-repair]') as HTMLButtonElement;
   const sync = () => {
