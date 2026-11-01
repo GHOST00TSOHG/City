@@ -533,7 +533,7 @@ def main():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); scout_variants(); yield 0.1
     if '--hands' in argv:
-        render(OUT, cam_az=math.pi, cam_el=0.0, res=(1800, 1100), tgt=(0, 0, 0.82), dist=2.4, lens=55); return
+        render(OUT, cam_az=0.0, cam_el=0.0, res=(1800, 1100), tgt=(0, 0, 0.82), dist=2.4, lens=55); return
     if '--closeup' in argv:
         render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.12, 0.92), dist=1.6, lens=60)
         if '--with34' in argv: render(OUT.replace('.png', '-34.png'), setup=False)

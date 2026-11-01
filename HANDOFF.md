@@ -160,4 +160,5 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Heavy test (TYPES=heavy): all PASS, 47/41 calls, 26,533 tris, 0 console errors. Test now takes TYPES=a,b env to run one robot at a time.
 - Worker v3 preview: worker-v3-34.png, worker-v3-closeup.png.
 - Worker v3 kit exported (Blender TRIS 49,858). Test (TYPES=worker): all PASS, 49/43 calls, 26,146 tris, 0 console errors. Next: Glitch from scratch.
-- Hands front render (camera az=pi is the FRONT): scout-v2i-hands-front.png — curled fingers face the thighs.
+- Hands front render: scout-v2i-hands-front.png (az=0 = front, robot faces -y; kneecaps + front skirt visible). Curled fingers face the thighs.
+- Worker v3b: chamfered/angled plates, wider stance, menacing cyclops under brow cage + jaw, bigger lattice crane with jib/hook block, grittier olive. Render worker-v3b-34.png.

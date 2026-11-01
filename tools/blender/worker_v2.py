@@ -9,7 +9,7 @@ from scout_v2 import *
 import scout_v2 as S, addons as A
 
 V = Vector
-OLV = mat('armor_white', (0.06, 0.075, 0.025), 0.62, 0.05, wear=True)     # shell: worn olive
+OLV = mat('armor_white', (0.045, 0.058, 0.02), 0.72, 0.05, wear=True)     # shell: worn olive
 YEL = mat('armor_blue', (0.62, 0.38, 0.02), 0.5, wear=True)             # torso: replacement yellow panels
 ORA = mat('armor_red', (0.55, 0.1, 0.015), 0.5, wear=True)              # shorts: safety orange
 GRY = mat('armor_yellow', (0.03, 0.032, 0.035), 0.55, 0.4, wear=True)     # backpack: crane / tanks
@@ -17,11 +17,11 @@ FR = mat('frame', (0.04, 0.042, 0.05), 0.55, 0.8)
 ST = mat('steel', (0.45, 0.45, 0.46), 0.3, 1.0)
 RUB = mat('rubber', (0.012, 0.012, 0.014), 0.85)
 LAMP = mat('glow', (0, 0, 0), 0.3, 0, (1.0, 0.62, 0.15), 18)    # amber work lights
-LENS = mat('screen', (0, 0.01, 0.02), 0.1, 0, (0.24, 0.95, 1.0), 12)
+LENS = mat('screen', (0, 0.01, 0.02), 0.1, 0, (1.0, 0.18, 0.04), 22)
 WORKER_SLOTS = {'helmet': ['boxcam', 'welder', 'lamp'], 'arms': ['claw', 'drill', 'welder'], 'bionics': ['tanks', 'battery', 'reel'],
                 'legs': ['cans', 'strut', 'ribbed'], 'thrusters': ['stacks', 'fans', 'rocket'], 'boots': ['stabilizer', 'wheels', 'clamp']}
 
-def box(name, c, half, m, rx=0.0, ry=0.0, rz=0.0, bev=0.18):
+def box(name, c, half, m, rx=0.0, ry=0.0, rz=0.0, bev=0.32):
     R = Matrix.Rotation(rz, 3, 'Z') @ Matrix.Rotation(ry, 3, 'Y') @ Matrix.Rotation(rx, 3, 'X')
     return S._box(name, V(c), (R.col[0], R.col[1], R.col[2]), half, m, bev)
 
@@ -52,7 +52,7 @@ def arm(s):
     bone(B + 'Arm'); J[B + 'Arm'] = V((0.34 * s, 0.02, 1.64))
     joint(f'shoulder_{side}', V((0.32 * s, 0.02, 1.64)), (1, 0, 0), 0.06, 0.09)
     # mismatched pauldrons: left olive with dents, right a yellow replacement; hazard band + work light on each
-    box(f'pauldron_{side}', (0.42 * s, 0.02, 1.75), (0.13, 0.15, 0.075), OLV if s > 0 else YEL, ry=-0.35 * s, rz=0.06 * s, bev=0.12)
+    box(f'pauldron_{side}', (0.42 * s, 0.02, 1.75), (0.13, 0.15, 0.075), OLV if s > 0 else YEL, rx=0.25, ry=-0.5 * s, rz=0.12 * s, bev=0.2)
     box(f'pauldron_lip_{side}', (0.5 * s, 0.02, 1.68), (0.035, 0.14, 0.05), FR, ry=-0.35 * s, bev=0.15)
     hazard(f'hz_sh_{side}', (0.43 * s, -0.135, 1.75), (0.12, 0.008, 0.028), rz=0, ry=-0.35 * s)
     for i in range(3): box(f'p_rivet_{side}{i}', (0.36 * s + 0.05 * i * s, 0.12, 1.82 - 0.02 * i), (0.006, 0.006, 0.006), ST)
@@ -89,7 +89,7 @@ def arm(s):
 
 def leg(s):
     side = 'L' if s > 0 else 'R'; B = 'Left' if s > 0 else 'Right'
-    hip, knee, ank = V((0.13 * s, 0, 0.98)), V((0.14 * s, -0.08, 0.56)), V((0.15 * s, 0.03, 0.15))
+    hip, knee, ank = V((0.15 * s, 0, 0.98)), V((0.2 * s, -0.1, 0.56)), V((0.25 * s, 0.03, 0.15))
     bone(B + 'UpLeg'); J[B + 'UpLeg'], J[B + 'Leg'], J[B + 'Foot'] = hip.copy(), knee.copy(), ank.copy()
     joint(f'hip_{side}', hip, (1, 0, 0), 0.055, 0.1)
     th = loft(f'thigh_{side}', [(0.04, 0, 0, 0.05, 0.05), (0.2, 0, 0, 0.06, 0.06), (0.36, 0, 0, 0.05, 0.05)], FR, e=6, n=8); place(th, hip, knee)
@@ -144,18 +144,18 @@ def build():
     box('chest_light', (0.16, -0.185, 1.6), (0.025, 0.012, 0.02), LAMP)
     # back: frame + crane boom
     box('backframe', (0, 0.2, 1.48), (0.18, 0.05, 0.2), GRY)
-    cyl('crane_base', V((0.08, 0.27, 1.55)), V((0.08, 0.3, 1.55)), 0.06, ST)
-    A_, B_ = V((0.08, 0.3, 1.55)), V((0.18, 0.35, 2.1))
-    for rx_ in (-0.025, 0.025): cyl(f'crane_boom_{rx_}', A_ + V((rx_, 0, 0)), B_ + V((rx_, 0, 0)), 0.012, YEL, n=10)
+    cyl('crane_base', V((0.1, 0.25, 1.55)), V((0.1, 0.31, 1.55)), 0.085, ST); box('crane_mount', (0.1, 0.27, 1.5), (0.09, 0.04, 0.1), GRY)
+    A_, B_ = V((0.1, 0.3, 1.55)), V((0.3, 0.38, 2.35))
+    for rx_ in (-0.045, 0.045): cyl(f'crane_boom_{rx_}', A_ + V((rx_, 0, 0)), B_ + V((rx_, 0, 0)), 0.02, YEL, n=10)
     for i in range(6):
         p0, p1 = A_.lerp(B_, i / 6), A_.lerp(B_, (i + 1) / 6)
-        cyl(f'crane_brace_{i}', p0 + V((-0.025, 0, 0)), p1 + V((0.025, 0, 0)), 0.005, YEL, n=6)
+        cyl(f'crane_brace_{i}', p0 + V((-0.045, 0, 0)), p1 + V((0.045, 0, 0)), 0.008, YEL, n=6)
     piston('crane_ram', V((0.08, 0.25, 1.4)), A_.lerp(B_, 0.45) + V((0, -0.02, 0)), r=0.015)
-    box('crane_beacon', (0.18, 0.35, 2.12), (0.015, 0.015, 0.012), LAMP, bev=0.3)
-    cyl('crane_jib', V((0.18, 0.35, 2.1)), V((0.14, 0.0, 2.2)), 0.018, YEL, n=12)
-    cyl('crane_cable', V((0.14, 0.0, 2.19)), V((0.14, -0.02, 1.98)), 0.003, FR, n=6)
-    box('crane_block', (0.14, -0.02, 1.98), (0.02, 0.012, 0.025), YEL, bev=0.2)
-    cyl('crane_hook', V((0.14, -0.02, 1.955)), V((0.14, -0.03, 1.935)), 0.008, ST, n=8)
+    box('crane_beacon', (0.3, 0.38, 2.38), (0.015, 0.015, 0.012), LAMP, bev=0.3)
+    for rx_ in (-0.03, 0.03): cyl(f'crane_jib_{rx_}', V((0.3 + rx_, 0.38, 2.35)), V((0.33 + rx_, -0.22, 2.42)), 0.016, YEL, n=10)
+    cyl('crane_cable', V((0.33, -0.22, 2.41)), V((0.33, -0.23, 2.08)), 0.004, FR, n=6)
+    box('crane_block', (0.33, -0.23, 2.06), (0.035, 0.02, 0.04), YEL, bev=0.2); hazard('hz_block', (0.33, -0.252, 2.06), (0.035, 0.003, 0.012), n=4)
+    cyl('crane_hook', V((0.33, -0.23, 2.02)), V((0.33, -0.25, 1.98)), 0.014, ST, n=10)
     hose('hose_back', [V((-0.12, 0.25, 1.62)), V((-0.2, 0.18, 1.72)), V((-0.32, 0.05, 1.68))], 0.016)
     slot('bionics', 'tanks')
     for s in (1, -1): cyl(f'b_tank_{s}', V((0.09 * s - 0.03, 0.27, 1.3)), V((0.09 * s - 0.03, 0.27, 1.5)), 0.05, ORA)
@@ -169,13 +169,19 @@ def build():
     # head: box-cam on a neck, one big lens, two lamps, antenna, tilted (curious / tired)
     bone('Head'); J['Head'] = V((0, -0.03, 1.8))
     cyl('neck', V((0, 0, 1.72)), V((0, -0.03, 1.84)), 0.04, FR)
-    box('head', (0, -0.05, 1.92), (0.13, 0.12, 0.09), OLV, rz=0.04, ry=0.08)
-    box('head_visor_frame', (0, -0.175, 1.93), (0.11, 0.01, 0.06), FR, ry=0.08)
-    cyl('lens_barrel', V((0.03, -0.17, 1.93)), V((0.03, -0.22, 1.93)), 0.045, FR, n=24)
-    cyl('lens', V((0.03, -0.22, 1.93)), V((0.03, -0.225, 1.93)), 0.035, LENS, n=24)
-    for s in (1, -1): box(f'head_lamp_{s}', (-0.07 + 0.03 * s, -0.18, 1.975), (0.012, 0.006, 0.01), LAMP)
-    cyl('antenna', V((-0.1, 0, 2.0)), V((-0.13, 0.04, 2.2)), 0.004, ST, n=6)
-    hazard('hz_head', (0, -0.05, 2.015), (0.12, 0.11, 0.006), n=6)
+    # menacing: low wedge skull, heavy brow cage over a single recessed red cyclops, armoured jaw
+    box('head', (0, -0.03, 1.91), (0.12, 0.12, 0.08), OLV, rx=0.12, bev=0.3)
+    box('head_crest', (0, -0.02, 2.0), (0.04, 0.13, 0.03), GRY, rx=0.15, bev=0.3)
+    box('brow', (0, -0.15, 1.965), (0.135, 0.04, 0.026), GRY, rx=-0.35, bev=0.2)
+    for s_ in (1, -1): box(f'brow_wing_{s_}', (0.11 * s_, -0.13, 1.95), (0.05, 0.03, 0.02), GRY, rx=-0.3, ry=0.45 * s_, bev=0.2)
+    for i in range(5): cyl(f'cage_bar_{i}', V((-0.1 + i * 0.05, -0.19, 1.95)), V((-0.1 + i * 0.05 * 0.8, -0.2, 1.84)), 0.006, ST, n=8)
+    cyl('cage_rail', V((-0.12, -0.2, 1.85)), V((0.12, -0.2, 1.85)), 0.007, ST, n=8)
+    cyl('lens_barrel', V((0, -0.13, 1.91)), V((0, -0.175, 1.91)), 0.04, FR, n=24)
+    cyl('lens', V((0, -0.175, 1.91)), V((0, -0.18, 1.91)), 0.03, LENS, n=24)
+    box('jaw', (0, -0.12, 1.84), (0.1, 0.06, 0.03), OLV, rx=0.3, bev=0.3)
+    for i in range(3): box(f'jaw_vent_{i}', (-0.04 + i * 0.04, -0.17, 1.83), (0.012, 0.004, 0.018), FR, rx=0.3)
+    for s_ in (1, -1): box(f'head_lamp_{s_}', (0.1 * s_, -0.17, 1.99), (0.014, 0.006, 0.008), LAMP)
+    cyl('antenna', V((-0.1, 0.03, 1.98)), V((-0.14, 0.08, 2.2)), 0.004, ST, n=6)
     slot('helmet', 'boxcam'); box('h_cam2', (0.09, -0.1, 2.04), (0.03, 0.04, 0.025), FR)
     slot('helmet', 'welder'); box('h_mask', (0, -0.19, 1.98), (0.12, 0.01, 0.04), GRY, rx=-0.3)
     slot('helmet', 'lamp'); cyl('h_lamp', V((0, -0.05, 2.02)), V((0, -0.05, 2.08)), 0.04, LAMP)
@@ -183,7 +189,7 @@ def build():
     arm(1); arm(-1); leg(1); leg(-1)
     # slouch: upper body pitched forward + listed to the right (worn hip)
     upb = [o for o in S.ALL if not o['bone'].endswith(('UpLeg', 'Leg', 'Foot')) and o['bone'] != 'Hips']
-    lean = Matrix.Translation((0, 0, 1.1)) @ Matrix.Rotation(0.04, 4, 'Y') @ Matrix.Rotation(0.2, 4, 'X').inverted() @ Matrix.Translation((0, 0, -1.1))
+    lean = Matrix.Translation((0, 0, 1.1)) @ Matrix.Rotation(0.04, 4, 'Y') @ Matrix.Rotation(0.1, 4, 'X').inverted() @ Matrix.Translation((0, 0, -1.1))
     for o in upb: o.matrix_world = lean @ o.matrix_world
     for k_ in list(J):
         if not k_.endswith(('UpLeg', 'Leg', 'Foot')) and k_ != 'Hips': J[k_] = lean @ J[k_]
