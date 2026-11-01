@@ -25,6 +25,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Rebuild phase 1: Key West ground, water, roads, buildings | bot/websmith-rebuild-p1-keywest | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 6: procedural interiors | bot/websmith-rebuild-p6-interiors | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Realistic textures + painting per area | bot/websmith-textures | Grok Bot (Websmith) | PR open | 2026-10-31 |
+| Weather: eased Clear/Rain/Snow/Fog, wet roads | bot/websmith-weather | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | Rebuild phase 7: player robot (placeholder model, flight, thrust, chase cam, HUD) | bot/websmith-rebuild-p7-robot | Grok Bot (Websmith) | merged | 2026-10-31 |
 | Rebuild phase 7b: robot garage, Blender parts, save, hero FX | bot/websmith-rebuild-p7b-customize | Grok Bot (Websmith) | PR open | 2026-10-31 |
 | A6 smoothness pass (perf overlay, flight bench, time-sliced/worker loading) | bot/websmith-rebuild-a6-smooth | Grok Bot (Websmith) | PR open | 2026-10-31 |
@@ -183,3 +184,6 @@ Main-thread JS per frame (route: low-fast, cruise, sharp turns). Draw calls: 81 
 - CC0 ambientCG sets packed as KTX2 2D arrays in `public/textures/` (ground 4 layers, walls 5, roofs 3; ETC1S, mipmapped, ~550 KB total). Rebuild with `node tools/textures/build.mjs` (needs `ktx` 4.4 on PATH); list in `tools/textures/sets.json`, licences in `public/textures/LICENSES.md`.
 - Terrain: per-vertex `gmat` weights [grass, sand, soil, concrete]; seabed (weights 0) keeps vertex colour. Buildings: `facade.z = kind + 4*wallMat + 32*roofMat`; area style (palettes, material weights) in `src/area/textures.ts` `AREA_STYLE`.
 - Lights/fog neutralised (no blue tint); night mood from lighting/sky only. Roads untouched (PR4).
+## Weather (bot/websmith-weather)
+- `src/weather.ts`: `WEATHER_PRESETS` (data) + `createWeatherState()` which eases the live mix each frame; ground wetness/snow cover accumulate and dry slowly. `scene.setWeather(kind, k, instant?)` sets the target; `applyWeather()` in scene.ts is the single place that writes uniforms. Particles read `app.weatherMix`.
+- New kind = preset entry + its particle system. `?weather=rain` starts in rain (instant); `__weather()` exposes the mix. Test: `tests/weather.spec.ts`.
