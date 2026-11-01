@@ -4,7 +4,7 @@ import * as THREE from 'three/webgpu';
 import { createSky } from './sky';
 import { createFlyControls } from './flyControls';
 import { loadArea } from './area/data';
-import { buildTerrain, buildRoads, buildPoolsPiers, redrapeRoadGeometry } from './area/ground';
+import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
 import { buildBuildings } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
 import { loadMaterialTextures, styleFor, GROUND_GAIN, GROUND_SCALE } from './area/textures';
@@ -123,13 +123,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     // and keep trees and grass out of the pad.
     const grassMask = mask ? parseGroundMask(mask) : null;
     const lmTrees = treesOutsideLandmarks(area.trees as number[], landmarks.pads);
-    const keepRoadBed = (x: number, z: number) => {
-      if (grassMask?.blocked(x, z)) return true;
-      const ix = Math.round((x - terrain.x0) / terrain.cell), iz = Math.round((z - terrain.z0) / terrain.cell);
-      if (ix < 0 || iz < 0 || ix >= terrain.nx || iz >= terrain.nz) return false;
-      return terrain.cover[iz * terrain.nx + ix] === 3; // paved / hardscape: keep bed height, re-drape roads on it
-    };
-    if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads, 14, keepRoadBed), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
+    if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
     const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);
@@ -138,7 +132,6 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const grass = buildGrass(terrain, grassMask);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     const roads = buildRoads(area, terrain, roadMat, landmarks.pads);
-    redrapeRoadGeometry(roads, roads.surface);
     group.add(buildTerrain(terrain, groundMat, style), roads, buildPoolsPiers(area, terrain, roadMat), blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group);
