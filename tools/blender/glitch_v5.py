@@ -63,7 +63,7 @@ def face_disp(X, Z):
     return d
 
 def face_plate():
-    NT, NP = 60, 72; bm = bmesh.new(); rows = []
+    NT, NP = (30, 38) if '--kit' in S.argv else (60, 72); bm = bmesh.new(); rows = []
     for j in range(NP + 1):
         ph = -1.08 + 1.62 * j / NP; r = []
         for i in range(NT + 1):
@@ -77,7 +77,7 @@ def face_plate():
         rows.append(r)
     for a, b in zip(rows, rows[1:]):
         for i in range(NT): bm.faces.new((a[i], a[i + 1], b[i + 1], b[i]))   # winding gives outward (-Y) normals; open sheet, so no recalc
-    o = obj_from_bm('face_plate', bm, FACE)
+    o = obj_from_bm('face_plate', bm, FACE); o['_keep'] = 1
     for p in o.data.polygons: p.use_smooth = True
     print('FACE normal y', sum(p.normal.y for p in o.data.polygons) / len(o.data.polygons), flush=True)
     return o
@@ -100,16 +100,16 @@ def ribs(name, a, b, r, n, m=CB):
 def build():
     # ---------------- torso
     bone('Hips'); J['Hips'] = V((0, 0, 0.98))
-    skin(loft('s_pelvis', [(0.86, 0, 0.0, 0.13, 0.095), (0.95, 0, 0, 0.155, 0.1), (1.05, 0, 0, 0.14, 0.09)], SK), 0.048, 'torso')
-    loft('m_pelvis', [(0.87, 0, 0.0, 0.11, 0.08), (1.04, 0, 0, 0.12, 0.075)], DK, armor=False)
+    skin(loft('s_pelvis', [(0.86, 0, 0.0, 0.0936, 0.0779), (0.95, 0, 0, 0.1116, 0.082), (1.05, 0, 0, 0.1008, 0.0738)], SK), 0.028, 'torso')
+    loft('m_pelvis', [(0.87, 0, 0.0, 0.0792, 0.0656), (1.04, 0, 0, 0.0864, 0.0615)], DK, armor=False)
     bone('Spine'); J['Spine'] = V((0, 0, 1.12))
-    skin(loft('s_torso', [(1.05, 0, 0, 0.135, 0.088), (1.16, 0, 0, 0.125, 0.085), (1.3, 0, -0.005, 0.165, 0.105), (1.43, 0, -0.005, 0.185, 0.11), (1.51, 0, 0.005, 0.16, 0.1), (1.56, 0, 0.01, 0.08, 0.07)], SK), 0.036, 'torso')
-    loft('m_torso', [(1.04, 0, 0, 0.11, 0.07), (1.3, 0, 0, 0.14, 0.088), (1.48, 0, 0, 0.15, 0.09), (1.56, 0, 0.01, 0.07, 0.06)], DK, armor=False)
+    skin(loft('s_torso', [(1.05, 0, 0, 0.0972, 0.0722), (1.16, 0, 0, 0.09, 0.0697), (1.3, 0, -0.005, 0.1188, 0.0861), (1.43, 0, -0.005, 0.1332, 0.0902), (1.51, 0, 0.005, 0.1152, 0.082), (1.56, 0, 0.01, 0.0576, 0.0574)], SK), 0.024, 'torso')
+    loft('m_torso', [(1.04, 0, 0, 0.0792, 0.0574), (1.3, 0, 0, 0.1008, 0.0722), (1.48, 0, 0, 0.108, 0.0738), (1.56, 0, 0.01, 0.0504, 0.0492)], DK, armor=False)
     for k in range(11):  # spinal column down the back
         z = 1.02 + k * 0.05; cyl(f'vert{k}', V((0, 0.075, z)), V((0, 0.075, z + 0.022)), 0.026, DK, n=16)
         cyl(f'vdisc{k}', V((0, 0.075, z + 0.024)), V((0, 0.075, z + 0.032)), 0.018, STEEL, n=12)
     for s in (1, -1):
-        for k in range(4): cyl(f'rib{k}_{s}', V((0.03 * s, 0.08, 1.24 + k * 0.06)), V((0.13 * s, -0.02, 1.2 + k * 0.065)), 0.007, CB, n=8)
+        for k in range(4): cyl(f'rib{k}_{s}', V((0.03 * s, 0.08, 1.24 + k * 0.06)), V((0.095 * s, -0.02, 1.2 + k * 0.065)), 0.007, CB, n=8)
         S.piston(f'chest_pst_{s}', V((0.05 * s, -0.07, 1.18)), V((0.12 * s, -0.06, 1.44)), r=0.014)
     cyl('neck_glow', V((0, 0.01, 1.555)), V((0, 0.01, 1.565)), 0.06, GL, n=24)
     slot('bionics', 'spine')
@@ -141,9 +141,9 @@ def build():
     slot('body')
     # ---------------- left arm (mirrored)
     bone('LeftArm'); sh, el, wr = V((0.205, 0.0, 1.49)), V((0.24, 0.03, 1.21)), V((0.255, 0.0, 0.96)); J['LeftArm'] = sh.copy()
-    skin(ellip('s_delt_L', sh + V((0.02, 0, 0.005)), V((0.07, 0.075, 0.07)), SK), 0.026, 'shoulder')
+    skin(ellip('s_delt_L', sh + V((0.01, 0, 0.005)), V((0.055, 0.06, 0.058)), SK), 0.022, 'shoulder')
     ellip('m_delt_L', sh + V((0.015, 0, 0)), V((0.055, 0.058, 0.055)), DK)
-    ua = loft('s_uarm_L', [(0, 0, 0, 0.05, 0.05), (0.15, 0, 0, 0.048, 0.048), (0.28, 0, 0, 0.04, 0.04)], SK); place(ua, sh, el); skin(ua, 0.03, 'arm')
+    ua = loft('s_uarm_L', [(0, 0, 0, 0.04, 0.04), (0.15, 0, 0, 0.0384, 0.0384), (0.28, 0, 0, 0.032, 0.032)], SK); place(ua, sh, el); skin(ua, 0.021, 'arm')
     m = loft('m_uarm_L', [(0, 0, 0, 0.032, 0.032), (0.28, 0, 0, 0.026, 0.026)], DK, armor=False); place(m, sh, el)
     ribs('uarm_rib_L', sh, el, 0.036, 6)
     S.piston('uarm_pst_L', sh + V((0.0, -0.05, -0.03)), el + V((0.0, -0.035, 0.03)), r=0.011)
@@ -151,7 +151,7 @@ def build():
     cyl('sh_glow_L', sh + V((0.06, 0, 0)), sh + V((0.066, 0, 0)), 0.03, GL, n=20)
     bone('LeftForeArm'); J['LeftForeArm'] = el.copy()
     S.joint('elbow_L', el, (1, 0, 0), 0.034, 0.075)
-    fa = loft('s_farm_L', [(0, 0, 0, 0.042, 0.042), (0.08, 0, 0, 0.045, 0.044), (0.25, 0, 0, 0.033, 0.032)], SK); place(fa, el, wr); skin(fa, 0.03, 'arm')
+    fa = loft('s_farm_L', [(0, 0, 0, 0.0344, 0.0344), (0.08, 0, 0, 0.0369, 0.0361), (0.25, 0, 0, 0.0271, 0.0262)], SK); place(fa, el, wr); skin(fa, 0.021, 'arm')
     m = loft('m_farm_L', [(0, 0, 0, 0.026, 0.026), (0.25, 0, 0, 0.02, 0.02)], DK, armor=False); place(m, el, wr)
     ribs('farm_rib_L', el.lerp(wr, 0.15), wr, 0.03, 5)
     for k, a in enumerate((0.6, 2.2, 4.0)): cyl(f'farm_cab{k}_L', el + V((0.03 * math.cos(a), 0.03 * math.sin(a), -0.02)), wr + V((0.022 * math.cos(a), 0.022 * math.sin(a), 0.02)), 0.005, CB, n=8)
@@ -166,19 +166,19 @@ def build():
     bone('LeftUpLeg'); hip, knee, ank = V((0.095, 0, 0.93)), V((0.105, -0.015, 0.52)), V((0.105, 0.015, 0.1))
     ball, toe = V((0.105, -0.09, 0.035)), V((0.105, -0.17, 0.025))
     J['LeftUpLeg'], J['LeftLeg'], J['LeftFoot'] = hip.copy(), knee.copy(), ank.copy()
-    th = loft('s_thigh_L', [(0, 0, 0, 0.078, 0.08), (0.15, 0, 0, 0.072, 0.074), (0.4, 0, 0, 0.05, 0.052)], SK); place(th, hip, knee); skin(th, 0.056, 'leg')
-    m = loft('m_thigh_L', [(0, 0, 0, 0.055, 0.055), (0.4, 0, 0, 0.034, 0.034)], DK, armor=False); place(m, hip, knee)
+    th = loft('s_thigh_L', [(0, 0, 0, 0.0546, 0.056), (0.15, 0, 0, 0.0504, 0.0518), (0.4, 0, 0, 0.035, 0.0364)], SK); place(th, hip, knee); skin(th, 0.028, 'leg')
+    m = loft('m_thigh_L', [(0, 0, 0, 0.044, 0.044), (0.4, 0, 0, 0.0272, 0.0272)], DK, armor=False); place(m, hip, knee)
     S.piston('thigh_pst_L', hip + V((0.04, -0.06, -0.05)), knee + V((0.02, -0.045, 0.05)), r=0.013)
     slot('legs', 'bare'); cyl('l_cab_L', hip + V((0.07, 0.02, -0.06)), knee + V((0.045, 0.02, 0.05)), 0.006, CB, n=8)
     slot('legs', 'plated'); box('l_plate_L', hip.lerp(knee, 0.45) + V((0, -0.075, 0)), (0.045, 0.012, 0.08), SK)
     slot('legs', 'pistons'); S.piston('l_pst_L', hip + V((-0.05, 0.03, -0.06)), knee + V((-0.03, 0.04, 0.05)), r=0.011)
     slot('body')
     bone('LeftLeg'); S.joint('knee_L', knee, (1, 0, 0), 0.04, 0.09)
-    sn = loft('s_shin_L', [(0, 0, 0, 0.05, 0.055), (0.12, 0, 0, 0.055, 0.062), (0.42, 0, 0, 0.034, 0.036)], SK); place(sn, knee, ank); skin(sn, 0.052, 'leg')
-    m = loft('m_shin_L', [(0, 0, 0, 0.034, 0.034), (0.42, 0, 0, 0.024, 0.024)], DK, armor=False); place(m, knee, ank)
+    sn = loft('s_shin_L', [(0, 0, 0, 0.036, 0.0396), (0.12, 0, 0, 0.0396, 0.0446), (0.42, 0, 0, 0.0245, 0.0259)], SK); place(sn, knee, ank); skin(sn, 0.027, 'leg')
+    m = loft('m_shin_L', [(0, 0, 0, 0.0289, 0.0289), (0.42, 0, 0, 0.0204, 0.0204)], DK, armor=False); place(m, knee, ank)
     S.piston('calf_pst_L', knee + V((0, 0.05, -0.06)), ank + V((0, 0.04, 0.06)), r=0.012)
     bone('LeftFoot'); S.joint('ankle_L', ank, (1, 0, 0), 0.03, 0.07)
-    ft = loft('s_foot_L', [(0, 0, 0, 0.045, 0.04), (0.1, 0, 0, 0.05, 0.035), (0.21, 0, 0, 0.04, 0.022)], SK); place(ft, ank + V((0, 0.05, -0.05)), toe); skin(ft, 0.04, 'foot')
+    ft = loft('s_foot_L', [(0, 0, 0, 0.045, 0.04), (0.1, 0, 0, 0.05, 0.035), (0.21, 0, 0, 0.04, 0.022)], SK); place(ft, ank + V((0, 0.05, -0.05)), toe); skin(ft, 0.025, 'foot')
     box('m_sole_L', V((0.105, -0.055, 0.012)), (0.05, 0.12, 0.012), DK)
     slot('boots', 'flat'); box('bt_flat_L', V((0.105, -0.055, 0.003)), (0.052, 0.122, 0.003), CB)
     slot('boots', 'plated'); box('bt_plate_L', toe + V((0, 0.02, 0.025)), (0.045, 0.04, 0.02), SK)
@@ -191,7 +191,7 @@ def build():
 
 def _jb(bn): return J[bn] if bn in J else V((-J[bn.replace('Right', 'Left')].x, J[bn.replace('Right', 'Left')].y, J[bn.replace('Right', 'Left')].z))
 
-DROP = {'head': 0.3, 'neck': 0.5, 'shoulder': 0.42, 'arm': 0.36, 'torso': 0.22, 'leg': 0.16, 'foot': 0.1}
+DROP = {'head': 0.3, 'neck': 0.66, 'shoulder': 0.62, 'arm': 0.58, 'torso': 0.46, 'leg': 0.5, 'foot': 0.34}
 
 def voxelize():
     """Cube skin: surface-sample each skin shell, snap to its cube grid, add stepped tiers / slabs, punch noise patches."""
@@ -214,7 +214,10 @@ def voxelize():
             if reg == 'head' and in_face(p): continue
             w = DROP[reg] + (0.22 if reg in ('head', 'torso') and p.y > HC.y + 0.01 and (reg == 'head' or p.z > 1.3) else 0)
             if reg == 'torso' and p.z > 1.42: w += 0.12
-            n = noise.noise(p * (1 / (c * 4.5)) + V((3.1, 7.7, 1.3)))
+            if reg == 'torso' and abs(p.x) > 0.095: w += 0.2                                  # open chest sides
+            if reg == 'torso' and p.y > 0.03: w += 0.12                                       # open back
+            # big irregular gaps (fixed ~10 cm scale, independent of cube size) + fine breakup
+            n = 0.72 * noise.noise(p * 9.5 + V((3.1, 7.7, 1.3))) + 0.28 * noise.noise(p * (1 / (c * 3.5)) + V((8.2, 1.4, 5.9)))
             if n < (w - 0.5) * 1.6: continue
             gk = (bn, key, c)
             if gk in seen: continue
@@ -222,11 +225,15 @@ def voxelize():
             grey = rnd.random() < 0.35
             h = [c * 0.47] * 3
             if rnd.random() < 0.3: h[rnd.choice((0, 1, 2))] *= rnd.choice((1.5, 2.0))           # slabs
+            if reg != 'head' and rnd.random() < 0.1:                                             # peeling: lifted off the surface, tumbled
+                ax = V((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))).normalized()
+                cubes.append([bn, p + nrm * c * rnd.uniform(0.8, 2.6) + V((0, 0, c * rnd.uniform(0, 1.5))), [c * 0.4] * 3, 1 if grey else 0, reg, Quaternion(ax, rnd.uniform(0.3, 1.2))])
+                continue
             cubes.append([bn, p, h, 1 if grey else 0, reg])
             if rnd.random() < 0.16:                                                             # stepped tier
                 ax = max(range(3), key=lambda i: abs(nrm[i])); off = V((0, 0, 0)); off[ax] = c * (1 if nrm[ax] > 0 else -1)
                 cubes.append([bn, p + off * 0.85, [c * 0.45] * 3, 1 if rnd.random() < 0.6 else 0, reg])
-            if reg in ('head', 'neck', 'shoulder') and rnd.random() < 0.35: emit.append((bn, p.copy(), reg))
+            if rnd.random() < (0.35 if reg in ('head', 'neck', 'shoulder') else 0.14): emit.append((bn, p.copy(), reg))
     return cubes, emit
 
 def tilt_head(cubes, emit):
@@ -234,7 +241,8 @@ def tilt_head(cubes, emit):
     for o in [o for o in bpy.context.scene.objects if o.get('bone') == 'Head']: o.matrix_world = T @ o.matrix_world
     q = Matrix.Rotation(TILT, 4, 'X').to_quaternion()
     for cb in cubes:
-        cb.append(q if cb[0] == 'Head' else Quaternion())
+        base = cb.pop(5) if len(cb) > 5 else Quaternion()
+        cb.append(q @ base if cb[0] == 'Head' else base)
         if cb[0] == 'Head': cb[1] = T @ cb[1]
     return [(b, T @ p if b == 'Head' else p, r) for b, p, r in emit]
 
@@ -260,15 +268,15 @@ def cube_mesh(name, items):
     b = o.modifiers.new('bv', 'BEVEL'); b.width = 0.0012; b.segments = 1
     return o
 
-def cloud(emit, n=460):
+def cloud(emit, n=700):
     rnd = random.Random(4); items = []; hc = J['Head'] + V((0, 0.0, 0.17))
     for _ in range(n):
         bn, p, reg = rnd.choice(emit)
-        out = (p - (hc if reg != 'shoulder' else p - V((0.0, 0.0, -0.1)))).normalized()
+        ax = V((0, 0, max(0.9, min(1.55, p.z)))); out = (p - (hc if reg == 'head' else ax)).normalized() if reg != 'shoulder' else V((0, 0, 1))
         d = (out * 0.9 + V((rnd.uniform(-0.6, 0.6), rnd.uniform(-0.6, 0.6), rnd.uniform(0.1, 1.0)))).normalized()
         t = rnd.random() ** 1.6
-        dist = 0.015 + t * (0.42 if reg == 'head' else 0.3)
-        s = 0.0105 * 0.5 * (1 - 0.7 * t) * rnd.uniform(0.7, 1.15)
+        dist = 0.015 + t * (0.42 if reg == 'head' else 0.3 if reg in ('neck', 'shoulder') else 0.2)
+        s = (0.0105 if reg in ('head', 'neck') else 0.016) * 0.5 * (1 - 0.7 * t) * rnd.uniform(0.7, 1.15)
         q = Quaternion(V((rnd.uniform(-1, 1), rnd.uniform(-1, 1), rnd.uniform(-1, 1))).normalized(), rnd.uniform(-0.25, 0.25))
         items.append((p + d * dist, [s] * 3, 1 if rnd.random() < 0.3 else 0, q))
     return cube_mesh('cloud', items)
