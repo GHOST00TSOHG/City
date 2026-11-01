@@ -118,6 +118,7 @@ createScene(canvas, areaId).then(async (app) => {
     sfx.tread(T === 'worker' && ground && ctl.form >= 0.97 ? v / Math.max(1, ctl.tuning.run) : null);
     sfx.hover(T === 'scout' && ground && ctl.form >= 0.97, v / Math.max(1, ctl.tuning.run));
     const cloud = T === 'glitch' && ctl.cloud > 0.5; if (cloud !== wasCloud) { wasCloud = cloud; sfx.glitch(cloud ? 'dissolve' : 'reform'); snapT = 0.3; }
+    sfx.runBed(cloud); // option G bed under the snaps (ogg loop; the m4a is never looped: its encoder padding leaves a gap)
     if (cloud && v > 3) { snapT -= dt; if (snapT < 0) { snapT = 0.62; sfx.snap(); } } // Luis's pick: teleport snaps (one per 0.62 s) while Glitch runs as a cloud
     peakV = Math.max(v, peakV - 14 * dt); if (ground && v < 1.2 && peakV > 5.5 && ctl.anim !== 'land') { sfx.stopSkid(now); peakV = 0; }
     const dh = Math.atan2(Math.sin(ctl.heading - prevHead), Math.cos(ctl.heading - prevHead)) / Math.max(dt, 1e-3); prevHead = ctl.heading;

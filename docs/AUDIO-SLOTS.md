@@ -36,6 +36,7 @@ Rules in force: **no idle sound** (robots are silent standing still); **every lo
 | `tread-turn-sparks` (Worker) | treads out, speed above 3 m/s, yaw rate above 1.6 rad/s, 1.0 s (60 frames) cooldown | t = 0 |
 | `dissolve` (Glitch) | running starts: the cloud weight (1 - e^(-3.2 t)) passes 0.5 | 0.217 s (13 frames) after Shift+W |
 | `teleport-snap_01..03` (Glitch on foot, **Luis's pick**) | while running as a cloud at over 3 m/s: first snap 0.3 s (18 frames) after the dissolve, then every 0.62 s (37 frames); random, no immediate repeat. **At most 2 overlapping voices**: a snap requested while 2 are still sounding is dropped (a voice is reserved synchronously, so 6 requests in one frame start 2) | |
+| `run-loop` (Glitch on foot, **Luis's pick: option G**, `glitch-run-loop_G` from robots_v3) | continuous bed the whole time Glitch runs as a cloud (cloud weight > 0.5, same gate as `dissolve`), under the teleport snaps (every 0.62 s, max 2 voices). Fade in 50 ms, **stop with an 80 ms fade** when the run ends (at `reform`). **Looped from the .ogg only** (the .m4a is never looped: AAC encoder padding leaves a gap); 10.0 s mono 48 kHz; seam checked: end-to-start step 0.028, inside the clip's own p99 sample step (0.024-0.076), no click | starts with `dissolve` 0.217 s (13 frames) after Shift+W |
 | `reform` (Glitch) | he stops: cloud weight (rate 4.5 /s) falls below 0.5 | 0.154 s (9 frames) after the keys are released; solid about 0.5 s (30 frames) later |
 | `cloud` loop file | **not used** (Luis chose the teleport snaps for the on-foot run) | |
 
