@@ -1,0 +1,583 @@
+{
+ "_doc": "Per-type skeleton shared by the game (src/robot/types.ts) and Blender (tools/blender/kit.py). Game frame: +Y up, +Z forward, metres. Each bone offset is relative to its parent; Right* bones mirror Left* in x. sole = foot-bone y of the sole, hand = forearm-bone y of the wrist.",
+ "scout": {
+  "hand": -0.221,
+  "bones": {
+   "Hips": [
+    0.0,
+    1.0,
+    -0.0
+   ],
+   "Spine": [
+    0.0,
+    0.1197,
+    -0.0032
+   ],
+   "Head": [
+    0.0,
+    0.5536,
+    -0.0843
+   ],
+   "LeftArm": [
+    0.3,
+    0.3751,
+    -0.0605
+   ],
+   "LeftForeArm": [
+    0.05,
+    -0.3306,
+    0.023
+   ],
+   "LeftHand": [
+    0.0,
+    -0.221,
+    0.137
+   ],
+   "LeftF0_0": [
+    -0.0025,
+    -0.0704,
+    0.0914
+   ],
+   "LeftF0_1": [
+    0.0077,
+    -0.0341,
+    0.0211
+   ],
+   "LeftF0_2": [
+    0.0178,
+    -0.0218,
+    0.0135
+   ],
+   "LeftF1_0": [
+    -0.0025,
+    -0.0847,
+    0.0684
+   ],
+   "LeftF1_1": [
+    0.0077,
+    -0.0341,
+    0.0211
+   ],
+   "LeftF1_2": [
+    0.0178,
+    -0.0218,
+    0.0135
+   ],
+   "LeftF2_0": [
+    -0.0025,
+    -0.0989,
+    0.0454
+   ],
+   "LeftF2_1": [
+    0.0077,
+    -0.0341,
+    0.0211
+   ],
+   "LeftF2_2": [
+    0.0178,
+    -0.0218,
+    0.0135
+   ],
+   "LeftF3_0": [
+    -0.0025,
+    -0.1132,
+    0.0224
+   ],
+   "LeftF3_1": [
+    0.0077,
+    -0.0341,
+    0.0211
+   ],
+   "LeftF3_2": [
+    0.0178,
+    -0.0218,
+    0.0135
+   ],
+   "LeftF9_0": [
+    -0.0189,
+    -0.036,
+    0.0911
+   ],
+   "LeftF9_1": [
+    -0.02,
+    -0.0176,
+    0.0285
+   ],
+   "LeftUpLeg": [
+    0.12,
+    -0.04,
+    0.01
+   ],
+   "LeftLeg": [
+    0.03,
+    -0.36,
+    0.19
+   ],
+   "LeftFoot": [
+    0.0,
+    -0.35,
+    -0.33
+   ]
+  },
+  "parents": {
+   "Hips": null,
+   "Spine": "Hips",
+   "Head": "Spine",
+   "LeftArm": "Spine",
+   "LeftForeArm": "LeftArm",
+   "LeftHand": "LeftForeArm",
+   "LeftF0_0": "LeftHand",
+   "LeftF0_1": "LeftF0_0",
+   "LeftF0_2": "LeftF0_1",
+   "LeftF1_0": "LeftHand",
+   "LeftF1_1": "LeftF1_0",
+   "LeftF1_2": "LeftF1_1",
+   "LeftF2_0": "LeftHand",
+   "LeftF2_1": "LeftF2_0",
+   "LeftF2_2": "LeftF2_1",
+   "LeftF3_0": "LeftHand",
+   "LeftF3_1": "LeftF3_0",
+   "LeftF3_2": "LeftF3_1",
+   "LeftF9_0": "LeftHand",
+   "LeftF9_1": "LeftF9_0",
+   "LeftUpLeg": "Hips",
+   "LeftLeg": "LeftUpLeg",
+   "LeftFoot": "LeftLeg"
+  }
+ },
+ "heavy": {
+  "hand": -0.305,
+  "bones": {
+   "Hips": [
+    0.0,
+    1.02,
+    -0.0
+   ],
+   "Spine": [
+    0.0,
+    0.1399,
+    -0.0024
+   ],
+   "Head": [
+    0.0,
+    0.749,
+    0.0306
+   ],
+   "LeftArm": [
+    0.56,
+    0.556,
+    -0.067
+   ],
+   "LeftForeArm": [
+    0.14,
+    -0.4007,
+    0.0181
+   ],
+   "LeftHand": [
+    0.0,
+    -0.3054,
+    0.1444
+   ],
+   "LeftF0_0": [
+    -0.0061,
+    -0.1794,
+    0.2312
+   ],
+   "LeftF0_1": [
+    -0.0449,
+    -0.0794,
+    0.0375
+   ],
+   "LeftF0_2": [
+    -0.0753,
+    -0.0033,
+    0.0016
+   ],
+   "LeftF1_0": [
+    -0.0061,
+    -0.2171,
+    0.1515
+   ],
+   "LeftF1_1": [
+    -0.0449,
+    -0.0794,
+    0.0375
+   ],
+   "LeftF1_2": [
+    -0.0753,
+    -0.0033,
+    0.0016
+   ],
+   "LeftF2_0": [
+    -0.0061,
+    -0.2548,
+    0.0717
+   ],
+   "LeftF2_1": [
+    -0.0449,
+    -0.0794,
+    0.0375
+   ],
+   "LeftF2_2": [
+    -0.0753,
+    -0.0033,
+    0.0016
+   ],
+   "LeftF3_0": [
+    -0.0061,
+    -0.2925,
+    -0.0081
+   ],
+   "LeftF3_1": [
+    -0.0449,
+    -0.0794,
+    0.0375
+   ],
+   "LeftF3_2": [
+    -0.0753,
+    -0.0033,
+    0.0016
+   ],
+   "LeftF9_0": [
+    -0.0457,
+    -0.0901,
+    0.2538
+   ],
+   "LeftF9_1": [
+    -0.0314,
+    -0.0549,
+    0.0699
+   ],
+   "LeftUpLeg": [
+    0.24,
+    -0.06,
+    -0.0
+   ],
+   "LeftLeg": [
+    0.04,
+    -0.37,
+    0.08
+   ],
+   "LeftFoot": [
+    0.02,
+    -0.35,
+    -0.1
+   ]
+  },
+  "parents": {
+   "Hips": null,
+   "Spine": "Hips",
+   "Head": "Spine",
+   "LeftArm": "Spine",
+   "LeftForeArm": "LeftArm",
+   "LeftHand": "LeftForeArm",
+   "LeftF0_0": "LeftHand",
+   "LeftF0_1": "LeftF0_0",
+   "LeftF0_2": "LeftF0_1",
+   "LeftF1_0": "LeftHand",
+   "LeftF1_1": "LeftF1_0",
+   "LeftF1_2": "LeftF1_1",
+   "LeftF2_0": "LeftHand",
+   "LeftF2_1": "LeftF2_0",
+   "LeftF2_2": "LeftF2_1",
+   "LeftF3_0": "LeftHand",
+   "LeftF3_1": "LeftF3_0",
+   "LeftF3_2": "LeftF3_1",
+   "LeftF9_0": "LeftHand",
+   "LeftF9_1": "LeftF9_0",
+   "LeftUpLeg": "Hips",
+   "LeftLeg": "LeftUpLeg",
+   "LeftFoot": "LeftLeg"
+  }
+ },
+ "worker": {
+  "hand": -0.319,
+  "bones": {
+   "Hips": [
+    0.0,
+    1.006,
+    -0.0
+   ],
+   "Spine": [
+    0.0012,
+    0.1195,
+    -0.006
+   ],
+   "Head": [
+    0.0186,
+    0.6187,
+    -0.0531
+   ],
+   "LeftArm": [
+    0.3546,
+    0.481,
+    -0.0945
+   ],
+   "LeftForeArm": [
+    0.1079,
+    -0.4064,
+    0.0103
+   ],
+   "LeftHand": [
+    -0.0196,
+    -0.3193,
+    0.1596
+   ],
+   "LeftF0_0": [
+    -0.0101,
+    -0.0963,
+    0.1185
+   ],
+   "LeftF0_1": [
+    -0.0157,
+    -0.0449,
+    0.0226
+   ],
+   "LeftF0_2": [
+    -0.0303,
+    -0.0236,
+    0.0122
+   ],
+   "LeftF1_0": [
+    -0.0106,
+    -0.1151,
+    0.081
+   ],
+   "LeftF1_1": [
+    -0.0157,
+    -0.0449,
+    0.0226
+   ],
+   "LeftF1_2": [
+    -0.0303,
+    -0.0236,
+    0.0122
+   ],
+   "LeftF2_0": [
+    -0.0112,
+    -0.1338,
+    0.0435
+   ],
+   "LeftF2_1": [
+    -0.0157,
+    -0.0449,
+    0.0226
+   ],
+   "LeftF2_2": [
+    -0.0303,
+    -0.0236,
+    0.0122
+   ],
+   "LeftF3_0": [
+    -0.0117,
+    -0.1525,
+    0.006
+   ],
+   "LeftF3_1": [
+    -0.0157,
+    -0.0449,
+    0.0226
+   ],
+   "LeftF3_2": [
+    -0.0303,
+    -0.0236,
+    0.0122
+   ],
+   "LeftF9_0": [
+    -0.0287,
+    -0.0489,
+    0.1262
+   ],
+   "LeftF9_1": [
+    -0.0259,
+    -0.0252,
+    0.0351
+   ],
+   "LeftUpLeg": [
+    0.15,
+    -0.04,
+    -0.0
+   ],
+   "LeftLeg": [
+    0.05,
+    -0.42,
+    0.1
+   ],
+   "LeftFoot": [
+    0.05,
+    -0.39,
+    -0.13
+   ]
+  },
+  "parents": {
+   "Hips": null,
+   "Spine": "Hips",
+   "Head": "Spine",
+   "LeftArm": "Spine",
+   "LeftForeArm": "LeftArm",
+   "LeftHand": "LeftForeArm",
+   "LeftF0_0": "LeftHand",
+   "LeftF0_1": "LeftF0_0",
+   "LeftF0_2": "LeftF0_1",
+   "LeftF1_0": "LeftHand",
+   "LeftF1_1": "LeftF1_0",
+   "LeftF1_2": "LeftF1_1",
+   "LeftF2_0": "LeftHand",
+   "LeftF2_1": "LeftF2_0",
+   "LeftF2_2": "LeftF2_1",
+   "LeftF3_0": "LeftHand",
+   "LeftF3_1": "LeftF3_0",
+   "LeftF3_2": "LeftF3_1",
+   "LeftF9_0": "LeftHand",
+   "LeftF9_1": "LeftF9_0",
+   "LeftUpLeg": "Hips",
+   "LeftLeg": "LeftUpLeg",
+   "LeftFoot": "LeftLeg"
+  }
+ },
+ "glitch": {
+  "hand": -0.25,
+  "bones": {
+   "Hips": [
+    0.0,
+    0.98,
+    -0.0
+   ],
+   "Spine": [
+    0.0,
+    0.14,
+    -0.0
+   ],
+   "Head": [
+    0.0,
+    0.48,
+    -0.0
+   ],
+   "LeftArm": [
+    0.205,
+    0.37,
+    -0.0
+   ],
+   "LeftForeArm": [
+    0.035,
+    -0.28,
+    -0.03
+   ],
+   "LeftHand": [
+    0.015,
+    -0.25,
+    0.03
+   ],
+   "LeftF0_0": [
+    0.0037,
+    -0.0986,
+    0.0471
+   ],
+   "LeftF0_1": [
+    -0.0107,
+    -0.0373,
+    0.0045
+   ],
+   "LeftF0_2": [
+    -0.0256,
+    -0.0153,
+    0.0018
+   ],
+   "LeftF1_0": [
+    0.0037,
+    -0.1013,
+    0.0239
+   ],
+   "LeftF1_1": [
+    -0.0107,
+    -0.0373,
+    0.0045
+   ],
+   "LeftF1_2": [
+    -0.0256,
+    -0.0153,
+    0.0018
+   ],
+   "LeftF2_0": [
+    0.0037,
+    -0.1041,
+    0.0007
+   ],
+   "LeftF2_1": [
+    -0.0107,
+    -0.0373,
+    0.0045
+   ],
+   "LeftF2_2": [
+    -0.0256,
+    -0.0153,
+    0.0018
+   ],
+   "LeftF3_0": [
+    0.0037,
+    -0.1069,
+    -0.0224
+   ],
+   "LeftF3_1": [
+    -0.0107,
+    -0.0373,
+    0.0045
+   ],
+   "LeftF3_2": [
+    -0.0256,
+    -0.0153,
+    0.0018
+   ],
+   "LeftF9_0": [
+    -0.0136,
+    -0.0697,
+    0.0592
+   ],
+   "LeftF9_1": [
+    -0.0139,
+    -0.0292,
+    0.0188
+   ],
+   "LeftUpLeg": [
+    0.095,
+    -0.05,
+    -0.0
+   ],
+   "LeftLeg": [
+    0.01,
+    -0.41,
+    0.015
+   ],
+   "LeftFoot": [
+    0.0,
+    -0.42,
+    -0.03
+   ]
+  },
+  "parents": {
+   "Hips": null,
+   "Spine": "Hips",
+   "Head": "Spine",
+   "LeftArm": "Spine",
+   "LeftForeArm": "LeftArm",
+   "LeftHand": "LeftForeArm",
+   "LeftF0_0": "LeftHand",
+   "LeftF0_1": "LeftF0_0",
+   "LeftF0_2": "LeftF0_1",
+   "LeftF1_0": "LeftHand",
+   "LeftF1_1": "LeftF1_0",
+   "LeftF1_2": "LeftF1_1",
+   "LeftF2_0": "LeftHand",
+   "LeftF2_1": "LeftF2_0",
+   "LeftF2_2": "LeftF2_1",
+   "LeftF3_0": "LeftHand",
+   "LeftF3_1": "LeftF3_0",
+   "LeftF3_2": "LeftF3_1",
+   "LeftF9_0": "LeftHand",
+   "LeftF9_1": "LeftF9_0",
+   "LeftUpLeg": "Hips",
+   "LeftLeg": "LeftUpLeg",
+   "LeftFoot": "LeftLeg"
+  }
+ }
+}

@@ -3,14 +3,17 @@ import '@fontsource/inter/600.css';
 import './style.css';
 import * as THREE from 'three/webgpu';
 import { createScene } from './scene';
-import { loadRobot, type RobotLook } from './robot/model';
+import { type RobotLook } from './robot/model';
+import { createRobotSwitch } from './robot/typed';
+import { TYPES, TYPE_KEYS, type RobotType } from './robot/types';
 import { createCustomizer } from './robot/customizer';
-import { loadParts } from './robot/parts';
 import { createRobotFx } from './robot/fx';
-import { loadSave, writeSave } from './save';
+import { loadSave, writeSave, lookOf, storeLook } from './save';
 import { createRobotController } from './robot/controller';
 import { createThrust } from './robot/thrust';
+import { loadClips } from './robot/clips';
 import { createRobotHud } from './robot/hud';
+import { createRobotAudio } from './robot/audio';
 import { A6, budget } from './perf/frame';
 import { gpu, installGpuHooks, resetGpuFrame } from './perf/gpuHooks';
 import { createPerfOverlay } from './perf/overlay';
@@ -65,22 +68,76 @@ createScene(canvas, areaId).then(async (app) => {
   hint.textContent = 'Free cam: WASD move · drag look · E/Q up/down · Shift fast · G walk · V robot';
   document.body.appendChild(hint); hint.classList.add('gone');
 
-  // Player robot. Build + battle damage live in the versioned save (city.save.v1); the garage opens on every entry.
+  // Player robot. Type, per-type build, paint + battle damage live in the versioned save (city.save.v2); the garage
+  // opens on every entry. The robot is a switch host: changing type swaps the body under a stable root.
   const save = loadSave();
-  const look: RobotLook = { ...save.robot.look };
-  const [robot, parts] = await Promise.all([loadRobot(look), loadParts()]); app.scene.add(robot.root);
-  robot.equip(parts);
+  const look: RobotLook = lookOf(save);
+  const robot = await createRobotSwitch(save.robot.type, look); app.scene.add(robot.root);
+  const parts = robot; // uniforms (energy / damage / sweep) live on the switch, shared by every type
   const fx = createRobotFx(app.scene, app.camera); fx.setColor(look.visor);
-  const joints: THREE.Object3D[] = []; robot.root.traverse((o) => { if (/^(Left|Right)(ForeArm|Leg|Arm)$|^Head$/.test(o.name)) joints.push(o); });
+  let joints: THREE.Object3D[] = robot.joints;
   let damage = save.robot.damage, repairT = -1;
-  const setDamage = (d: number) => { damage = Math.min(1, Math.max(0, d)); if (parts) parts.uniforms.damage.value = damage; save.robot.damage = damage; writeSave(save); };
+  const setDamage = (d: number) => { if (d > damage + 0.01) sfx.hit(); damage = Math.min(1, Math.max(0, d)); parts.uniforms.damage.value = damage; save.robot.damage = damage; writeSave(save); };
   setDamage(damage);
   const thrust = createThrust(app.scene, robot.nozzles.length); thrust.attach(robot.nozzles);
   const ctl = createRobotController(robot, app.camera, canvas, app.world);
+  const sfx = createRobotAudio();
+  const applyType = (t: RobotType) => { const d = TYPES[t]; ctl.setTuning(d.tune); ctl.setGait(d.run.kind); ctl.setLand(d.land.kind); sfx.powerUp(); ctl.setSpecial(d.motion.special, d.specialDur); ctl.setFlight(d.flight.launch); thrust.configure(d.flight); sfx.setType(t); };
+  applyType(save.robot.type);
+  robot.onSwap = () => { thrust.attach(robot.nozzles); joints = robot.joints; };
+  idle(() => TYPE_KEYS.forEach((t) => robot.preload(t)));
+  const switchType = (t: RobotType): RobotLook => {
+    storeLook(save, cust.look); save.robot.type = t; writeSave(save);
+    const l = lookOf(save); void robot.setType(t, l); applyType(t); fx.setColor(l.visor); return l;
+  };
   const hud = createRobotHud();
   const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
   const heroDrop = () => { const s = app.spawnPoint(); ctl.heroDrop(s.x, s.ground + 160, s.z, s.heading); };
-  ctl.onImpact = (p, k) => fx.impact(p, k);
+  void loadClips();
+  ctl.onImpact = (p, k) => { fx.impact(p, k); };
+  // landings scaled by fall speed (s 0..1): Heavy slam = crack decal + dust ring + shockwave + shake, Scout = thruster puff (controller), Worker = steam + hiss hook, Glitch = violet reform pulse
+  ctl.onLandFx = (kind, p, s) => {
+    sfx.land(s);
+    if (kind === 'slam') { fx.impact(p, 0.4 + 1.0 * s); fx.kick(0.35 + 0.9 * s); }
+    else if (kind === 'knee') { fx.impact(p, 0.18 + 0.3 * s); }
+    else if (kind === 'quad') { thrust.steam(p, s); fx.kick(0.15 + 0.3 * s); }
+    else if (kind === 'voxel') { fx.impact(p, 0.25 + 0.3 * s); }
+  };
+  ctl.onScrape = (p, v, k) => thrust.scrape(p, v, k);
+  ctl.onLaunch = (d) => sfx.charge(d);
+  let bumpAt = -9; ctl.onBump = () => { const n = performance.now() / 1000; if (n - bumpAt > 0.45) { bumpAt = n; sfx.bump(); fx.kick(0.15); } };
+  ctl.onSlide = () => sfx.stopSkid(performance.now() / 1000);
+  ctl.onBall = (ph) => { if (ph === 'fold') sfx.transform('fold'); else if (ph === 'unfold') sfx.transform('unfold'); else if (ph === 'open' && save.robot.type === 'worker') sfx.steamVent(); fx.kick(ph === 'closed' ? 0.5 : ph === 'open' ? 0.35 : 0.14); }; // snap-lock shake at 'closed' // clunks as the armour starts folding, locks shut, starts unfolding, locks open
+
+  ctl.onSpecial = (kind, phase) => { if (phase === 'start') sfx.special(kind); if (phase === 'hit') fx.kick(kind === 'groundpound' ? 1 : 0.35); };
+  let lastStep = 0, lastBurst = 0, wasCloud = false;
+  const stepFx = () => { // footfalls every half gait cycle; heavier types shake the camera
+    const n = Math.floor(ctl.phase / Math.PI), a = ctl.anim;
+    if (n !== lastStep && (a === 'walk' || a === 'run') && ctl.mode === 'GROUND' && ctl.form < 0.5 && ctl.cloud < 0.5) { sfx.step(ctl.anim === 'run' && (save.robot.type === 'scout' || save.robot.type === 'worker') ? 'run' : 'walk'); const m = TYPES[save.robot.type].motion.mass; if (m > 1.5) fx.kick(0.12 * m); }
+    lastStep = n; if (ctl.burstOn > 0.5 && lastBurst <= 0.5) sfx.boost(); lastBurst = ctl.burstOn;
+  };
+  // ---- per-frame robot audio (docs/AUDIO-SLOTS.md): thrusters, roll / tread / hover loops, Glitch snaps, skids, servos, hydraulics, spatial flyby
+  let peakV = 0, prevHead = 0, servoAt = 0, sparkAt = 0, snapT = 0, wasCharging = false, flyAt = -99, prevTca = 99; const camPrev = new THREE.Vector3(), camV = new THREE.Vector3(), rel = new THREE.Vector3(), rv = new THREE.Vector3(), camF = new THREE.Vector3();
+  const audioFrame = (dt: number) => {
+    const T = save.robot.type, v = Math.hypot(ctl.vel.x, ctl.vel.z), ground = ctl.mode === 'GROUND', fl = ctl.mode === 'ROCKETS', now = performance.now() / 1000;
+    sfx.thrusters(fl, ctl.thrust, dt, ctl.pos.y - ctl.floor.y, ctl.floor.water);
+    sfx.roll(T === 'heavy' && ground && ctl.form >= 0.97 ? v : null);
+    sfx.tread(T === 'worker' && ground && ctl.form >= 0.97 ? v / Math.max(1, ctl.tuning.run) : null);
+    sfx.hover(T === 'scout' && ground && ctl.form >= 0.97, v / Math.max(1, ctl.tuning.run));
+    const cloud = T === 'glitch' && ctl.cloud > 0.5; if (cloud !== wasCloud) { wasCloud = cloud; sfx.glitch(cloud ? 'dissolve' : 'reform'); snapT = 0.3; }
+    sfx.runBed(cloud); // option G bed under the snaps (ogg loop; the m4a is never looped: its encoder padding leaves a gap)
+    if (cloud && v > 3) { snapT -= dt; if (snapT < 0) { snapT = 0.62; sfx.snap(); } } // Luis's pick: teleport snaps (one per 0.62 s) while Glitch runs as a cloud
+    peakV = Math.max(v, peakV - 14 * dt); if (ground && v < 1.2 && peakV > 5.5 && ctl.anim !== 'land') { sfx.stopSkid(now); peakV = 0; }
+    const dh = Math.atan2(Math.sin(ctl.heading - prevHead), Math.cos(ctl.heading - prevHead)) / Math.max(dt, 1e-3); prevHead = ctl.heading;
+    if (ground && Math.abs(dh) > 5 && now - servoAt > 0.7) { servoAt = now; sfx.turnServo(); }
+    if (T === 'worker' && ground && ctl.form >= 0.97 && v > 3 && Math.abs(dh) > 1.6 && now - sparkAt > 1) { sparkAt = now; sfx.treadSparks(); }
+    if (ctl.charging !== wasCharging) { wasCharging = ctl.charging; sfx.hydraulic(ctl.charging ? 'push' : 'release'); }
+    // spatial flyby: when the robot will pass the camera 1.3 s from now (relative speed > 25 m/s, closest approach under 60 m)
+    camV.copy(app.camera.position).sub(camPrev).divideScalar(Math.max(dt, 1e-3)); camPrev.copy(app.camera.position); rel.copy(ctl.pos).sub(app.camera.position); rv.copy(ctl.vel).sub(camV);
+    const sp2 = rv.lengthSq(), tca = sp2 > 625 ? -rel.dot(rv) / sp2 : 99;
+    if (fl && tca <= 1.3 && prevTca > 1.3 && tca > 0 && rel.clone().addScaledVector(rv, tca).length() < 60 && now - flyAt > 6) { flyAt = now; sfx.flyby(ctl.pos); }
+    prevTca = tca; app.camera.getWorldDirection(camF); sfx.updateSpatial(app.camera.position, camF, ctl.pos);
+  };
   let robotMode = qs.get('mode') !== 'free';
   const setRobotMode = (on: boolean) => {
     robotMode = on; ctl.setEnabled(on); app.controls.setEnabled(!on); hud.setVisible(on); thrust.setVisible(on);
@@ -88,12 +145,12 @@ createScene(canvas, areaId).then(async (app) => {
     if (!on) { app.camera.fov = 55; app.camera.updateProjectionMatrix(); app.controls.syncAngles(); hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 5000); }
   };
   // Hangar (join screen): robot stands on the street start on a turntable; pick a look, then Drop in.
-  const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0 };
+  const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0, shot: null as null | { d: number; y: number; ty: number; fov: number; pan?: number } }; // shot = test camera override (audit close-ups)
   const placeHangar = () => { const s = app.spawnPoint(); hangar.x = s.x; hangar.z = s.z; hangar.h = s.heading; hangar.y = app.world.floorAt(s.x, s.z, s.ground + 1.5).y; hangar.yaw = s.heading + Math.PI * 0.85; ctl.pos.set(s.x, hangar.y, s.z); };
-  const cust = createCustomizer(look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); save.robot.look = { ...l }; writeSave(save); },
-    () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
+  const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
+    (t) => switchType(t), () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
   const setHangar = (on: boolean) => {
-    cust.setOpen(on); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
+    cust.setOpen(on); if (!on) sfx.powerUp(); else if (robotMode) sfx.powerDown(); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
     if (on) { placeHangar(); robot.root.visible = true; robot.root.quaternion.identity(); app.setFocus(ctl.pos); } else if (robotMode) heroDrop();
   };
   let hdrag = false, hx = 0;
@@ -105,10 +162,13 @@ createScene(canvas, areaId).then(async (app) => {
     r.position.set(hangar.x, hangar.y, hangar.z); r.quaternion.identity(); r.rotation.set(0, hangar.yaw, 0);
     robot.animate({ anim: 'idle', phase: 0, speed: 0, lean: 0, bank: 0, crouch: 0, t: hangar.t }, dt);
     // Camera in front of the street heading, robot framed right of the panel.
-    const fx = Math.sin(hangar.h), fz = Math.cos(hangar.h), d = 3.1, cam = app.camera;
-    cam.position.set(hangar.x + fx * d, hangar.y + 1.15, hangar.z + fz * d);
+    // Framing scales with the type's height (2.0 m glitch .. 2.6 m heavy).
+    const H = robot.height, fx = Math.sin(hangar.h), fz = Math.cos(hangar.h), d = 2.75 * H, cam = app.camera;
+    cam.position.set(hangar.x + fx * d, hangar.y + 0.62 * H, hangar.z + fz * d);
     if (cam.fov !== 40) { cam.fov = 40; cam.updateProjectionMatrix(); }
-    cam.lookAt(hangar.x - fz * 0.55, hangar.y + 0.62, hangar.z + fx * 0.55);
+    cam.lookAt(hangar.x - fz * 0.5 * H, hangar.y + 0.5 * H, hangar.z + fx * 0.5 * H);
+    const sh = hangar.shot; // low close-up: orbit (yaw) camera at distance d, height y above the floor, looking at ty
+    if (sh) { const a = hangar.yaw; cam.position.set(hangar.x + Math.sin(a) * sh.d, hangar.y + sh.y, hangar.z + Math.cos(a) * sh.d); if (cam.fov !== sh.fov) { cam.fov = sh.fov; cam.updateProjectionMatrix(); } cam.lookAt(hangar.x, hangar.y + sh.ty, hangar.z); }
   };
   const benchKind = (['walk', 'flight', 'all'] as const).find((k) => k === qs.get('bench')) ?? null, benchMode = !!benchKind;
   const joinScreen = robotMode && qs.get('join') !== '0' && !benchMode;
@@ -149,7 +209,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__stats = () => app.stats;
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
-  w.__robot = { ctl, model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, hangarState: hangar };
+  w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
   w.__setView = (name: string) => { const v = app.views.find((x) => x.name === name); if (v) app.setView(v); };
 
   // A6: compile every pipeline the flight can need (hidden rockets, crater, weather, empty LOD buckets) while the
@@ -169,6 +229,7 @@ createScene(canvas, areaId).then(async (app) => {
     info: () => ({ backend: app.backend, adapter, area: app.areaId, budgetMs: budget.ms }) }) : null;
   if (bench) { overlay.setVisible(true); w.__benchRun = bench; }
 
+  const fixedDt = +(qs.get('fixeddt') ?? 0); // capture hook: step the sim a fixed dt per rendered frame (slow renderers)
   let frames = 0, last = performance.now(), t = 0, cpuMs = 0, heap0 = 0;
   const mem = (performance as any).memory;
   const sec = (name: string, t: number) => { const n = performance.now(); diag.section(name, n - t); return n; };
@@ -180,19 +241,20 @@ createScene(canvas, areaId).then(async (app) => {
     overlay.frame(frameMs, cpuMs); resetGpuFrame(); budget.begin();
     if (dynres(frameMs, pacing.targetMs, setPR)) diag.event(`dynres -> ${quality.scale}`);
     // real rAF delta (never assumes 60 Hz); clamped so a stall doesn't fast-forward the world (physics also caps catch-up steps)
-    const rdt = Math.min(frameMs, 100) / 1000; t += rdt;
+    const rdt = fixedDt ? ((w as any).__steps === undefined || (w as any).__steps-- > 0 ? fixedDt : 1e-6) : Math.min(frameMs, 100) / 1000; t += rdt;
     const dt = rdt * (slowT > 0 ? 0.3 + 0.7 * (1 - Math.sin((slowT / 0.55) * Math.PI)) : 1);
     let ts = t0;
     if (cust.open) {
       updateHangar(rdt); cust.tick();
-      if (repairT >= 0 && parts) { // repair: scan band sweeps up each part while damage drains
+      if (repairT >= 0) { // repair: scan band sweeps up each part while damage drains
         repairT += rdt; parts.uniforms.sweep.value = -0.35 + ((repairT * 0.9) % 0.8);
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); ts = sec('physics+ground', ts); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); hud.update(dt, ctl); }
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); ts = sec('physics+ground', ts); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); audioFrame(dt); hud.update(dt, ctl); stepFx(); }
     const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
-    if (parts) parts.uniforms.energy.value = cust.open ? 1.2 : energy;
+    parts.uniforms.energy.value = cust.open ? 1.2 : energy;
+    const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
     ts = sec('fx', ts);
     app.update(dt, t); const wm = app.weatherMix;
     rain.mesh.visible = wm.rain > 0.01; rain.setIntensity(wm.rain); snow.mesh.visible = wm.snow > 0.01; snow.setIntensity(wm.snow);

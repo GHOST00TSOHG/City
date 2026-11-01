@@ -1,0 +1,72 @@
+// Flight clips: node tools/clips-robot-fly.mjs [port=5180] [types=scout,heavy,worker,glitch]  (expects `npx vite --port <port>`)
+// Deterministic stepping (?fixeddt + window.__steps), one sim step per frame (CLIP_FPS, default 12). Per type: take-off (F), climb,
+// hover, cruise with a banked turn, hover, descend and land. Out: robot-clips/<type>-fly.mp4 (or /workspace/robot-clips on the box)
+import { chromium, webkit } from '@playwright/test';
+import { execSync } from 'child_process';
+import fs from 'fs';
+const port = process.argv[2] || '5180', OUT = process.env.CLIP_OUT || (fs.existsSync('/workspace') ? '/workspace/robot-clips' : `${process.env.HOME}/builds/City-gh/robot-clips`), FPS = +(process.env.CLIP_FPS || 12);
+const SWIFT = process.env.SWIFTSHADER === '1'; // default: real GPU (headed Chrome); SWIFTSHADER=1 for the box
+const TYPES = (process.argv[3] || 'scout,heavy,worker,glitch').split(',');
+fs.mkdirSync(OUT, { recursive: true });
+const WK = (process.env.BROWSER || '') === 'webkit'; // BROWSER=webkit → headed Playwright WebKit (Safari engine, real GPU)
+const b = await (WK ? webkit.launch({ headless: false }) : chromium.launch(SWIFT ? { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] }
+  : { channel: process.env.CLIP_CHANNEL || 'chrome', headless: false, args: ['--ignore-gpu-blocklist', '--enable-gpu-rasterization'] }));
+console.log('browser', WK ? 'WebKit' : 'Chromium', b.version());
+const p = await b.newPage({ viewport: { width: 960, height: 540 } });
+const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => m.type() === 'error' && errs.push(m.text())); p.on('response', (r) => r.status() >= 400 && errs.push(r.status() + ' ' + r.url()));
+await p.goto(`http://localhost:${port}/?perf=1&area=keywest&join=0&fixeddt=${1 / FPS}`, { waitUntil: 'load', timeout: 240000 });
+await p.waitForFunction(() => window.__city?.ready, null, { timeout: 240000 });
+const key = (c, d) => [c, d];
+const s = (sec) => Math.round(sec * FPS);
+async function shoot(name, secs, at) {
+  const dir = `/tmp/clip-${name}`; fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir);
+  for (let i = 0; i < secs * FPS; i++) {
+    for (const [c, d] of at[i] ?? []) await p.evaluate(([c, d]) => window.__robot.ctl.press(c, d), [c, d]);
+    await p.evaluate(() => (window.__steps = 1)); await p.waitForFunction(() => window.__steps <= 0, null, { timeout: 120000, polling: 100 });
+    // grab the canvas in-page inside a rAF (page.screenshot costs ~25 s/frame on SwiftShader)
+    const url = await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => r(document.querySelector('canvas').toDataURL('image/jpeg', 0.88)))));
+    fs.writeFileSync(`${dir}/${String(i).padStart(4, '0')}.jpg`, Buffer.from(url.split(',')[1], 'base64'));
+  }
+  execSync(`${process.env.FFMPEG || "ffmpeg"} -y -loglevel error -framerate ${FPS} -i ${dir}/%04d.jpg -c:v libx264 -pix_fmt yuv420p ${OUT}/${name}.mp4`);
+  console.log(`${OUT}/${name}.mp4`);
+}
+await p.evaluate(() => (window.__steps = 0));
+for (const t of TYPES) {
+  await p.evaluate(() => (window.__steps = 1e9));
+  await p.evaluate((t) => window.__robot.setType(t), t);
+  await p.waitForFunction((t) => window.__robot.model.type === t, t, { timeout: 60000 });
+  await p.evaluate(() => { const r = window.__robot; r.hangar(false); r.dropIn(0); for (let i = 0; i < 60; i++) r.ctl.update(1 / 30); });
+  const at = {};
+  const add = (sec, ...f) => (at[s(sec)] ??= []).push(...f);
+  add(0.3, key('KeyF', true), key('KeyF', false));            // take-off (Heavy: crouch-and-launch)
+  add(0.8, key('Space', true)); add(2.0, key('Space', false)); // climb
+  add(2.8, key('KeyW', true)); add(3.6, key('KeyA', true)); add(4.3, key('KeyA', false)); add(5.0, key('KeyW', false)); // cruise + banked turn
+  add(5.8, key('KeyC', true));                                 // descend -> landing burn -> touchdown
+  // Keep the flight over land: dry-run the same key schedule in-page (no rendering) for 24 headings from the drop-in point and
+  // take the one whose path touches the least sea (ties: the one that stays farthest from it). Then spawn on that heading.
+  const best = await p.evaluate(([at, FPS, secs]) => {
+    const R = window.__robot, c = R.ctl, sp = R.spawnPoint(); let pick = null;
+    for (let k = 0; k < 24; k++) {
+      const h = (k / 24) * Math.PI * 2; c.spawn(sp.x, sp.ground, sp.z, h); for (let i = 0; i < 60; i++) c.update(1 / 30);
+      let water = 0, minLand = 1e9; const X0 = c.pos.x, Z0 = c.pos.z;
+      for (let i = 0; i < secs * FPS; i++) {
+        for (const [code, d] of at[i] ?? []) c.press(code, d);
+        c.update(1 / FPS);
+        const f = R.world.floorAt(c.pos.x, c.pos.z, 1e3); if (f.water) water++;
+        // look 60 m ahead of the robot too, so it never ends up right at the shoreline
+        const ah = R.world.floorAt(c.pos.x + Math.sin(c.heading) * 60, c.pos.z + Math.cos(c.heading) * 60, 1e3); if (ah.water) water += 0.25;
+      }
+      for (const code of ['KeyC', 'KeyW', 'KeyA', 'KeyF', 'Space']) c.press(code, false);
+      const score = water * 1000 - Math.hypot(c.pos.x - X0, c.pos.z - Z0) * 0;
+      if (!pick || score < pick.score) pick = { h, score, water, end: [c.pos.x - X0, c.pos.z - Z0].map((v) => +v.toFixed(0)) };
+    }
+    c.spawn(sp.x, sp.ground, sp.z, pick.h); for (let i = 0; i < 60; i++) c.update(1 / 30);
+    return pick;
+  }, [at, FPS, 9.5]);
+  console.log(t, 'heading', best);
+  await p.waitForTimeout(3000); await p.evaluate(() => (window.__steps = 0));
+  await shoot(`${t}-fly`, 9.5, at);
+  await p.evaluate(() => { const c = window.__robot.ctl; for (const k of ['KeyC', 'KeyW', 'KeyA', 'Space']) c.press(k, false); });
+  console.log(t, await p.evaluate(() => { const r = window.__app?.renderer ?? window.__city?.renderer; return r?.info?.render?.drawCalls ?? null; }));
+}
+console.log('console errors', errs.length, errs.slice(0, 5)); await b.close();
