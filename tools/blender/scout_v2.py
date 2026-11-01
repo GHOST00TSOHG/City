@@ -210,7 +210,7 @@ def build_hand(side, wr, fwd, fingers=5, size=1.0, curl=0.35, armor_m=None, digi
             fi = 9 if thumb else i; bone(f'{S_}F{fi}_{j}'); J[f'{S_}F{fi}_{j}'] = b.copy()
             ang = curl * (0.45 if j == 0 else 1.0) * (0.7 if thumb else 1.0)
             ax = d.cross(pn)
-            if ax.length > 1e-4: d = (Quaternion_axis(ax.normalized(), -ang) @ d).normalized()
+            if ax.length > 1e-4: d = (Quaternion_axis(ax.normalized(), -ang if thumb else ang) @ d).normalized()
             Lj = Ls * k * (1.25 if thumb else 1.0)
             tp = 1 - 0.13 * j; c = b + d * Lj / 2
             up_ = (d.cross(side_ax)).normalized()
@@ -532,6 +532,8 @@ def main():
     if '--hand-test' in argv: yield from hand_test(); return
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
     build(); scout_variants(); yield 0.1
+    if '--hands' in argv:
+        render(OUT, cam_az=0.0, cam_el=0.05, res=(1800, 1000), tgt=(0, 0, 0.95), dist=3.4, lens=55); return
     if '--closeup' in argv:
         render(OUT.replace('.png', '-closeup.png'), cam_az=-0.9, cam_el=0.1, res=(1500, 1200), tgt=(0.3, -0.12, 0.92), dist=1.6, lens=60)
         if '--with34' in argv: render(OUT.replace('.png', '-34.png'), setup=False)

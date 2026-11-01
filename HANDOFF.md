@@ -154,3 +154,6 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 ## 2026-11-01 robots-v2 log
 - Scout v2g done (visor slit, seams per part, light knuckles); kit re-exported (e60d8fe). Renders: robot-renders/scout-v2g-{closeup,34}.png
 - Heavy v3: rebuilt from scratch in tools/blender/heavy_v2.py; faceted leg armour (dark core + hard plates), thigh/shin/calf pistons, V-brow/horns/twin eye slits. Preview: `-- --preview --out=heavy-v3.png` (34 + hand closeup).
+- Hands fix (all robots, shared S.build_hand): the four fingers now curl inward toward the thigh (curl rotation sign flipped for non-thumb digits); thumbs unchanged. Front render: `scout_v2.py -- --hands --out=scout-v2h-hands.png`.
+- Heavy v3 --kit run done (add-on pass + export to public/robot/heavy + turnaround), but it ran before the hand fix, so it needs re-exporting.
+- Worker v3 rebuild in progress (worker_v2.py): faceted olive plates on a dark frame, pistons, lattice crane boom with ram + beacon, welder rig, forearm winch, work lights, boot treads, `--preview` mode.
