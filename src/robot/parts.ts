@@ -21,7 +21,7 @@ export interface PartLib {
 export async function loadParts(base = `${import.meta.env.BASE_URL}robot/parts/`): Promise<PartLib | null> {
   try {
     const loader = new GLTFLoader();
-    const files = await Promise.all((Object.keys(SLOTS) as Slot[]).map((s) => loader.loadAsync(`${base}${s}.glb`)));
+    const files = await Promise.all((Object.keys(SLOTS) as Slot[]).map((s) => loader.loadAsync(`${base}${s}.glb?v=${__ROBOT_V__}`)));
     const uEnergy = uniform(1), uDamage = uniform(0), uSweep = uniform(-1), uGlow = uniform(new THREE.Color('#3df2ff'));
     const mats: PartLib['mats'] = {};
     const mk = (region: string) => {

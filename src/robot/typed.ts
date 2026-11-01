@@ -112,7 +112,7 @@ export async function createRobotSwitch(type: RobotType, look: RobotLook) {
   const u = createKitUniforms();
   const kits = new Map<RobotType, Promise<Kit | [Kit, ShardData]>>();
   const load = (t: RobotType) => {
-    if (!kits.has(t)) kits.set(t, t === 'glitch' ? Promise.all([loadKit(t, u), fetch(`${import.meta.env.BASE_URL}robot/glitch/shards.json`).then((r) => r.json() as Promise<ShardData>)]) : loadKit(t, u));
+    if (!kits.has(t)) kits.set(t, t === 'glitch' ? Promise.all([loadKit(t, u), fetch(`${import.meta.env.BASE_URL}robot/glitch/shards.json?v=${__ROBOT_V__}`).then((r) => r.json() as Promise<ShardData>)]) : loadKit(t, u));
     return kits.get(t)!;
   };
   let cur: TypedRobot;
