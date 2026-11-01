@@ -173,3 +173,9 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - Worker v3c: solid box-section crane boom + jib/knuckle/ram, broader chest, bigger pauldrons, thicker limbs, hunch 0.17, hands 1.55. Render: worker-v3c-34.png. Test: tris 22,332, garage 49 calls, world 43 calls, 0 console errors.
 - Hands: all robots use shared S.build_hand (palm faces thigh, digits curl inward) — verified, no change needed.
 - Note: HOPS bevel 'angle' AttributeError in worker kit log is non-fatal.
+
+## Glitch v3c / Worker v3d
+- Worker v3d: one olive/gunmetal scheme with hazard-orange accents only (paint in src/robot/types.ts). Tapered, sloped plates with inset panels, a helmet sunk into a collar with a red visor slit, hydraulic pistons, three-talon claw feet, forged C-hook crane. Kit: 28,390 tris after export; simplified with `robot-simplify.mjs worker 0.7 0.01`. In game: 22,553 tris, garage 49 calls, world 43.
+- Glitch v3c: dark proxy under a flush dark tile skin (1,405 shards, 11,240 tris), about 40 light edge cracks, a thin 4-streak dash trail, rim lights lowered, a lighter post RGB split. In game: 15,312 tris, garage 44 calls, world 38.
+- Tests: TYPES=worker,glitch all PASS, 0 console errors.
+- Renders: /workspace/robot-renders/{worker-v3d-34,worker-v3d-closeup,glitch-v3c-34,glitch-v3c-closeup}.png
