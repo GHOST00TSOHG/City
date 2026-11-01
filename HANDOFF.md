@@ -133,3 +133,9 @@ Plan: helio-research/robot-types-plan.md. Kits are built in Blender with `tools/
 - **Test:** `npx vite --port 5180` then `node tools/test-robot-types.mjs 5180`. It covers migration, each type in the garage and the world, build restore on switch, reload, a corrupt save, and zero console errors. Shots go to `/workspace/city-shots/types-final-*.png`.
 - Measured (SwiftShader, Key West start): 41 to 51 draw calls in the garage and 35 to 45 in the world.
 - **Still to do:** Heavy ground-pound dust ring and shove; Glitch blink-dash; Scout double-jump/dash; LOD1/LOD2 for other players' robots past 25/80 m; KTX2 textures (WebP now); a phone cube-count drop for Glitch; a real-GPU fps check on an M4 Air. The old phase-7b parts (`public/robot/parts/*.glb`, `src/robot/parts.ts`, `loadRobot`, `robot_parts.py`) are unused but not deleted, because the plan doesn't call for removing them.
+
+## robots-v2 status (2026-10-31 21:30 ET)
+- Step 1 done (f52d593): tools/blender/scout_v2.py -> /workspace/robot-renders/scout-v2b.png, scout-v2b-closeup.png (hands).
+  Add-ons: Boxcutter 31 box + 4 circle, HOps bool 14 / bevel 68 / weighted normal 68, MESHmachine fuse 15. 78,151 tris pre-decimation (target <30k).
+- Audio staged (uncommitted) in public/audio/robots/{scout,heavy,worker,glitch}/ (ogg+m4a, 1.1 MB) + LICENSES.md. No runtime audio system exists yet.
+- TODO: Heavy/Worker/Glitch builds, rig w/ finger bones, anim, decimate, game integration, audio wiring, step-3 deliverables.
