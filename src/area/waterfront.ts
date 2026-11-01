@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { Terrain } from './data';
-import type { Bridge, RoadPlan, ShoreSeg } from './cleanup';
+import { DECK_T, type Bridge, type RoadPlan, type ShoreSeg } from './cleanup';
 import { Soup } from './geom';
 
 const CONC = new THREE.Color(0x8e8b84), CONC_D = new THREE.Color(0x6f6d68), CAP = new THREE.Color(0xa7a49c), RAIL = new THREE.Color(0x4a4d52);
@@ -25,7 +25,7 @@ export function buildWaterfront(bridges: Bridge[], plans: RoadPlan[], walls: Sho
       const q = p.pts[i], p0 = p.pts[Math.max(i - 1, 0)], p1 = p.pts[Math.min(i + 1, p.pts.length - 1)], dx = p1[0] - p0[0], dz = p1[1] - p0[1], l = Math.hypot(dx, dz) || 1, nx = -dz / l, nz = dx / l;
       L.push([q[0] + nx * hw, y[i], q[1] + nz * hw]); R.push([q[0] - nx * hw, y[i], q[1] - nz * hw]);
     }
-    const bottom = (i: number) => { const span = i + a >= b.i0 && i + a <= b.i1; return span ? y[i + a] - 0.65 : Math.min(y[i + a] - 0.65, Math.max(t.heightAt(p.pts[i + a][0], p.pts[i + a][1]), 0) - 0.3); };
+    const bottom = (i: number) => { const span = i + a >= b.i0 && i + a <= b.i1; return span ? y[i + a] - DECK_T : Math.min(y[i + a] - DECK_T, Math.max(t.heightAt(p.pts[i + a][0], p.pts[i + a][1]), 0) - 0.3); };
     for (let i = 0; i + 1 < L.length; i++) {
       const b0 = bottom(i), b1 = bottom(i + 1);
       for (const [E, sg] of [[L, 1], [R, -1]] as [number[][], number][]) {
@@ -50,7 +50,7 @@ export function buildWaterfront(bridges: Bridge[], plans: RoadPlan[], walls: Sho
     for (const [x, zz, bed] of b.bents) {
       let bi = b.i0, d = Infinity; for (let i = b.i0; i <= b.i1; i++) { const dd = Math.hypot(p.pts[i][0] - x, p.pts[i][1] - zz); if (dd < d) { d = dd; bi = i; } }
       const q0 = p.pts[Math.max(bi - 1, 0)], q1 = p.pts[Math.min(bi + 1, p.pts.length - 1)], ang = Math.atan2(q1[1] - q0[1], q1[0] - q0[0]), nx = -Math.sin(ang), nz = Math.cos(ang);
-      const top = y[bi] - 0.65, wide = b.hw > 2.2, off = Math.max(b.hw - (wide ? 1.1 : 0.25), 0.2), r = wide ? 0.55 : 0.2;
+      const top = y[bi] - DECK_T, wide = b.hw > 2.2, off = Math.max(b.hw - (wide ? 1.1 : 0.25), 0.2), r = wide ? 0.55 : 0.2;
       for (const sg of [-1, 1]) box(s, x + nx * off * sg, zz + nz * off * sg, bed - 0.3, top, r, r, ang, CONC);
       box(s, x, zz, top - 0.55, top, 0.5, b.hw + 0.2, ang, CONC_D);
     }

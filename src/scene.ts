@@ -80,6 +80,12 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const facade = createFacadeMaterial(tex); const lambert = facade.material;
   const groundMat = new THREE.MeshStandardNodeMaterial({ vertexColors: true, metalness: 0 });
   const roadMat = new THREE.MeshStandardNodeMaterial({ vertexColors: true, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  // Bridge / overpass / seawall concrete: its own material (same single draw as before). Down-facing faces (soffits, pier caps) get no moon or sky light and used to be black,
+  // so add ambient + ground-bounce (lit ground, water and sodium glow reflected up) tinted by the vertex colour. Shader maths only: no extra light, no extra draw call.
+  const concreteMat = new THREE.MeshStandardNodeMaterial({ vertexColors: true, metalness: 0 });
+  { const down = smoothstep(0.1, 0.9, normalWorld.y.negate());
+    concreteMat.colorNode = vertexColor().mul(1.5); concreteMat.roughnessNode = float(0.9);
+    concreteMat.emissiveNode = vertexColor().mul(vec3(1, 0.95, 0.86)).mul(down.mul(0.4).add(0.2)); }
   const uWet = tslUniform(0), uSnow = tslUniform(0), uSkyRefl = tslUniform(new THREE.Color(0x1a2438));
   { // wet look: darker albedo, puddles (noise mask) that turn mirror-smooth and pick up the sky + lamp glints; snow cover on top
     const p = positionWorld, above = smoothstep(0.02, 0.25, p.y);
@@ -114,7 +120,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     fm.colorNode = mix(base, vec3(0.95, 0.96, 1), roof);
     if (fm.emissiveNode) fm.emissiveNode = fm.emissiveNode.add(vec3(0.075, 0.08, 0.095).mul(roof));
   }
-  const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
+  const shared = new Set<THREE.Material>([groundMat, roadMat, concreteMat, lambert]);
   /** Builds one area's meshes into a group (not yet in the scene). Data comes from the preload cache when warm. */
   async function buildContent(id: string) {
     const loaded = await loadArea(id), terrain = loaded.terrain, mask = loaded.mask;
@@ -130,7 +136,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const trees = await buildTrees(area.trees as number[], terrain, id === 'keywest'); // palms only in Key West
     const grass = buildGrass(terrain, mask ? parseGroundMask(mask) : null);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
-    const roads = buildRoads(area, terrain, roadMat, cleaned.plans), docks = buildDocks(area.piers, terrain), front = buildWaterfront(cleaned.bridges, cleaned.plans, cleaned.walls, terrain, roadMat);
+    const roads = buildRoads(area, terrain, roadMat, cleaned.plans), docks = buildDocks(area.piers, terrain), front = buildWaterfront(cleaned.bridges, cleaned.plans, cleaned.walls, terrain, concreteMat);
     group.add(buildTerrain(terrain, groundMat, style), roads, buildPools(area, terrain, roadMat), front, docks.group, blds.group, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group);
@@ -211,6 +217,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       if (fl !== null) return { y: fl, water: false, roof: false };
       return { y: Math.max(th, 0), water: th < 0, roof: false };
     },
+    /** underside of the lowest deck above a robot standing/flying at feet height y (Infinity if open sky) */
+    ceilingAt(x: number, z: number, y: number) { return cur.roads.soffitAbove(x, z, y); },
     blocked(x: number, z: number, y: number) { const r = cur.collision.roofAt(x, z); return r !== null && y < r && cur.interiors.floorAt(x, z) === null; },
   };
 

@@ -34,7 +34,24 @@ export const T = {
   BANK: 1.0,             // shore edge whose land side is at least this high needs a seawall (m)
   POOL_SPREAD: 0.4,      // pools: ground spread under the rim (m)
   PAD_TOL: 2.0,
+  GRADE_SLOPE: 0.2,     // steep-lot grading: fill apron falls away from the wall at this rise/run (1:5, a gentle lawn bank: steeper banks raised neighbours too)
+  GRADE_REACH: 14,       // ... and reaches at most this far from the wall (m)
+  GRADE_LIP: 0.35,       // fill meets the wall this far under the floor, so a low stone plinth shows
+  EXPOSED: 1.2,          // bare foundation wall taller than this (floor minus ground at the wall, m) counts as exposed
 };
+
+/** Tallest bare wall between the ground and the floor along the footprint outline (m). Samples the outline every ~1.5 m. */
+export function exposedHeight(outer: P[], floor: number, heightAt: (x: number, z: number) => number): number {
+  let worst = 0;
+  for (let i = 0; i < outer.length; i++) {
+    const a = outer[i], b = outer[(i + 1) % outer.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]), n = Math.max(1, Math.ceil(L / 1.5));
+    for (let k = 0; k <= n; k++) { const u = k / n; worst = Math.max(worst, floor - Math.max(heightAt(a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u), 0)); }
+  }
+  return worst;
+}
+
+/** Distance from a point to a polygon outline. */
+export function ringDist(x: number, z: number, pts: P[]) { let d = Infinity; for (let i = 0; i < pts.length; i++) { const p = pts[i], q = pts[(i + 1) % pts.length]; d = Math.min(d, distToSeg(x, z, p[0], p[1], q[0], q[1])); } return d; }
 
 export interface BInfo { i: number; b: Building; outer: P[]; s: number[]; bb: [number, number, number, number]; area: number }
 function samples(outer: P[]) {
@@ -310,6 +327,26 @@ export function cleanArea(area: AreaData, t: Terrain, legacy = false): CleanResu
     const hs = groundAt(q), pad = Math.max(hs[Math.floor(hs.length * 0.6)], 0.2);
     vertsNear(t, q.outer, 1, (vi) => { if (Math.abs(t.h[vi] - pad) < T.PAD_TOL && t.h[vi] > 0) t.h[vi] = pad; });
   }
+  // pass A2: steep lots. Fill an apron of earth up against the downhill walls (bank falls away at GRADE_SLOPE, never reaching further than GRADE_REACH,
+  // never over roads, water, other buildings), so the bare wall that is left is short. Walls still taller than T.EXPOSED get a stepped stone plinth (buildings.ts).
+  { const gb = new Grid(32); for (const q of kept) if (!tiny(q)) gb.add(q.i, q.bb[0] - 2, q.bb[1] - 2, q.bb[2] + 2, q.bb[3] + 2);
+    const others = (x: number, z: number, self: number) => { const l = gb.at(x, z); if (l) for (const j of l) if (j !== self) { const o = byId2.get(j)!; if (x >= o.bb[0] - 1 && x <= o.bb[2] + 1 && z >= o.bb[1] - 1 && z <= o.bb[3] + 1 && (inPoly(x, z, o.outer) || ringDist(x, z, o.outer) < 1.5)) return true; } return false; };
+    const byId2 = new Map(kept.map((q) => [q.i, q] as const));
+    for (const q of kept.slice().sort((a, b) => b.area - a.area)) {
+      if (tiny(q)) continue;
+      const hs = groundAt(q), floor = Math.max(hs[Math.floor(hs.length * 0.35)], hs[hs.length - 1] - 0.45, 0.2);
+      if (exposedHeight(q.outer, floor, t.heightAt) <= 0.6) continue;
+      let filled = 0;
+      vertsNear(t, q.outer, T.GRADE_REACH, (vi, d) => {
+        if (d <= 0 || t.h[vi] <= 0.2 || t.cover[vi] === 3) return; // inside the footprint is levelled by pass A; leave water and existing causeways alone
+        const ix = vi % t.nx, iz = (vi - ix) / t.nx, x = t.x0 + ix * t.cell, z = t.z0 + iz * t.cell, want = floor - T.GRADE_LIP - d * T.GRADE_SLOPE;
+        if (t.h[vi] >= want || want < 0.2) return;
+        if (ri.inside(x, z, 1) || ri.near(x, z, 3) || others(x, z, q.i)) return;
+        t.h[vi] = want; filled++;
+      });
+      if (filled) { bump('steepLotsGraded'); bump('gradeFillVerts', filled); }
+    }
+  }
   const buildings: Building[] = [];
   for (const q of kept) { // pass B: floor + foundation from the final terrain, so nothing floats or sinks
     if (tiny(q)) { buildings.push(q.b); continue; }
@@ -359,13 +396,14 @@ export interface WorldView {
   /** dock deck height fn (dockPlan.deckAt) */
   deckAt?: (t: Terrain, x: number, z: number) => number;
 }
-export const ISSUES = ['buildingInWater', 'buildingFloating', 'buildingSunk', 'buildingOverlap', 'buildingOnRoad', 'roadFloating', 'bridgeUnsupported', 'treeBadlyPlaced', 'propBadlyPlaced', 'shorelineGap', 'nonFlatWater', 'pierUnsupported', 'bridgeSolidBelow', 'bridgeNoClearance', 'overpassMissing', 'pilingThroughDeck', 'pilingMisplaced'] as const;
+export const ISSUES = ['buildingInWater', 'buildingFloating', 'buildingSunk', 'buildingOverlap', 'buildingOnRoad', 'roadFloating', 'bridgeUnsupported', 'treeBadlyPlaced', 'propBadlyPlaced', 'shorelineGap', 'nonFlatWater', 'pierUnsupported', 'bridgeSolidBelow', 'bridgeNoClearance', 'overpassMissing', 'pilingThroughDeck', 'pilingMisplaced', 'foundationExposed'] as const;
 export type Issue = (typeof ISSUES)[number];
 export function auditWorld(w: WorldView): { counts: Record<Issue, number>; totals: Record<string, number>; examples: Record<string, unknown[]> } {
   const { area, terrain: t } = w, counts = Object.fromEntries(ISSUES.map((k) => [k, 0])) as Record<Issue, number>, ex: Record<string, unknown[]> = {};
   const note = (k: Issue, v: unknown) => { counts[k]++; (ex[k] ??= []).length < 5 && ex[k].push(v); };
   const infos = binfo(area.buildings), ri = roadIndex(area.roads), real = infos.filter((q) => q.b.m <= 0);
   // buildings
+  let maxExposed = 0, sumExposed = 0, over3 = 0;
   const g = new Grid(40); for (const q of real) g.add(q.i, q.bb[0], q.bb[1], q.bb[2], q.bb[3]);
   const byId = new Map(real.map((q) => [q.i, q] as const));
   for (const q of real) {
@@ -380,6 +418,7 @@ export function auditWorld(w: WorldView): { counts: Record<Issue, number>; total
       if (bottom - lo > T.FLOAT_GAP) note('buildingFloating', { ...id, gap: +(bottom - lo).toFixed(2) });
       if (hi - floorRef > T.SUNK_DEPTH) note('buildingSunk', { ...id, depth: +(hi - floorRef).toFixed(2) });
     }
+    { const ex = exposedHeight(q.outer, floorRef, t.heightAt); maxExposed = Math.max(maxExposed, ex); sumExposed += ex; if (ex > 3) over3++; if (ex > T.EXPOSED) note('foundationExposed', { ...id, exposed: +ex.toFixed(2) }); }
     if (onRoad / n >= T.ROAD_FRAC) note('buildingOnRoad', id);
     for (const j of g.near(q.bb[0], q.bb[1], q.bb[2], q.bb[3])) {
       if (j === q.i) continue; const o = byId.get(j)!; if (o.area < q.area || (o.area === q.area && o.i < q.i)) continue;
@@ -452,7 +491,7 @@ export function auditWorld(w: WorldView): { counts: Record<Issue, number>; total
       if (!decks.some((d) => inPoly(x, z, d.pts)) || bot > Math.max(t.heightAt(x, z), -9) + 0.05) note('pilingMisplaced', id);
     }
   }
-  const totals = { buildings: area.buildings.length, roads: area.roads.length, trees: area.trees.length / 5, lamps: area.lamps.length, pools: area.pools.length, piers: area.piers.length, bridges: (w.bridges ?? []).length, seawallSegments: walls.length, shoreSegments: segs.length };
+  const totals = { maxExposedFoundation: +maxExposed.toFixed(2), meanExposedFoundation: +(sumExposed / Math.max(real.length, 1)).toFixed(3), exposedOver3m: over3, buildings: area.buildings.length, roads: area.roads.length, trees: area.trees.length / 5, lamps: area.lamps.length, pools: area.pools.length, piers: area.piers.length, bridges: (w.bridges ?? []).length, seawallSegments: walls.length, shoreSegments: segs.length };
   return { counts, totals, examples: ex };
 }
 
@@ -460,8 +499,10 @@ export function auditWorld(w: WorldView): { counts: Record<Issue, number>; total
 /** Road/bridge surface height query. surfaceAt(x, z, y) returns the highest surface that is not above y + STEP, so a bridge or overpass deck is only
  *  "ground" for someone standing on it and the space under it is open (walk, fly or boat beneath). Without y it returns the highest surface (legacy). */
 export const WALK_LIFT = 0.05, WALK_W = 1.8;
+export const DECK_T = 0.65; // deck slab thickness: the soffit (underside) is this far below the road surface
 export const STEP = 0.9; // a surface this far above the query height still counts as a step up
-export interface RoadSurface { surfaceAt(x: number, z: number, y?: number): number; /** highest deck over this spot that is above y (or -Infinity) */ deckAbove(x: number, z: number, y: number): number }
+export interface RoadSurface { surfaceAt(x: number, z: number, y?: number): number; /** highest deck over this spot that is above y (or -Infinity) */ deckAbove(x: number, z: number, y: number): number;
+  /** underside of the lowest bridge/overpass slab whose top is above y + STEP (Infinity when none): a solid ceiling for anything below it */ soffitAbove(x: number, z: number, y: number): number }
 
 export function createSurface(roads: AreaData['roads'], t: Terrain, plans?: RoadPlan[], legacy = false): RoadSurface & { addSeg: (...a: number[]) => void } {
   const B = 32, hash = new Map<number, number[]>(), segs: number[] = []; // seg: x0 z0 x1 z1 halfWidth lift y0 y1
@@ -498,6 +539,16 @@ export function createSurface(roads: AreaData['roads'], t: Terrain, plans?: Road
       const lim = legacy ? Infinity : y + STEP; let best = -Infinity;
       each(x, z, (v) => { if (v <= lim && v > best) best = v; });
       return best === -Infinity ? t.heightAt(x, z) : best;
+    },
+    soffitAbove(x, z, y) {
+      const l = hash.get(Math.floor(x / B) * 100003 + Math.floor(z / B)); if (!l) return Infinity; let best = Infinity;
+      for (const id of l) {
+        const o = id * 8, ya = segs[o + 6], yb = segs[o + 7]; if (!Number.isFinite(ya) || !Number.isFinite(yb)) continue; // elevated segments only
+        const x0 = segs[o], z0 = segs[o + 1], dx = segs[o + 2] - x0, dz = segs[o + 3] - z0, hw = segs[o + 4], L2 = dx * dx + dz * dz || 1, u = Math.min(1, Math.max(0, ((x - x0) * dx + (z - z0) * dz) / L2));
+        const ex = x0 + dx * u - x, ez = z0 + dz * u - z; if (ex * ex + ez * ez > hw * hw) continue;
+        const v = ya + (yb - ya) * u; if (v > y + STEP && v - DECK_T < best) best = v - DECK_T;
+      }
+      return best;
     },
     deckAbove(x, z, y) { let best = -Infinity; each(x, z, (v) => { if (v > y + STEP && v > best) best = v; }); return best; },
   };
