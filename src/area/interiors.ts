@@ -27,7 +27,7 @@ export function createInteriors(list: Building[], terrain: Terrain) {
     if (area < 40 || area > 4000) return;
     let gmin = Infinity, gmax = -Infinity, cx = 0, cz = 0;
     for (const [x, z] of ring) { const g = terrain.heightAt(x, z); gmin = Math.min(gmin, g); gmax = Math.max(gmax, g); cx += x / ring.length; cz += z / ring.length; }
-    gmin = Math.max(gmin, 0.2); gmax = Math.max(gmax, 0.2);
+    gmin = b.pad ?? Math.max(gmin, 0.2); gmax = Math.max(gmax, 0.2);
     if (gmax - gmin > 0.9) return; // sloped lots: skip (floor would float)
     const pitched = b.s !== 'flat' && b.rh > 0.2, house = (pitched || b.h < 7.5) && area < 400;
     const base = gmin - 0.4, fh = house ? 3.1 : 3.4, ceil = base + 0.35 + fh;

@@ -8,7 +8,7 @@ import * as THREE from 'three/webgpu';
  * - G toggles walk mode: keeps the eye ~1.7 m above the tiles via a downward raycast
  * - never below ground (fly mode keeps >= 2 m clearance)
  */
-export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElement, ground: (x: number, z: number) => number | null) {
+export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElement, ground: (x: number, z: number, y?: number) => number | null) {
   const keys = new Set<string>();
   const vel = new THREE.Vector3();
   let yaw = 0, pitch = 0;
@@ -56,7 +56,7 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
   const tmp = new THREE.Vector3(), fwd = new THREE.Vector3(), right = new THREE.Vector3();
   let groundY: number | null = null, rcTimer = 0;
   // Ground comes from the baked height field (constant time), not a raycast through the city mesh.
-  const sampleGround = () => { groundY = ground(camera.position.x, camera.position.z); };
+  const sampleGround = () => { groundY = ground(camera.position.x, camera.position.z, camera.position.y - 1); }; // y: a bridge deck is ground only when the camera is above it
 
   return {
     get walk() { return walk; },

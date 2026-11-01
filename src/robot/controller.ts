@@ -3,7 +3,8 @@ import { A6 } from '../perf/frame';
 import type { RobotModel, RobotAnim } from './model';
 
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
-export interface World { floorAt(x: number, z: number, y: number): { y: number; water: boolean; roof: boolean }; blocked(x: number, z: number, y: number): boolean }
+const BODY_H = 1.45; // robot height for deck-underside collision (m)
+export interface World { floorAt(x: number, z: number, y: number): { y: number; water: boolean; roof: boolean }; blocked(x: number, z: number, y: number): boolean; ceilingAt(x: number, z: number, y: number): number }
 
 const G = 22, BASE = { walk: 3.4, run: 7.5, cruise: 90, burst: 140, jump: 7.2, turn: 1, accel: 1 }; // m/s; 90 m/s ≈ 200 mph
 /** Live movement constants; `setTuning` scales them per robot type (types.ts TYPES[type].tune). */
@@ -157,8 +158,12 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
       if ((mode === 'ROCKETS' || mode === 'SKYDIVING') && world.blocked(nx, nz, ny + 0.3) && !world.blocked(pos.x, pos.z, pos.y + 0.3)) {
         const sp = Math.hypot(vel.x, vel.z); vel.x *= -0.2; vel.z *= -0.2; // bonk off the wall
         if (sp > 30) { mode = 'SKYDIVING'; airT = 0; anim = 'stumble'; }
+      } else if (world.ceilingAt(nx, nz, pos.y) - Math.max(pos.y, floor.y) < BODY_H && world.ceilingAt(pos.x, pos.z, pos.y) - Math.max(pos.y, floor.y) >= BODY_H) {
+        vel.x *= -0.1; vel.z *= -0.1; // too low to fit under the deck ahead: solid, like a wall
       } else { pos.x = nx; pos.z = nz; }
       pos.y = ny;
+      { const ce = world.ceilingAt(pos.x, pos.z, pos.y - vel.y * dt); // bridge / overpass undersides are solid: no passing up through a deck from below
+        if (pos.y + BODY_H > ce) { pos.y = Math.max(ce - BODY_H, floor.y); if (vel.y > 0) vel.y = 0; } }
       floor = world.floorAt(pos.x, pos.z, pos.y + 0.6);
       if (mode === 'GROUND' || mode === 'LAND' || mode === 'ROLL') {
         if (pos.y - floor.y > 0.5) { mode = 'SKYDIVING'; airT = 0; anim = 'jump'; } // walked off a ledge
