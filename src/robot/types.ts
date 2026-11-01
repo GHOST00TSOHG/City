@@ -35,11 +35,11 @@ export const TYPES: Record<RobotType, TypeDef> = {
     tune: { walk: 0.8, run: 0.78, cruise: 0.85, burst: 0.85, jump: 0.85, turn: 0.72, accel: 0.65 },
   },
   worker: {
-    label: 'Worker', blurb: 'Utility rig. Balanced, tool arms, lanky gait.', height: 2.4, sole: -0.14, tris: 30_000,
+    label: 'Worker', blurb: 'Combat medic. Regen core, injector arm, heal emitter.', height: 2.4, sole: -0.14, tris: 26_000,
     motion: { mass: 1.3, bob: 1.1, sway: 1.1, stride: 0.95, arms: 0.9, limp: 0.35, hunch: 0.08, curl: 0.4, special: 'none' }, specialDur: 0.8,
     slots: { helmet: ['boxcam', 'welder', 'lamp'], arms: ['claw', 'drill', 'welder'], bionics: ['tanks', 'battery', 'reel'], legs: ['cans', 'strut', 'ribbed'], thrusters: ['stacks', 'fans', 'rocket'], boots: ['stabilizer', 'wheels', 'clamp'] },
     names: { boxcam: 'Box cam', welder: 'Welder', lamp: 'Lamp head', claw: 'Cargo claw', drill: 'Drill', tanks: 'Gas tanks', battery: 'Battery crate', reel: 'Cable reel', cans: 'Twin cans', strut: 'Strut', ribbed: 'Ribbed', stacks: 'Exhaust stacks', fans: 'Lift fans', rocket: 'Rocket can', stabilizer: 'Stabilisers', wheels: 'Wheels', clamp: 'Clamp feet' },
-    paint: { shell: '#616c38', joints: '#2b2e33', torso: '#4a5530', shorts: '#e0a020', backpack: '#3c3f45', visor: '#ff3020', decalColor: '#e0a020' },
+    paint: { shell: '#616c38', joints: '#2b2e33', torso: '#4a5530', shorts: '#2f8a3e', backpack: '#3c3f45', visor: '#ff3020', decalColor: '#3dff6e' },
     tune: { walk: 1, run: 1, cruise: 1, burst: 1, jump: 1, turn: 1, accel: 1 },
   },
   glitch: {
