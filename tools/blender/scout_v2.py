@@ -16,7 +16,7 @@ FAST = '--fast' in argv
 OUT = '/workspace/robot-renders/' + next((a.split('=')[1] for a in argv if a.startswith('--out=')), 'scout-v2b.png')
 TAU = math.tau
 
-def _wear(m, b, col, rough):
+def _wear(m, b, col, rough, metal=0.0):
     """Render-side weathering: edge wear (bevel-normal vs normal -> bare metal on edges), panel-line grooves
     (voronoi distance-to-edge in object space, darkened + bumped in), low-frequency grime."""
     nt = m.node_tree; N = nt.nodes; Lk = nt.links.new
@@ -40,12 +40,14 @@ def _wear(m, b, col, rough):
         return mr.outputs['Result']
     pl = N.new('ShaderNodeMath'); pl.operation = 'MINIMUM'; Lk(_seam(sep.outputs['Z'], 0.3, 0.25), pl.inputs[0]); Lk(_seam(sep.outputs['X'], 0.62, 0.1), pl.inputs[1])
     gr = N.new('ShaderNodeTexNoise'); gr.inputs['Scale'].default_value = 3; Lk(tc.outputs['Object'], gr.inputs['Vector'])
-    base = N.new('ShaderNodeMix'); base.data_type = 'RGBA'; base.inputs['A'].default_value = (*col, 1); base.inputs['B'].default_value = (col[0] * 0.7, col[1] * 0.7, col[2] * 0.68, 1)
+    _rgb = lambda n, k: next(x for x in n.inputs if x.name == k and x.type == 'RGBA')   # Mix has float/vector/colour A,B
+    _rgbo = lambda n: next(x for x in n.outputs if x.type == 'RGBA')
+    base = N.new('ShaderNodeMix'); base.data_type = 'RGBA'; _rgb(base, 'A').default_value = (*col, 1); _rgb(base, 'B').default_value = (col[0] * 0.7, col[1] * 0.7, col[2] * 0.68, 1)
     Lk(gr.outputs['Fac'], base.inputs['Factor'])
-    groove = N.new('ShaderNodeMix'); groove.data_type = 'RGBA'; groove.inputs['A'].default_value = (0.02, 0.02, 0.022, 1); Lk(base.outputs['Result'], groove.inputs['B']); Lk(pl.outputs[0], groove.inputs['Factor'])
-    worn = N.new('ShaderNodeMix'); worn.data_type = 'RGBA'; Lk(groove.outputs['Result'], worn.inputs['A']); worn.inputs['B'].default_value = (0.55, 0.55, 0.56, 1); Lk(ew.outputs['Result'], worn.inputs['Factor'])
-    Lk(worn.outputs['Result'], b.inputs['Base Color'])
-    met = N.new('ShaderNodeMath'); met.operation = 'MULTIPLY'; met.inputs[1].default_value = 0.9; Lk(ew.outputs['Result'], met.inputs[0]); Lk(met.outputs[0], b.inputs['Metallic'])
+    groove = N.new('ShaderNodeMix'); groove.data_type = 'RGBA'; _rgb(groove, 'A').default_value = (0.02, 0.02, 0.022, 1); Lk(_rgbo(base), _rgb(groove, 'B')); Lk(pl.outputs[0], groove.inputs['Factor'])
+    worn = N.new('ShaderNodeMix'); worn.data_type = 'RGBA'; Lk(_rgbo(groove), _rgb(worn, 'A')); _rgb(worn, 'B').default_value = (0.55, 0.55, 0.56, 1); Lk(ew.outputs['Result'], worn.inputs['Factor'])
+    Lk(_rgbo(worn), b.inputs['Base Color'])
+    met = N.new('ShaderNodeMath'); met.operation = 'MULTIPLY'; met.inputs[1].default_value = 0.9; Lk(ew.outputs['Result'], met.inputs[0]); mx = N.new('ShaderNodeMath'); mx.operation = 'MAXIMUM'; mx.inputs[1].default_value = metal; Lk(met.outputs[0], mx.inputs[0]); Lk(mx.outputs[0], b.inputs['Metallic'])
     bump = N.new('ShaderNodeBump'); bump.inputs['Strength'].default_value = 0.6; bump.inputs['Distance'].default_value = 0.002; Lk(pl.outputs[0], bump.inputs['Height']); Lk(bump.outputs['Normal'], b.inputs['Normal'])
 
 # ------------------------------------------------------------------ materials (Gundam tricolour, scout flavour)
@@ -54,7 +56,7 @@ def mat(name, col, rough=0.35, metal=0.0, emit=None, strength=6, wear=False):
     b = m.node_tree.nodes['Principled BSDF']
     b.inputs['Base Color'].default_value = (*col, 1); b.inputs['Roughness'].default_value = rough; b.inputs['Metallic'].default_value = metal
     b.inputs['Coat Weight'].default_value = 0.06 if metal < 0.5 else 0.0
-    if wear: _wear(m, b, col, rough)
+    if wear: _wear(m, b, col, rough, metal)
     if emit: b.inputs['Emission Color'].default_value = (*emit, 1); b.inputs['Emission Strength'].default_value = strength
     return m
 WHITE = mat('armor_white', (0.43, 0.44, 0.45), 0.52, wear=True)
