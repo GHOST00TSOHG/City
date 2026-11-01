@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import SKEL from './skeleton.json';
 import { makePoser, type Bones, type RobotLook, type RobotModel, type PoseInput, REGIONS } from './model';
 import { TYPES, SLOT_KEYS, skeleton, type RobotType, type SlotBuild } from './types';
 import { createGlitchBody, type ShardData } from './glitch';
@@ -19,7 +20,14 @@ function rig(type: RobotType) {
   }
   by.get('Hips')!.userData.y0 = by.get('Hips')!.position.y;
   const nozzles: THREE.Object3D[] = [];
-  for (const s of ['Left', 'Right']) { const nz = new THREE.Object3D(); nz.name = s + 'FootNozzle'; nz.position.set(0, TYPES[type].sole + 0.02, -0.03); by.get(s + 'Foot')!.add(nz); nozzles.push(nz); }
+  // jet nozzles (thrust.ts points each flame down the nozzle's -Y): boots for most; the medic flies on a backpack
+  // regen-core jet (main lift, userData.k = flame scale) plus two palm boosters at the wrists
+  const noz = (name: string, bone: string, x: number, y: number, z: number, k = 1) => {
+    const nz = new THREE.Object3D(); nz.name = name; nz.position.set(x, y, z); nz.userData.k = k; by.get(bone)?.add(nz); nozzles.push(nz);
+  };
+  if (TYPES[type].flight.style === 'medic') {
+    noz('BackNozzle', 'Spine', 0, 0.2, -0.3, 1.35); noz('LeftPalmNozzle', 'LeftForeArm', 0, (SKEL as any)[type].hand - 0.07, 0, 0.5); noz('RightPalmNozzle', 'RightForeArm', 0, (SKEL as any)[type].hand - 0.07, 0, 0.5);
+  } else for (const s of ['Left', 'Right']) noz(s + 'FootNozzle', s + 'Foot', 0, TYPES[type].sole + 0.02, -0.03);
   const bones: Bones = {}; for (const [n, o] of by) (bones as any)[n] = o;
   const joints = [...by.values()].filter((o) => /^(Left|Right)(ForeArm|Leg|Arm)$|^Head$/.test(o.name));
   return { root, arm, by, list, nozzles, bones, joints };
@@ -45,7 +53,7 @@ export function createKitRobot(type: RobotType, kit: Kit, look: RobotLook, u: Ki
     }
   };
   rebuild();
-  const pose = makePoser(R.bones, TYPES[type].motion);
+  const pose = makePoser(R.bones, TYPES[type].motion, TYPES[type].flight.style);
   const A = new THREE.Vector3(), B = new THREE.Vector3(), Y = new THREE.Vector3(0, 1, 0), inv = new THREE.Matrix4();
   const aimPistons = () => {
     R.root.updateMatrixWorld(true); inv.copy(R.root.matrixWorld).invert();
