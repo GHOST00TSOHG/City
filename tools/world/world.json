@@ -1,0 +1,21 @@
+{
+  "_note": "One-world layout (docs/WORLD-PLAN.md, step 6a). Offsets are integer metres in one ENU frame (x east, z south) centred on Twin Lights (bayshore origin). Each area's content stays in its own local frame and its group is translated by `offset`. Real offsets are kept inside each NJ cluster; the Newark cluster is moved closer (compressed) and joined by a short connector road. Key West is placed over open water east of Sandy Hook and reached by flying (no road).",
+  "frame": { "name": "Twin Lights", "lat": 40.39666, "lon": -73.98594 },
+  "areas": {
+    "bayshore":  { "cluster": "shore",  "offset": [0, 0],          "real": true },
+    "sandyhook": { "cluster": "shore",  "offset": [-1363, -7242],  "real": true },
+    "passaic":   { "cluster": "newark", "offset": [-5909, -3008],  "shift": [9000, 34500] },
+    "newark":    { "cluster": "newark", "offset": [-7844, -7037],  "shift": [9000, 34500] },
+    "keywest":   { "cluster": "keys",   "offset": [9000, -6000],   "flyOnly": true }
+  },
+  "connectors": [
+    {
+      "id": "nj-connector",
+      "from": "bayshore", "to": "passaic",
+      "kind": "highway", "lanes": 2, "widthM": 9,
+      "note": "Compressed stand-in for the real ~40 km Route 36 / Garden State Parkway corridor. Procedural; generic low-detail terrain either side.",
+      "points": [[-1870, -450], [-2600, -900], [-3400, -1700], [-4200, -2300], [-4739, -2500]]
+    }
+  ],
+  "ocean": { "between": ["shore", "keys"], "tiles": "terrain-only", "note": "Water plane + fog only, so the flight to Key West streams cheaply." }
+}
