@@ -1,0 +1,172 @@
+{
+ "when": "2026-11-02T06:39:52.830Z",
+ "viewport": [
+  1920,
+  1080
+ ],
+ "budget": {
+  "fps": 50,
+  "calls": 150
+ },
+ "static": {
+  "tilesBuilt": [
+   "passaic",
+   "newark",
+   "sandyhook",
+   "keywest",
+   "bayshore"
+  ],
+  "memory": {
+   "geoMB": 353.4,
+   "instMB": 25.9,
+   "texMB": 106.5,
+   "gpuMB": 485.8,
+   "hostArraysMB": 6.7,
+   "heapMB": null,
+   "infoGeometries": 319,
+   "infoTextures": 45,
+   "tiles": 5,
+   "webContentRssMB": 2283
+  },
+  "views": [
+   {
+    "view": "aerial-keywest",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 68,
+    "callsMedian": 68,
+    "triangles": 8052636
+   },
+   {
+    "view": "mid-keywest",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 79,
+    "callsMedian": 79,
+    "triangles": 8440917
+   },
+   {
+    "view": "aerial-bayshore",
+    "frames": 241,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 78,
+    "callsMedian": 78,
+    "triangles": 7038863
+   },
+   {
+    "view": "aerial-sandyhook",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 50,
+    "worstMs": 20,
+    "over33": 0,
+    "calls": 59,
+    "callsMedian": 59,
+    "triangles": 6444049
+   },
+   {
+    "view": "aerial-newark",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 29,
+    "callsMedian": 29,
+    "triangles": 3805477
+   },
+   {
+    "view": "aerial-passaic",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 95,
+    "callsMedian": 95,
+    "triangles": 7344693
+   },
+   {
+    "view": "mid-passaic",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 42,
+    "callsMedian": 42,
+    "triangles": 5985723
+   },
+   {
+    "view": "ground-nj-passaic-hook",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 65,
+    "callsMedian": 65,
+    "triangles": 5829326
+   },
+   {
+    "view": "aerial-nj-passaic-hook",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 56,
+    "callsMedian": 56,
+    "triangles": 4793286
+   },
+   {
+    "view": "ground-nj-hook-highlands",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 52,
+    "callsMedian": 52,
+    "triangles": 4480994
+   },
+   {
+    "view": "aerial-nj-hook-highlands",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 59,
+    "callsMedian": 59,
+    "triangles": 4496986
+   },
+   {
+    "view": "ground-keywest-duval",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 73,
+    "callsMedian": 73,
+    "triangles": 8195992
+   }
+  ],
+  "fpsMedian": 58.8,
+  "fpsMin": 50,
+  "callsMax": 95,
+  "trianglesMax": 8440917,
+  "consoleErrors": 0
+ },
+ "consoleErrors": []
+}

@@ -7,6 +7,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Building, Terrain } from './data';
 import { ringPts } from './geom';
+import { projectLatLon } from '../world/registry';
 
 export interface LandmarkManifest {
   id: string; name: string; area: string; file: string; lat: number; lon: number;
@@ -24,12 +25,31 @@ export interface LandmarkPad { id: string; pts: [number, number][]; y: number; m
 export interface LandmarkCollider { tris: Float32Array; minX: number; maxX: number; minZ: number; maxZ: number }
 
 const BASE = import.meta.env.BASE_URL;
-const R = 6378137; // same sphere as tools/bake/lib.mjs projector
 let ktx2: KTX2Loader | null = null;
 let index: Promise<Record<string, string[]>> | null = null;
 
 /** Area origins come from the baked area manifest (same point the bake projected from). */
-export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer) {
+/** Drops the decoded CPU copy of every texture (ImageBitmap) once the renderer has uploaded it (onUpdate runs after the upload), so the page keeps only the GPU copy. */
+function releaseTextureSources(root: THREE.Object3D) {
+  const seen = new Set<THREE.Texture>();
+  root.traverse((o) => {
+    for (const m of [(o as THREE.Mesh).material].flat()) {
+      if (!m) continue;
+      for (const v of Object.values(m) as unknown[]) {
+        const t = v as THREE.Texture;
+        if (!t?.isTexture || seen.has(t) || (t as any).isCompressedTexture) continue;
+        seen.add(t);
+        // ImageBitmap (Chrome) is closed; an <img> (Safari/WebKit) is detached so its decoded pixels can be dropped
+        t.onUpdate = () => { const im = t.image as ImageBitmap | HTMLImageElement | undefined; t.onUpdate = null; if (!im) return; if (typeof (im as ImageBitmap).close === 'function') (im as ImageBitmap).close(); else if ((im as HTMLImageElement).src) { (im as HTMLImageElement).removeAttribute('src'); t.source.data = null; } };
+      }
+    }
+  });
+}
+
+/** `opts.padsOnly` (run F): another tile owns the ground where this area's landmarks stand (Passaic owns Newark's south-east corner), so that tile only needs their pads,
+ *  footprints and colliders: only landmarks within `opts.within` (+250 m) are loaded, nothing is added to a group, and the model is disposed again. */
+export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer, off: { x: number; z: number } = { x: 0, z: 0 },
+  opts: { padsOnly?: boolean; within?: { minX: number; maxX: number; minZ: number; maxZ: number } } = {}) {
   const group = new THREE.Group(); group.name = 'landmarks';
   const colliders: LandmarkCollider[] = [], footprints: LandmarkFootprint[] = [], pads: LandmarkPad[] = [];
   if (!origin) return { group, colliders, footprints, pads };
@@ -38,11 +58,11 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
   if (!slugs.length) return { group, colliders, footprints, pads };
   ktx2 ??= new KTX2Loader().setTranscoderPath(BASE + 'basis/').detectSupport(renderer);
   const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
-  const k = (Math.PI / 180) * R, c = Math.cos((origin.lat * Math.PI) / 180);
   for (const slug of slugs) {
     try {
       const dir = `${BASE}landmarks/${areaId}/${slug}/`;
       const m: LandmarkManifest = await (await fetch(dir + 'manifest.json')).json();
+      if (opts.within) { const [wx, wz] = projectLatLon(origin, m.lat, m.lon), w = opts.within, X = wx + off.x, Z = wz + off.z; if (X < w.minX - 250 || X > w.maxX + 250 || Z < w.minZ - 250 || Z > w.maxZ + 250) continue; }
       const gltf = await loader.loadAsync(dir + m.file);
       const levels = [0, 1, 2].map((i) => gltf.scene.children.find((n) => new RegExp(`_LOD${i}$`).test(n.name))).filter(Boolean) as THREE.Object3D[];
       if (!levels.length) throw new Error('no _LOD nodes');
@@ -58,19 +78,22 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       // glTF front is -Z (north at heading 0); headingDeg is clockwise from north, three's +Y rotation is counter-clockwise.
       lod.rotation.y = -THREE.MathUtils.degToRad(m.headingDeg ?? 0);
       lod.scale.setScalar(m.scale ?? 1);
-      const x = (m.lon - origin.lon) * k * c, z = -(m.lat - origin.lat) * k;
+      const [lx, lz] = projectLatLon(origin, m.lat, m.lon), x = lx + off.x, z = lz + off.z; // world frame
       lod.position.set(x, 0, z); lod.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(levels[0]);
       let groundY = Infinity;
       for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) groundY = Math.min(groundY, terrain.heightAt(sx, sz));
       const baseY = m.elevationM ?? Math.max(groundY, 0);
       lod.position.y = baseY; lod.updateMatrixWorld(true);
-      tuneLandmarkMaterials(lod, m.id);
-      if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
-      group.add(lod);
+      if (!opts.padsOnly) {
+        tuneLandmarkMaterials(lod, m.id);
+        releaseTextureSources(lod);
+        if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
+        group.add(lod);
+      }
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
       const pts: [number, number][] = m.footprint?.length! >= 3
-          ? m.footprint!.map(([la, lo]) => [(lo - origin.lon) * k * c, -(la - origin.lat) * k])
+          ? m.footprint!.map(([la, lo]) => { const q = projectLatLon(origin, la, lo); return [q[0] + off.x, q[1] + off.z] as [number, number]; })
           : ([[local.min.x, local.min.z], [local.max.x, local.min.z], [local.max.x, local.max.z], [local.min.x, local.max.z]] as const)
               .map(([px, pz]) => { const v = new THREE.Vector3(px, 0, pz).applyMatrix4(lod.matrixWorld); return [v.x, v.z] as [number, number]; });
       // the pad is the union of the outline and the model's own plan box (a tower or steps can overhang an OSM outline)
@@ -79,6 +102,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       const f = makeFootprint(m.id, pts, 0), fb = makeFootprint(m.id, boxPts, 0);
       pads.push({ id: m.id, pts: boxPts, y: baseY, minX: Math.min(f.minX, fb.minX), maxX: Math.max(f.maxX, fb.maxX), minZ: Math.min(f.minZ, fb.minZ), maxZ: Math.max(f.maxZ, fb.maxZ) });
       if (m.cullMarginM !== false) footprints.push(makeFootprint(m.id, pts, Math.max(0, m.cullMarginM ?? 4)));
+      if (opts.padsOnly) lod.traverse((n) => { const mm = n as THREE.Mesh; if (!mm.isMesh) return; mm.geometry.dispose(); for (const mt of [mm.material].flat()) { for (const v of Object.values(mt) as unknown[]) (v as THREE.Texture)?.isTexture && (v as THREE.Texture).dispose(); mt.dispose(); } });
     } catch (e) { console.warn('[City] landmark failed', areaId, slug, e); }
   }
   return { group, colliders, footprints, pads };

@@ -8,7 +8,7 @@ import type { TerrainGrid } from './terrainCore';
 export const FAR_LAYERS = [10, 24, 50, 100, 190, 340, 600, 1000, 1700, 2800, 4500, 7500, 12000, 19000, 30000, 38000];
 export const FAR_RADIUS = FAR_LAYERS[FAR_LAYERS.length - 1];
 
-const LAND = 0x5c5e4e, SEABED = 0xb9b08a, DEEP = 0x2c6a70;
+const LAND = 0x5c5e4e, SEABED = 0x8a8566, DEEP = 0x2c6a70;
 const rgb = (hex: number) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
 const lin = (c: number) => Math.pow(c, 2.2); // three's vertex colours are linear; the terrain colours above are authored in sRGB
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
@@ -16,7 +16,7 @@ const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t 
 export interface FarGroundData { positions: Float32Array; colors: Float32Array; indices: Uint32Array; triangles: number }
 
 /** Pure geometry (also run by the map audit): perimeter of the tile -> FAR_LAYERS square rings. */
-export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
+export function farGroundData(t: TerrainGrid, inland: boolean, seaSides: string[] = []): FarGroundData {
   const { nx, nz, cell, x0, z0, h } = t;
   // perimeter, clockwise seen from above (x east, z south): top edge W->E, right edge N->S, bottom edge E->W, left edge S->N
   const px: number[] = [], pz: number[] = [], ph: number[] = [], ox: number[] = [], oz: number[] = [];
@@ -26,6 +26,23 @@ export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
   for (let ix = nx - 1; ix > 0; ix--) add(ix, nz - 1);
   for (let iz = nz - 1; iz > 0; iz--) add(0, iz);
   const N = px.length, K = FAR_LAYERS.length + 1;
+  // Sides of an inland tile that face open water (Passaic's south side is Newark Bay): the ring there falls from the edge level to a seabed instead of
+  // climbing to a land plain, with a wavy cut so the new shoreline is not a straight line parallel to the tile edge.
+  // Run F: coastal tiles (not inland) face open sea on every side, so their ring falls to a seabed all round (it used to keep the edge level: Highlands' +70 m hills became a flat olive
+  // plateau over the sea). The sea weight eases along the perimeter (~700 m) so the sea/land change at a corner is a ramp, not a step between neighbouring vertices
+  // (that step made the jagged triangles at Passaic's south-east corner).
+  const raw = new Uint8Array(N), wob = new Float32Array(N), sea = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    raw[i] = !inland || (seaSides.includes('s') && oz[i] > 0) || (seaSides.includes('n') && oz[i] < 0) || (seaSides.includes('e') && ox[i] > 0) || (seaSides.includes('w') && ox[i] < 0) ? 1 : 0;
+    wob[i] = 0.5 + 0.28 * Math.sin(i * cell / 410) + 0.22 * Math.sin(i * cell / 133 + 1.7);
+  }
+  const dd = new Float32Array(N);
+  for (let i = 0; i < N; i++) dd[i] = raw[i] ? 0 : 1e9;
+  for (let r = 0; r < 2; r++) {
+    for (let i = 0; i < N; i++) dd[i] = Math.min(dd[i], dd[(i + N - 1) % N] + 1);
+    for (let i = N - 1; i >= 0; i--) dd[i] = Math.min(dd[i], dd[(i + 1) % N] + 1);
+  }
+  for (let i = 0; i < N; i++) sea[i] = 1 - smooth(dd[i] * cell / 700);
   const H: Float32Array[] = [Float32Array.from(ph)];
   for (let k = 1; k < K; k++) {
     const d = FAR_LAYERS[k - 1], prev = H[k - 1], rad = Math.min(N >> 1, Math.round(d / cell / 2)); // tangential blur grows with distance: edge bumps smear out, the plain follows the local edge level
@@ -34,17 +51,20 @@ export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
     const f = smooth(d / 70);
     for (let i = 0; i < N; i++) {
       const lo = i - rad + N, hi = i + rad + N, avg = rad ? (pre[hi + 1] - pre[lo]) / (2 * rad + 1) : prev[i];
-      out[i] = inland ? avg + (Math.max(avg, 0.3) - avg) * f : avg; // inland has no sea: a river bed at the edge climbs to the plain; coastal keeps its seabed under the sea plane
+      const land = inland ? avg + (Math.max(avg, 0.3) - avg) * f : avg; // inland has no sea: a river bed at the edge climbs to the plain
+      const seaH = avg + (Math.min(avg, -2.6) - avg) * smooth(d / (160 + 240 * wob[i] + 12 * Math.max(avg, 0))); // land at the edge ramps down to the seabed (gentler the higher it is)
+      out[i] = land + (seaH - land) * sea[i];
     }
     H.push(out);
   }
-  const pos = new Float32Array(N * K * 3), col = new Float32Array(N * K * 3), land3 = rgb(LAND).map(lin), sea = rgb(SEABED).map(lin), deep = rgb(DEEP).map(lin);
+  const pos = new Float32Array(N * K * 3), col = new Float32Array(N * K * 3), land3 = rgb(LAND).map(lin), seabed = rgb(SEABED).map(lin), deep = rgb(DEEP).map(lin);
   for (let k = 0; k < K; k++) {
     const d = k ? FAR_LAYERS[k - 1] : 0;
     for (let i = 0; i < N; i++) {
-      const v = k * N + i, y = H[k][i];
+      // far seabed keeps falling with distance: at 9 km the 24-bit depth buffer cannot separate it from the sea plane 2.6 m above (blocky z-fighting seen from altitude)
+      const v = k * N + i, y = H[k][i] - sea[i] * 0.005 * Math.max(0, d - 1000);
       pos[v * 3] = px[i] + ox[i] * d; pos[v * 3 + 1] = y; pos[v * 3 + 2] = pz[i] + oz[i] * d;
-      if (y < 0 && !inland) { const m = Math.min(1, -y / 2.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = sea[q] + (deep[q] - sea[q]) * m; }
+      if (y < 0 && sea[i] > 0.5) { const m = Math.min(1, -y / 1.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = seabed[q] + (deep[q] - seabed[q]) * m; }
       else for (let q = 0; q < 3; q++) col[v * 3 + q] = land3[q];
     }
   }
@@ -59,11 +79,28 @@ export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
   return { positions: pos, colors: col, indices: Uint32Array.from(idx), triangles: idx.length / 3 };
 }
 
-/** The ring as one lit mesh (fogged like everything else). */
-export function buildFarGround(t: TerrainGrid, inland: boolean) {
-  const d = farGroundData(t, inland), g = new THREE.BufferGeometry();
+export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
+const rectDist = (b: Rect, x: number, z: number) => Math.hypot(Math.max(b.minX - x, 0, x - b.maxX), Math.max(b.minZ - z, 0, z - b.maxZ));
+
+/** Keeps the ring triangles whose centre is nearer to `self` than to any rectangle in `others` (the other loaded tiles and link strips; inside one = 0 m),
+ *  so where two rings would overlap only the nearer tile's ring is drawn (no double ring, no z-fighting) and no ring pokes through another tile. Pure. */
+export function ownedRingIndices(pos: Float32Array, idx: Uint32Array, self: Rect, others: Rect[]): Uint32Array {
+  if (!others.length) return idx;
+  const out = new Uint32Array(idx.length); let n = 0;
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3, x = (pos[a] + pos[b] + pos[c]) / 3, z = (pos[a + 2] + pos[b + 2] + pos[c + 2]) / 3, ds = rectDist(self, x, z);
+    let keep = true; for (const o of others) if (rectDist(o, x, z) < ds - 1e-6) { keep = false; break; }
+    if (keep) { out[n++] = idx[i]; out[n++] = idx[i + 1]; out[n++] = idx[i + 2]; }
+  }
+  return out.slice(0, n);
+}
+
+/** The ring as one lit mesh (fogged like everything else). `cull(self, others)` re-owns its triangles when the set of loaded tiles changes. */
+export function buildFarGround(t: TerrainGrid, inland: boolean, seaSides: string[] = []) {
+  const d = farGroundData(t, inland, seaSides), g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(d.positions, 3)); g.setAttribute('color', new THREE.BufferAttribute(d.colors, 3));
   g.setIndex(new THREE.BufferAttribute(d.indices, 1)); g.computeVertexNormals(); g.computeBoundingSphere();
-  const m = new THREE.Mesh(g, new THREE.MeshLambertNodeMaterial({ vertexColors: true })); m.name = 'far-ground'; m.frustumCulled = false; m.renderOrder = -1;
+  const m = new THREE.Mesh(g, new THREE.MeshLambertNodeMaterial({ vertexColors: true })) as unknown as THREE.Mesh & { cull(self: Rect, others: Rect[]): number }; m.name = 'far-ground'; m.frustumCulled = false; m.renderOrder = -1;
+  m.cull = (self, others) => { const idx = ownedRingIndices(d.positions, d.indices, self, others); g.setIndex(new THREE.BufferAttribute(idx, 1)); return idx.length / 3; };
   return m;
 }

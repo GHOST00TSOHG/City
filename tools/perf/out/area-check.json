@@ -1,0 +1,369 @@
+{
+ "areas": {
+  "keywest": {
+   "player": {
+    "mode": "walk",
+    "avatar": true,
+    "area": "keywest",
+    "speed": 0,
+    "altitude": 0,
+    "pos": [
+     -925,
+     2,
+     -1213
+    ],
+    "world": {
+     "x": -642742.3487541217,
+     "z": 1804750.2295674093
+    }
+   },
+   "ctlSame": true,
+   "registry": {
+    "keywest": {
+     "load": "active",
+     "exact": true,
+     "off": [
+      -641817,
+      1805963
+     ]
+    },
+    "bayshore": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      16750,
+      41537
+     ]
+    },
+    "sandyhook": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      15394,
+      34294
+     ]
+    },
+    "newark": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      0,
+      0
+     ]
+    },
+    "passaic": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      1924,
+      4029
+     ]
+    }
+   },
+   "here": "keywest",
+   "free": {
+    "mode": "free",
+    "avatar": false,
+    "nearCam": true
+   },
+   "fpsMedian": 60,
+   "fpsMin": 59.9,
+   "calls": 45,
+   "tris": 3472288
+  },
+  "bayshore": {
+   "player": {
+    "mode": "walk",
+    "avatar": true,
+    "area": "bayshore",
+    "speed": 0,
+    "altitude": 0,
+    "pos": [
+     -787,
+     2,
+     -1254
+    ],
+    "world": {
+     "x": 15963.402595459285,
+     "z": 40282.890452205815
+    }
+   },
+   "ctlSame": true,
+   "registry": {
+    "keywest": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      -641817,
+      1805963
+     ]
+    },
+    "bayshore": {
+     "load": "active",
+     "exact": true,
+     "off": [
+      16750,
+      41537
+     ]
+    },
+    "sandyhook": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      15394,
+      34294
+     ]
+    },
+    "newark": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      0,
+      0
+     ]
+    },
+    "passaic": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      1924,
+      4029
+     ]
+    }
+   },
+   "here": "bayshore",
+   "free": {
+    "mode": "free",
+    "avatar": false,
+    "nearCam": true
+   },
+   "fpsMedian": 60,
+   "fpsMin": 60,
+   "calls": 43,
+   "tris": 3160718
+  },
+  "sandyhook": {
+   "player": {
+    "mode": "walk",
+    "avatar": true,
+    "area": "sandyhook",
+    "speed": 0,
+    "altitude": 0,
+    "pos": [
+     7,
+     3,
+     40
+    ],
+    "world": {
+     "x": 15401.724633876805,
+     "z": 34333.890881883846
+    }
+   },
+   "ctlSame": true,
+   "registry": {
+    "keywest": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      -641817,
+      1805963
+     ]
+    },
+    "bayshore": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      16750,
+      41537
+     ]
+    },
+    "sandyhook": {
+     "load": "active",
+     "exact": true,
+     "off": [
+      15394,
+      34294
+     ]
+    },
+    "newark": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      0,
+      0
+     ]
+    },
+    "passaic": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      1924,
+      4029
+     ]
+    }
+   },
+   "here": "sandyhook",
+   "free": {
+    "mode": "free",
+    "avatar": false,
+    "nearCam": true
+   },
+   "fpsMedian": 60,
+   "fpsMin": 59.9,
+   "calls": 42,
+   "tris": 5186843
+  },
+  "newark": {
+   "player": {
+    "mode": "walk",
+    "avatar": true,
+    "area": "newark",
+    "speed": 0,
+    "altitude": 0,
+    "pos": [
+     225,
+     36,
+     125
+    ],
+    "world": {
+     "x": 225.0126875256922,
+     "z": 124.89978059986561
+    }
+   },
+   "ctlSame": true,
+   "registry": {
+    "keywest": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      -641817,
+      1805963
+     ]
+    },
+    "bayshore": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      16750,
+      41537
+     ]
+    },
+    "sandyhook": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      15394,
+      34294
+     ]
+    },
+    "newark": {
+     "load": "active",
+     "exact": true,
+     "off": [
+      0,
+      0
+     ]
+    },
+    "passaic": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      1924,
+      4029
+     ]
+    }
+   },
+   "here": "newark",
+   "free": {
+    "mode": "free",
+    "avatar": false,
+    "nearCam": true
+   },
+   "fpsMedian": 60,
+   "fpsMin": 59.9,
+   "calls": 83,
+   "tris": 5431960
+  },
+  "passaic": {
+   "player": {
+    "mode": "walk",
+    "avatar": true,
+    "area": "passaic",
+    "speed": 0,
+    "altitude": 0,
+    "pos": [
+     139,
+     0,
+     -139
+    ],
+    "world": {
+     "x": 2062.5354376031723,
+     "z": 3889.9945679914895
+    }
+   },
+   "ctlSame": true,
+   "registry": {
+    "keywest": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      -641817,
+      1805963
+     ]
+    },
+    "bayshore": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      16750,
+      41537
+     ]
+    },
+    "sandyhook": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      15394,
+      34294
+     ]
+    },
+    "newark": {
+     "load": "data",
+     "exact": true,
+     "off": [
+      0,
+      0
+     ]
+    },
+    "passaic": {
+     "load": "active",
+     "exact": true,
+     "off": [
+      1924,
+      4029
+     ]
+    }
+   },
+   "here": "passaic",
+   "free": {
+    "mode": "free",
+    "avatar": false,
+    "nearCam": true
+   },
+   "fpsMedian": 60,
+   "fpsMin": 59.9,
+   "calls": 49,
+   "tris": 2503359
+  }
+ },
+ "tri": 2503359,
+ "switch": {
+  "area": "newark",
+  "active": "newark",
+  "kw": "data",
+  "nw": "active",
+  "nwTile": true,
+  "kwTile": false
+ },
+ "consoleErrors": []
+}

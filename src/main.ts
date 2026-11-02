@@ -22,19 +22,16 @@ import { diag } from './perf/diag';
 import { pacing } from './perf/pacing';
 import { quality, warmupTier, dynres, qualityLabel } from './perf/quality';
 import { prewarm } from './perf/prewarm';
+import { registry } from './world/registry';
+import { player } from './world/player';
 import { createSnow, createRain, createWeatherUI, WEATHER_PRESETS, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
 const canvas = document.getElementById('city') as HTMLCanvasElement;
 const loading = document.getElementById('loading');
-/** Public area list for the switcher (ids match public/areas/<id>/). */
-const AREAS: [string, string, string][] = [
-  ['keywest', 'Key West', 'Key West, FL · Old Town'], ['bayshore', 'Highlands', 'Highlands, NJ · Bayshore'], ['sandyhook', 'Sandy Hook', 'Sandy Hook, NJ'],
-  ['newark', 'Newark', 'Newark, NJ · Schools Stadium'], ['passaic', 'Passaic', 'Newark, NJ · Passaic waterfront'],
-];
-const areaId = AREAS.some((a) => a[0] === qs.get('area')) ? qs.get('area')! : 'keywest';
+const areaId = registry.has(qs.get('area')) ? qs.get('area')! : 'keywest';
 const titleEl = document.querySelector('#hud .title span');
-const setTitle = (id: string) => { if (titleEl) titleEl.textContent = AREAS.find((a) => a[0] === id)?.[2] ?? id; };
+const setTitle = (id: string) => { if (titleEl) titleEl.textContent = registry.has(id) ? registry.get(id).title : id; };
 setTitle(areaId);
 
 createScene(canvas, areaId).then(async (app) => {
@@ -48,7 +45,7 @@ createScene(canvas, areaId).then(async (app) => {
   // Area switcher: fade to dark, build + compile the next area off-scene, swap, fade back in. No pop-in.
   const fade = document.createElement('div'); fade.id = 'fade'; document.body.appendChild(fade);
   const bar = document.createElement('div'); bar.id = 'areas';
-  bar.innerHTML = AREAS.map(([id, label]) => `<button data-a="${id}" aria-pressed="${id === areaId}">${label}</button>`).join('');
+  bar.innerHTML = registry.areas.map(({ id, label }) => `<button data-a="${id}" aria-pressed="${id === areaId}">${label}</button>`).join('');
   document.body.appendChild(bar);
   let busy = false;
   const switchTo = async (id: string, view?: string) => {
@@ -61,9 +58,24 @@ createScene(canvas, areaId).then(async (app) => {
     fade.classList.remove('on'); bar.querySelectorAll('button').forEach((b) => (b.disabled = false)); busy = false;
   };
   bar.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.a) switchTo(b.dataset.a); });
-  // Preload the other areas' data one at a time once the first frame is up, so switching never waits on the network.
+  // (no blanket preload of every area's decoded data: it stayed resident for the whole session; streaming prefetches the areas near the player, scene.ts streamTick)
   const idle = (window as any).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
-  idle(async () => { for (const [id] of AREAS) if (id !== areaId) await app.preload(id); });
+  // Key West fly-over cue: distance + a heading arrow to the beacon, shown while the player is out over the water between NJ and Key West
+  const cue = document.createElement('div'); cue.id = 'kwcue'; cue.innerHTML = '<span class="arrow">&#9650;</span> <b>Key West</b> <span class="km"></span>'; document.body.appendChild(cue);
+  const cueArrow = cue.querySelector('.arrow') as HTMLElement, cueKm = cue.querySelector('.km') as HTMLElement, camDir = new THREE.Vector3();
+  const updateCue = () => {
+    const to = app.flight.to(player.pos.x, player.pos.z), inKW = player.area === 'keywest' && to.dist < 3500;
+    cue.classList.toggle('on', !inKW && to.dist > 800);
+    if (!cue.classList.contains('on')) return;
+    app.camera.getWorldDirection(camDir); const yaw = Math.atan2(camDir.x, -camDir.z);
+    cueArrow.style.transform = `rotate(${((to.bearing - yaw) * 180) / Math.PI}deg)`; cueKm.textContent = (to.dist / 1000).toFixed(1) + ' km';
+  };
+  // the title and the highlighted area button follow the player (flying from Newark to Passaic to the shore changes the area under you)
+  let shownArea = areaId;
+  const syncHud = () => {
+    if (busy || player.area === shownArea) return; shownArea = player.area; setTitle(shownArea);
+    bar.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.a === shownArea)));
+  };
   const hint = document.createElement('div'); hint.id = 'hint';
   hint.textContent = 'Free cam: WASD move · drag look · E/Q up/down · Shift fast · G walk · V robot';
   document.body.appendChild(hint); hint.classList.add('gone');
@@ -119,8 +131,8 @@ createScene(canvas, areaId).then(async (app) => {
   // ---- per-frame robot audio (docs/AUDIO-SLOTS.md): thrusters, roll / tread / hover loops, Glitch snaps, skids, servos, hydraulics, spatial flyby
   let peakV = 0, prevHead = 0, servoAt = 0, sparkAt = 0, snapT = 0, wasCharging = false, flyAt = -99, prevTca = 99; const camPrev = new THREE.Vector3(), camV = new THREE.Vector3(), rel = new THREE.Vector3(), rv = new THREE.Vector3(), camF = new THREE.Vector3();
   const audioFrame = (dt: number) => {
-    const T = save.robot.type, v = Math.hypot(ctl.vel.x, ctl.vel.z), ground = ctl.mode === 'GROUND', fl = ctl.mode === 'ROCKETS', now = performance.now() / 1000;
-    sfx.thrusters(fl, ctl.thrust, dt, ctl.pos.y - ctl.floor.y, ctl.floor.water);
+    const T = save.robot.type, v = Math.hypot(player.vel.x, player.vel.z), ground = ctl.mode === 'GROUND', fl = ctl.mode === 'ROCKETS', now = performance.now() / 1000;
+    sfx.thrusters(fl, ctl.thrust, dt, player.altitude, ctl.floor.water);
     sfx.roll(T === 'heavy' && ground && ctl.form >= 0.97 ? v : null);
     sfx.tread(T === 'worker' && ground && ctl.form >= 0.97 ? v / Math.max(1, ctl.tuning.run) : null);
     sfx.hover(T === 'scout' && ground && ctl.form >= 0.97, v / Math.max(1, ctl.tuning.run));
@@ -133,25 +145,24 @@ createScene(canvas, areaId).then(async (app) => {
     if (T === 'worker' && ground && ctl.form >= 0.97 && v > 3 && Math.abs(dh) > 1.6 && now - sparkAt > 1) { sparkAt = now; sfx.treadSparks(); }
     if (ctl.charging !== wasCharging) { wasCharging = ctl.charging; sfx.hydraulic(ctl.charging ? 'push' : 'release'); }
     // spatial flyby: when the robot will pass the camera 1.3 s from now (relative speed > 25 m/s, closest approach under 60 m)
-    camV.copy(app.camera.position).sub(camPrev).divideScalar(Math.max(dt, 1e-3)); camPrev.copy(app.camera.position); rel.copy(ctl.pos).sub(app.camera.position); rv.copy(ctl.vel).sub(camV);
+    camV.copy(app.camera.position).sub(camPrev).divideScalar(Math.max(dt, 1e-3)); camPrev.copy(app.camera.position); rel.copy(player.pos).sub(app.camera.position); rv.copy(player.vel).sub(camV);
     const sp2 = rv.lengthSq(), tca = sp2 > 625 ? -rel.dot(rv) / sp2 : 99;
-    if (fl && tca <= 1.3 && prevTca > 1.3 && tca > 0 && rel.clone().addScaledVector(rv, tca).length() < 60 && now - flyAt > 6) { flyAt = now; sfx.flyby(ctl.pos); }
-    prevTca = tca; app.camera.getWorldDirection(camF); sfx.updateSpatial(app.camera.position, camF, ctl.pos);
+    if (fl && tca <= 1.3 && prevTca > 1.3 && tca > 0 && rel.clone().addScaledVector(rv, tca).length() < 60 && now - flyAt > 6) { flyAt = now; sfx.flyby(player.pos); }
+    prevTca = tca; app.camera.getWorldDirection(camF); sfx.updateSpatial(app.camera.position, camF, player.pos);
   };
   let robotMode = qs.get('mode') !== 'free';
   const setRobotMode = (on: boolean) => {
-    robotMode = on; ctl.setEnabled(on); app.controls.setEnabled(!on); hud.setVisible(on); thrust.setVisible(on);
-    app.setFocus(on ? ctl.pos : null);
+    robotMode = on; ctl.setEnabled(on); app.controls.setEnabled(!on); hud.setVisible(on); thrust.setVisible(on); player.avatar = on;
     if (!on) { app.camera.fov = 55; app.camera.updateProjectionMatrix(); app.controls.syncAngles(); hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 5000); }
   };
   // Hangar (join screen): robot stands on the street start on a turntable; pick a look, then Drop in.
   const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0, shot: null as null | { d: number; y: number; ty: number; fov: number; pan?: number } }; // shot = test camera override (audit close-ups)
-  const placeHangar = () => { const s = app.spawnPoint(); hangar.x = s.x; hangar.z = s.z; hangar.h = s.heading; hangar.y = app.world.floorAt(s.x, s.z, s.ground + 1.5).y; hangar.yaw = s.heading + Math.PI * 0.85; ctl.pos.set(s.x, hangar.y, s.z); };
+  const placeHangar = () => { const s = app.spawnPoint(); hangar.x = s.x; hangar.z = s.z; hangar.h = s.heading; hangar.y = app.world.floorAt(s.x, s.z, s.ground + 1.5).y; hangar.yaw = s.heading + Math.PI * 0.85; player.pos.set(s.x, hangar.y, s.z); };
   const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
     (t) => switchType(t), () => setHangar(false), () => { if (damage > 0 && repairT < 0) repairT = 0; });
   const setHangar = (on: boolean) => {
     cust.setOpen(on); if (!on) sfx.powerUp(); else if (robotMode) sfx.powerDown(); hud.setVisible(!on && robotMode); thrust.setVisible(!on && robotMode); ctl.setEnabled(!on && robotMode);
-    if (on) { placeHangar(); robot.root.visible = true; robot.root.quaternion.identity(); app.setFocus(ctl.pos); } else if (robotMode) heroDrop();
+    if (on) { placeHangar(); robot.root.visible = true; robot.root.quaternion.identity(); } else if (robotMode) heroDrop();
   };
   let hdrag = false, hx = 0;
   canvas.addEventListener('pointerdown', (e) => { if (cust.open) { hdrag = true; hx = e.clientX; } });
@@ -191,8 +202,8 @@ createScene(canvas, areaId).then(async (app) => {
   const nearMiss = (dt: number) => {
     slowCd = Math.max(0, slowCd - dt); slowT = Math.max(0, slowT - dt);
     if (slowCd > 0 || reduced.matches || ctl.mode !== 'ROCKETS' || ctl.burstOn < 0.5) return;
-    const v = ctl.vel, sp = Math.hypot(v.x, v.z); if (sp < 60) return;
-    const fx0 = v.x / sp, fz0 = v.z / sp, p = ctl.pos, y = p.y + 0.4;
+    const v = player.vel, sp = Math.hypot(v.x, v.z); if (sp < 60) return;
+    const fx0 = v.x / sp, fz0 = v.z / sp, p = player.pos, y = p.y + 0.4;
     if (app.world.blocked(p.x + fx0 * 8, p.z + fz0 * 8, y)) return;
     for (const side of [1, -1]) for (const d of [3, 5, 7]) if (app.world.blocked(p.x + fz0 * side * d, p.z - fx0 * side * d, y)) { slowT = 0.55; slowCd = 3; fx.kick(0.3); return; }
   };
@@ -206,7 +217,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__weather = () => ({ ...app.weatherMix });
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
-  w.__stats = () => app.stats;
+  w.__THREE = THREE; w.__world = () => app.worldState(); w.__app = app; w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
@@ -225,7 +236,7 @@ createScene(canvas, areaId).then(async (app) => {
   if (showStats || qs.get('hud') === '1') overlay.setVisible(true);
   const bench = benchKind ? createBench(benchKind, { ctl, canvas,
     start: (walk) => { if (cust.open) setHangar(false); if (!robotMode) setRobotMode(true); dropIn(walk ? 1.5 : 40); },
-    interiorEntry: () => app.interiorEntry(ctl.pos.x, ctl.pos.z), teleport: (x, y, z, h) => ctl.spawn(x, y, z, h),
+    interiorEntry: () => app.interiorEntry(player.pos.x, player.pos.z), teleport: (x, y, z, h) => ctl.spawn(x, y, z, h),
     info: () => ({ backend: app.backend, adapter, area: app.areaId, budgetMs: budget.ms }) }) : null;
   if (bench) { overlay.setVisible(true); w.__benchRun = bench; }
 
@@ -251,12 +262,12 @@ createScene(canvas, areaId).then(async (app) => {
         damage = Math.max(0, damage - rdt * 0.6); parts.uniforms.damage.value = damage;
         if (damage <= 0 && repairT > 1) { repairT = -1; parts.uniforms.sweep.value = -1; setDamage(0); }
       }
-    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); ts = sec('physics+ground', ts); thrust.update(dt, ctl.thrust, ctl.burstOn, ctl.vel, ctl.floor.y, ctl.floor.water); audioFrame(dt); hud.update(dt, ctl); stepFx(); }
-    const energy = fx.update(dt, robot.root, ctl.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
+    } else if (robotMode) { nearMiss(rdt); ctl.update(dt); ts = sec('physics+ground', ts); thrust.update(dt, ctl.thrust, ctl.burstOn, player.vel, ctl.floor.y, ctl.floor.water); audioFrame(dt); hud.update(dt, ctl); stepFx(); }
+    const energy = fx.update(dt, robot.root, player.vel, cust.open ? 0 : ctl.burstOn, ctl.charging, damage, joints, robotMode && !cust.open);
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
     ts = sec('fx', ts);
-    app.update(dt, t); const wm = app.weatherMix;
+    app.update(dt, t); if ((frames & 7) === 0) { updateCue(); syncHud(); } const wm = app.weatherMix;
     rain.mesh.visible = wm.rain > 0.01; rain.setIntensity(wm.rain); snow.mesh.visible = wm.snow > 0.01; snow.setIntensity(wm.snow);
     rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     ts = sec('world update (trees/grass/interiors)', ts);
@@ -269,8 +280,8 @@ createScene(canvas, areaId).then(async (app) => {
       const fps = (frames * 1000) / (now - last); frames = 0; last = now;
       const r = app.renderer.info.render;
       if (showStats) statsEl.textContent = `${fps.toFixed(0)} fps · ${r.drawCalls ?? r.calls} calls · ${(r.triangles / 1e3).toFixed(0)}k tris · ${app.backend}`;
-      w.__city = { fps, quality: qualityLabel(), pacing: pacing.label(), heap0, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, hangar: cust.open, damage: +damage.toFixed(2), slowmo: slowT > 0, robot: robotMode && !cust.open ? { mode: ctl.mode, anim: ctl.anim, pos: ctl.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(ctl.vel.length() * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2), charge: +fx.charge.toFixed(2) } : null, ready: true };
-      w.__scene = app.scene;
+      w.__city = { fps, quality: qualityLabel(), pacing: pacing.label(), heap0, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, hangar: cust.open, damage: +damage.toFixed(2), slowmo: slowT > 0, robot: robotMode && !cust.open ? { mode: ctl.mode, anim: ctl.anim, pos: player.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(player.speed * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2), charge: +fx.charge.toFixed(2) } : null, ready: true };
+      w.__scene = app.scene; w.__renderer = app.renderer; // profiling tools read renderer.info
     }
   });
 }).catch((e) => {

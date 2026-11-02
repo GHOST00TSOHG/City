@@ -93,3 +93,7 @@ html, body { margin: 0; height: 100%; background: #05070d; overflow: hidden; fon
 #bench ol { margin: 4px 0 6px 18px; padding: 0; } #bench .w { font-size: 11px; }
 #bench textarea { width: 100%; height: 120px; font: 10px ui-monospace, monospace; }
 #bench tr.tot td { font-weight: 600; }
+
+#kwcue { position: fixed; top: 72px; left: 14px; font: 12px Inter, system-ui, sans-serif; color: #7fe9ff; background: rgba(10,12,18,.55); border: 1px solid rgba(127,233,255,.35); border-radius: 12px; padding: 3px 10px; display: none; align-items: center; gap: 6px; pointer-events: none; }
+#kwcue.on { display: flex; }
+#kwcue .arrow { display: inline-block; transition: transform .1s linear; }

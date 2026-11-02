@@ -1,14 +1,17 @@
+import { slicer } from '../perf/slice';
 import type { Building, Terrain } from '../area/data';
 import { ringPts } from '../area/geom';
 import { foundation } from '../area/foundation';
 import { colliderTopAt, type LandmarkCollider } from '../area/landmarks';
 
 /** Spatial grid of building footprints → roof height at a point (land on roofs, block walls in flight). */
-export function createCollision(list: Building[], terrain: Terrain, landmarks: LandmarkCollider[] = []) {
+export async function createCollision(list: Building[], terrain: Terrain, landmarks: LandmarkCollider[] = []) {
+  const tick = slicer();
   const CELL = 24, grid = new Map<number, number[]>();
   const polys: { pts: [number, number][]; top: number; minX: number; maxX: number; minZ: number; maxZ: number }[] = [];
   const key = (ix: number, iz: number) => ix * 73856093 ^ iz * 19349663;
   for (const b of list) {
+    await tick();
     const pts = ringPts(b.r[0] ?? []) as [number, number][]; if (pts.length < 3) continue;
     let gmin = Infinity, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
     for (const [x, z] of pts) { gmin = Math.min(gmin, terrain.heightAt(x, z)); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z); }

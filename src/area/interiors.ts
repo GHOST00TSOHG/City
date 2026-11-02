@@ -1,5 +1,6 @@
 import { quality } from '../perf/quality';
 import { diag } from '../perf/diag';
+import { slicer } from '../perf/slice';
 import * as THREE from 'three/webgpu';
 import { A6, budget } from '../perf/frame';
 import { vertexColor, positionWorld, normalWorld, uniform, vec3, float, floor, clamp, max, dot, normalize, length, mix, hash, select } from 'three/tsl';
@@ -19,25 +20,26 @@ interface Cand { i: number; cx: number; cz: number; r: number; ring: [number, nu
 const NEAR = quality.interiorNear; // Air tier 14, High 18; // m from the footprint edge at which the interior loads
 const INSET = 0.28; // inner shell sits inside the exterior wall
 
-export function createInteriors(list: Building[], terrain: Terrain) {
-  const cands: Cand[] = [];
-  list.forEach((b, i) => {
-    if (b.m > 0 || b.h < 3.2) return;
-    const rings = b.r.map(ringPts).filter((r) => r.length >= 3); if (!rings.length || rings.length > 1) return;
+export async function createInteriors(list: Building[], terrain: Terrain) {
+  const cands: Cand[] = [], tick = slicer();
+  for (let i = 0; i < list.length; i++) {
+    await tick(); const b = list[i];
+    if (b.m > 0 || b.h < 3.2) continue;
+    const rings = b.r.map(ringPts).filter((r) => r.length >= 3); if (!rings.length || rings.length > 1) continue;
     const ring = rings[0], area = Math.abs(signedArea(ring));
-    if (area < 40 || area > 4000) return;
+    if (area < 40 || area > 4000) continue;
     let gmin = Infinity, gmax = -Infinity, cx = 0, cz = 0;
     for (const [x, z] of ring) { const g = terrain.heightAt(x, z); gmin = Math.min(gmin, g); gmax = Math.max(gmax, g); cx += x / ring.length; cz += z / ring.length; }
     gmin = Math.max(gmin, 0.2); gmax = Math.max(gmax, 0.2);
-    if (gmax - gmin > 0.9) return; // sloped lots: skip (floor would float)
+    if (gmax - gmin > 0.9) continue; // sloped lots: skip (floor would float)
     gmin = foundation(rings, terrain).floor; // same floor the shell is built on (slopes raise it)
     const pitched = b.s !== 'flat' && b.rh > 0.2, house = (pitched || b.h < 7.5) && area < 400;
     const base = gmin - 0.4, fh = house ? 3.1 : 3.4, ceil = base + 0.35 + fh;
-    if (ceil > gmin + b.h - (pitched ? b.rh : 0) + 0.01) return;
+    if (ceil > gmin + b.h - (pitched ? b.rh : 0) + 0.01) continue;
     let r = 0; for (const [x, z] of ring) r = Math.max(r, Math.hypot(x - cx, z - cz));
     const L = b.o[3] / 20, S = b.o[4] / 20, rect = ring.length <= 6 && area / Math.max(4 * L * S, 1) > 0.92;
     cands.push({ i, cx, cz, r, ring, base, slab: gmax + 0.06, ceil: ceil - 0.02, house, seed: ((((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0) % 997) / 997, rect });
-  });
+  }
 
   // per-interior uniforms drive the lamp lighting: lamp row along the long axis of the footprint
   const uC = uniform(new THREE.Vector3()), uU = uniform(new THREE.Vector3(1, 0, 0)), uL = uniform(5), uRoom = uniform(5), uN = uniform(1);

@@ -4,13 +4,10 @@ import * as THREE from 'three/webgpu';
 import { attribute, positionLocal, vec3, sin, float, time, uniform, texture, uv, instanceColor, cameraPosition, step } from 'three/tsl';
 import { A6, budget } from '../perf/frame';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Tree as EzTree } from '@eztree/tree.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import oakLeafUrl from '@eztree/assets/leaves/oak_color.png';
 import ashLeafUrl from '@eztree/assets/leaves/ash_color.png';
 import oakBarkUrl from '@eztree/assets/bark/oak_color_1k.jpg';
-import oakPreset from '@eztree/presets/oak_medium.json';
-import ashPreset from '@eztree/presets/ash_medium.json';
 import type { Terrain } from './data';
 
 /** Procedural palms and broadleaf trees: alpha-tested frond/leaf cards from a canvas-drawn atlas, spherical canopy normals,
@@ -44,8 +41,8 @@ function setUV(g: THREE.BufferGeometry, r: number[]) {
   const u = g.attributes.uv; for (let i = 0; i < u.count; i++) u.setXY(i, r[0] + u.getX(i) * (r[2] - r[0]), r[1] + u.getY(i) * (r[3] - r[1]));
   return g;
 }
-function trunk(h: number, r0: number, r1: number, seg: number, lean: number) {
-  const g = new THREE.CylinderGeometry(r1, r0, h, seg, 6, true).translate(0, h / 2, 0);
+function trunk(h: number, r0: number, r1: number, seg: number, lean: number, hs = 6) {
+  const g = new THREE.CylinderGeometry(r1, r0, h, seg, hs, true).translate(0, h / 2, 0);
   const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const t = p.getY(i) / h; p.setX(i, p.getX(i) + lean * t * t); }
   return setUV(g, BARK);
 }
@@ -55,8 +52,8 @@ function sphereNormals(g: THREE.BufferGeometry, c: THREE.Vector3) {
   return g;
 }
 function palm(hi: boolean, far = false) {
-  const lean = 0.9, parts = [trunk(9.4, 0.24, 0.16, hi ? 7 : far ? 3 : 4, lean)];
-  const top = new THREE.Vector3(lean, 9.4, 0), N = hi ? 11 : 6, segs = hi ? 6 : 3;
+  const lean = 0.9, parts = [trunk(9.4, 0.24, 0.16, hi ? 7 : far ? 3 : 4, lean, hi ? 6 : far ? 1 : 3)]; // profile: trunk height segments were 40% of the far triangles
+  const top = new THREE.Vector3(lean, 9.4, 0), N = hi ? 11 : far ? 5 : 6, segs = hi ? 6 : far ? 1 : 3;
   for (let k = 0; k < N; k++) {
     const az = (k / N) * Math.PI * 2 + (k % 2) * 0.3, rise = 0.5 - (k % 3) * 0.28, L = 4.2 + (k % 4) * 0.35;
     const pos: number[] = [], uvs: number[] = [], idx: number[] = [];
@@ -77,13 +74,13 @@ function palm(hi: boolean, far = false) {
   return finish(parts.map(p => (p.index ? p.toNonIndexed() : p)));
 }
 function broad(hi: boolean) {
-  const parts = [trunk(4.2, 0.3, 0.2, hi ? 6 : 4, 0.15)];
-  const c = new THREE.Vector3(0, 6.6, 0), n = hi ? 34 : 9, r = new THREE.Vector3(); let s = 3;
+  const parts = [trunk(4.2, 0.3, 0.2, hi ? 6 : 3, 0.15, hi ? 6 : 1)];
+  const c = new THREE.Vector3(0, 6.6, 0), n = hi ? 34 : 5, r = new THREE.Vector3(); let s = 3;
   const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
   if (hi) for (let b = 0; b < 3; b++) parts.push(trunk(3, 0.14, 0.06, 4, 0).rotateZ(0.6).rotateY(b * 2.1).translate(0, 3.9, 0));
   for (let i = 0; i < n; i++) {
     r.set(rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1).normalize().multiply(new THREE.Vector3(3.6, 2.5, 3.6)).multiplyScalar(0.55 + rnd() * 0.5);
-    const sz = hi ? 2.6 + rnd() * 1.2 : 4.8;
+    const sz = hi ? 2.6 + rnd() * 1.2 : 6.4; // far impostor: 5 larger cards + a 3-sided trunk = 16 tris (was 66)
     const q = new THREE.PlaneGeometry(sz, sz); setUV(q, [0.02, 0.02, 0.48, 0.48]);
     q.lookAt(r.clone()); q.rotateY(rnd() * 0.6); q.translate(c.x + r.x, c.y + r.y, c.z + r.z);
     parts.push(sphereNormals(q.toNonIndexed(), c.clone().setY(c.y - 1)));
@@ -114,29 +111,40 @@ function normalise(gs: THREE.BufferGeometry[]) {
 // A6/Safari: decode images with createImageBitmap (off the main thread) instead of <img> + decode-on-upload.
 const bmpLoader = typeof createImageBitmap !== 'undefined' ? new THREE.ImageBitmapLoader().setOptions({ imageOrientation: 'flipY', premultiplyAlpha: 'none' }) : null;
 const texLoader = new THREE.TextureLoader();
+/** Tree maps are 1024 px sources drawn at a few cm per texel: halve to 512 (a quarter of the GPU memory, one copy shared by every area). */
+const TEX_MAX = 512;
+function shrink(img: ImageBitmap): ImageBitmap | HTMLCanvasElement {
+  if (img.width <= TEX_MAX) return img;
+  const cv = document.createElement('canvas'); cv.width = TEX_MAX; cv.height = Math.round((TEX_MAX * img.height) / img.width);
+  const g = cv.getContext('2d')!; g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, cv.width, cv.height); img.close?.(); return cv;
+}
 function loadTex(url: string) {
   if (!bmpLoader) return texLoader.load(url);
   const t = new THREE.Texture(); t.flipY = false; const t0 = performance.now();
-  bmpLoader.load(url, (img) => { t.image = img; t.needsUpdate = true; diag.event('image decode (bitmap)', 0); diag.section('decode wait', performance.now() - t0); });
+  bmpLoader.load(url, (img) => { t.image = shrink(img); t.needsUpdate = true; diag.event('image decode (bitmap)', 0); diag.section('decode wait', performance.now() - t0); });
   return t;
 }
 function tex(url: string, repeat = false) { const t = loadTex(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
 
-function ezGeometry(preset: any, lod: number) {
-  const tr = new EzTree(); tr.loadFromJson(structuredClone(preset));
-  const o: any = tr.options; o.seed = preset.seed;
-  if (lod === 1) { // mid LOD: fewer segments/sections, fewer but larger leaves
-    for (const k of Object.keys(o.branch.segments)) o.branch.segments[k] = Math.max(3, Math.ceil(o.branch.segments[k] / 2));
-    for (const k of Object.keys(o.branch.sections)) o.branch.sections[k] = Math.max(1, Math.ceil(o.branch.sections[k] / 2));
-    o.branch.levels = Math.max(1, o.branch.levels - 1); o.leaves.count = Math.max(4, Math.round(o.leaves.count * 0.8)); o.leaves.size *= 2.6;
-  }
-  tr.generate();
-  const b = (tr.branchesMesh.geometry as any).clone() as THREE.BufferGeometry, l = (tr.leavesMesh.geometry as any).clone() as THREE.BufferGeometry;
-  normalise([b, l]);
-  l.computeBoundingBox(); const c = l.boundingBox!.getCenter(new THREE.Vector3());
-  sphereNormals(l, c.setY(c.y - 1.5));
-  return { b, l };
+/** The ez-tree broadleaf LODs are baked offline (tools/trees/bake.mjs -> public/trees/ez.bin): the generator allocated ~100 MB of temporary arrays in the page. */
+type EzEntry = { name: string; lod: number; part: 'b' | 'l'; n: number; m: number; pos: number; nrm: number; uv: number; idx: number; idx32: boolean };
+async function loadEz(): Promise<Map<string, THREE.BufferGeometry>> {
+  const out = new Map<string, THREE.BufferGeometry>();
+  try {
+    const base = import.meta.env.BASE_URL + 'trees/';
+    const [list, buf] = await Promise.all([fetch(base + 'ez.json').then((r) => r.json() as Promise<EzEntry[]>), fetch(base + 'ez.bin').then((r) => r.arrayBuffer())]);
+    for (const e of list) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buf, e.pos, e.n * 3), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(buf, e.nrm, e.n * 3), 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(buf, e.uv, e.n * 2), 2));
+      g.setIndex(new THREE.BufferAttribute(e.idx32 ? new Uint32Array(buf, e.idx, e.m) : new Uint16Array(buf, e.idx, e.m), 1));
+      g.computeBoundingSphere(); out.set(`${e.name}:${e.lod}:${e.part}`, g);
+    }
+  } catch (err) { console.warn('ez tree geometry missing', err); }
+  return out;
 }
+const ezGeometry = (ez: Map<string, THREE.BufferGeometry>, name: string, lod: number) => ({ b: ez.get(`${name}:${lod}:b`)!, l: ez.get(`${name}:${lod}:l`)! });
 
 function windMaterial(mat: THREE.MeshLambertNodeMaterial, uWind: any, map: THREE.Texture, alpha: boolean) {
   const t = texture(map, uv());
@@ -158,7 +166,7 @@ function windMaterial(mat: THREE.MeshLambertNodeMaterial, uWind: any, map: THREE
   return mat;
 }
 
-function builtinSpecies(uWind: any): TreeSpecies[] {
+function builtinSpecies(uWind: any, ezg: Map<string, THREE.BufferGeometry>): TreeSpecies[] {
   const atlasTex = atlas();
   const cards = windMaterial(new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.5 }), uWind, atlasTex, true);
   const bark = windMaterial(new THREE.MeshLambertNodeMaterial(), uWind, tex(oakBarkUrl, true), false);
@@ -168,8 +176,8 @@ function builtinSpecies(uWind: any): TreeSpecies[] {
     { maxDist: 120 * quality.treeDist, parts: [{ geometry: palm(true), material: cards }] },
     { maxDist: 420 * quality.treeDist, parts: [{ geometry: palm(false), material: cards }] },
     { maxDist: 3200, parts: [{ geometry: palm(false, true), material: cards }] }] };
-  const ez = [oakPreset, ashPreset].map((pr, i) => {
-    const hi = ezGeometry(pr, 0), mid = ezGeometry(pr, 1);
+  const ez = (ezg.size ? ['ez-oak', 'ez-ash'] : []).map((nm, i) => {
+    const hi = ezGeometry(ezg, nm, 0), mid = ezGeometry(ezg, nm, 1);
     return { name: i ? 'ez-ash' : 'ez-oak', kind: 1 as const, lods: [
       { maxDist: 85 * quality.treeDist, parts: [{ geometry: hi.b, material: bark }, { geometry: hi.l, material: leafMats[i] }] },
       { maxDist: 200 * quality.treeDist, parts: [{ geometry: mid.b, material: bark }, { geometry: mid.l, material: leafMats[i] }] },
@@ -201,10 +209,19 @@ async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
 }
 
 /** `palms` = false (every NJ area): baked palm records become broadleaf. Palms are a Key West-only species. */
+/** Species geometry, materials, textures and the wind uniform are built once per page and shared by every area (profile: 18 MB of
+ *  tree textures per area before). Areas only own instance buffers and their own copy of the LOD geometry. */
+let sharedSpecies: Promise<{ uWind: any; extra: TreeSpecies[]; species: TreeSpecies[]; materials: Set<THREE.Material> }> | null = null;
+function loadShared() {
+  return (async () => {
+    const uWind = uniform(1), extra = await gltfSpecies(uWind), species = [...builtinSpecies(uWind, await loadEz()), ...extra];
+    const materials = new Set<THREE.Material>(); species.forEach((sp) => sp.lods.forEach((l) => l.parts.forEach((p) => materials.add(p.material))));
+    return { uWind, extra, species, materials };
+  })();
+}
+
 export async function buildTrees(flat: number[], terrain: Terrain, palms = true) {
-  const uWind = uniform(1);
-  const extra = await gltfSpecies(uWind);
-  const species = [...builtinSpecies(uWind), ...extra];
+  const { uWind, extra, species, materials } = await (sharedSpecies ??= loadShared());
   const byKind = [0, 1].map(k => { const own = extra.filter(s => s.kind === k); return own.length ? own : species.filter(s => s.kind === k); });
   const N = flat.length / 5, mats = new Float32Array(N * 16), cols = new Float32Array(N * 3), spIdx = new Uint8Array(N), xz = new Float32Array(N * 2);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), col = new THREE.Color();
@@ -237,7 +254,7 @@ export async function buildTrees(flat: number[], terrain: Terrain, palms = true)
       buckets.forEach((lv, s) => lv.forEach((parts, li) => parts.forEach(im => { im.count = c[s][li]; im.instanceMatrix.needsUpdate = true; im.instanceColor!.needsUpdate = true; })));
     }
     const triangles = () => buckets.flat(2).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
-    return { group, update, uWind, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), refreshes: 0 };
+    return { group, update, uWind, materials, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), refreshes: 0 };
   }
   // A6 path. Far LOD: one bucket per species holding every tree, uploaded once. Near LODs: filled from a 64 m grid
   // around the camera with a distance pad, refreshed only after the camera moves REFRESH m, uploading just the used
@@ -252,11 +269,23 @@ export async function buildTrees(flat: number[], terrain: Terrain, palms = true)
   for (let i = 0; i < N; i++) cellStart[cellOf(i) + 1]++;
   for (let k = 0; k < gw * gh; k++) cellStart[k + 1] += cellStart[k];
   { const fill = cellStart.slice(0, gw * gh); for (let i = 0; i < N; i++) order[fill[cellOf(i)]++] = i; }
-  type Bucket = { meshes: THREE.InstancedMesh[]; tpos: THREE.InstancedBufferAttribute; lo: number; hi: number; n: number };
-  const share = (g: THREE.BufferGeometry) => { const o = new THREE.BufferGeometry(); for (const k in g.attributes) o.setAttribute(k, g.attributes[k]); if (g.index) o.setIndex(g.index); o.boundingSphere = g.boundingSphere; return o; };
+  type Bucket = { meshes: THREE.InstancedMesh[]; tpos: THREE.InstancedBufferAttribute; lo: number; hi: number; n: number; cap: number };
+  // Near buckets only ever hold the trees inside their distance window (+ pad + prefetch lead), so size them from the densest
+  // such window of the species instead of the species total (profile: near buffers held 4x the baked tree count).
+  const cellCount = species.map(() => new Uint32Array(gw * gh));
+  for (let i = 0; i < N; i++) cellCount[spIdx[i]][cellOf(i)]++;
+  const windowMax = (s: number, reach: number) => {
+    const w = Math.min(gw, Math.ceil((2 * reach) / CELL) + 1), h = Math.min(gh, w), c = cellCount[s], pre = new Uint32Array((gw + 1) * (gh + 1));
+    for (let z = 0; z < gh; z++) for (let x = 0; x < gw; x++) pre[(z + 1) * (gw + 1) + x + 1] = c[z * gw + x] + pre[z * (gw + 1) + x + 1] + pre[(z + 1) * (gw + 1) + x] - pre[z * (gw + 1) + x];
+    let best = 0;
+    for (let z = 0; z + h <= gh; z++) for (let x = 0; x + w <= gw; x++) best = Math.max(best, pre[(z + h) * (gw + 1) + x + w] - pre[z * (gw + 1) + x + w] - pre[(z + h) * (gw + 1) + x] + pre[z * (gw + 1) + x]);
+    return best;
+  };
+  const share = (g: THREE.BufferGeometry) => g.clone(); // per-area copy (a few MB): disposing an old area must not free buffers a new area still draws
   const near: Bucket[][] = species.map(() => []);
   species.forEach((sp, s) => sp.lods.forEach((lod, li) => {
-    const isFar = li === sp.lods.length - 1, cap = Math.max(1, counts[s]);
+    const isFar = li === sp.lods.length - 1;
+    const cap = Math.max(1, isFar ? counts[s] : Math.min(counts[s], windowMax(s, lod.maxDist + PAD + 150 + 80)));
     const tpos = new THREE.InstancedBufferAttribute(new Float32Array(cap * 2), 2);
     const lo = li ? sp.lods[li - 1].maxDist : 0, hi = lod.maxDist;
     const meshes = lod.parts.map((pt) => {
@@ -265,14 +294,16 @@ export async function buildTrees(flat: number[], terrain: Terrain, palms = true)
       im.name = `trees ${sp.name} lod${li}`; im.userData.lo = lo; im.userData.hi = hi; group.add(im);
       im.instanceMatrix.setUsage(THREE.StaticDrawUsage); return im; // DynamicDraw makes the WebGPU renderer re-upload the whole matrix buffer every frame
     });
+    // parts of one LOD (bark + leaves) draw the same instances: one matrix + colour buffer, not one copy per part
+    for (let k = 1; k < meshes.length; k++) { meshes[k].instanceMatrix = meshes[0].instanceMatrix; meshes[k].instanceColor = meshes[0].instanceColor; }
     if (isFar) { // every tree of this species, written once
       let j = 0;
       for (let i = 0; i < N; i++) if (spIdx[i] === s) {
-        for (const im of meshes) { (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
+        { const im = meshes[0]; (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
         tpos.array[j * 2] = xz[i * 2]; tpos.array[j * 2 + 1] = xz[i * 2 + 1]; j++;
       }
       meshes.forEach(im => (im.count = j));
-    } else near[s].push({ meshes, tpos, lo, hi, n: 0 });
+    } else near[s].push({ meshes, tpos, lo, hi, n: 0, cap });
   }));
   const last = new THREE.Vector3(1e9, 0, 0), prev = new THREE.Vector3(1e9, 0, 0), vel = new THREE.Vector3();
   let refreshes = 0;
@@ -285,7 +316,7 @@ export async function buildTrees(flat: number[], terrain: Terrain, palms = true)
     let maxHi = 0; for (const b of near.flat()) maxHi = Math.max(maxHi, b.hi);
     const r = Math.sqrt(Math.max(0, (maxHi + pad) ** 2 - cam.y * cam.y));
     // bytes this refresh would upload (estimate from last time) — wait for a frame with room if over budget
-    let est = 0; for (const b of near.flat()) est += b.n * (16 + 3 + 2) * 4 * b.meshes.length;
+    let est = 0; for (const b of near.flat()) est += b.n * (16 + 3 + 2) * 4;
     if (!budget.upload(est)) return;
     last.copy(cam); refreshes++; diag.event('tree refresh');
     for (const bs of near) for (const b of bs) b.n = 0;
@@ -296,16 +327,17 @@ export async function buildTrees(flat: number[], terrain: Terrain, palms = true)
       const d = Math.hypot(xz[i * 2] - cam.x, xz[i * 2 + 1] - cam.z, cam.y), dp = Math.hypot(xz[i * 2] - cx, xz[i * 2 + 1] - cz, cam.y);
       const dm = Math.min(d, dp), dM = Math.max(d, dp);
       for (const b of bs) {
-        if (dM < b.lo - PAD || dm > b.hi + PAD) continue;
-        const j = b.n++;
-        for (const im of b.meshes) { (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3); }
+        if (dM < b.lo - PAD || dm > b.hi + PAD || b.n >= b.cap) continue;
+        const j = b.n++, im = b.meshes[0];
+        (im.instanceMatrix.array as Float32Array).set(mats.subarray(i * 16, i * 16 + 16), j * 16); (im.instanceColor!.array as Float32Array).set(cols.subarray(i * 3, i * 3 + 3), j * 3);
         b.tpos.array[j * 2] = xz[i * 2]; b.tpos.array[j * 2 + 1] = xz[i * 2 + 1];
       }
     }
     for (const bs of near) for (const b of bs) {
       if (!b.n && !b.meshes[0].count) continue;
-      for (const im of b.meshes) {
-        im.count = b.n; if (!b.n) continue;
+      for (const im of b.meshes) im.count = b.n;
+      if (b.n) { // one shared matrix/colour buffer per bucket
+        const im = b.meshes[0];
         im.instanceMatrix.clearUpdateRanges(); im.instanceMatrix.addUpdateRange(0, b.n * 16); im.instanceMatrix.needsUpdate = true;
         im.instanceColor!.clearUpdateRanges(); im.instanceColor!.addUpdateRange(0, b.n * 3); im.instanceColor!.needsUpdate = true;
       }
@@ -313,5 +345,5 @@ export async function buildTrees(flat: number[], terrain: Terrain, palms = true)
     }
   }
   const triangles = () => (group.children as THREE.InstancedMesh[]).reduce((t, im) => t + im.count * ((im.geometry.index?.count ?? im.geometry.attributes.position.count) / 3), 0);
-  return { group, update, uWind, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), get refreshes() { return refreshes; } };
+  return { group, update, uWind, materials, triangles, species: species.map(s => s.name), palms: counts.reduce((a, c, i) => a + (species[i].kind === 0 ? c : 0), 0), get refreshes() { return refreshes; } };
 }

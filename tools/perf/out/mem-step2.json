@@ -1,0 +1,319 @@
+{
+ "label": "step2",
+ "rssAfterFirstTile": {
+  "other": 149,
+  "Network": 54,
+  "GPU": 561,
+  "WebContent": 1722,
+  "total": 2486
+ },
+ "loadMs": 9776,
+ "rssAllTiles": {
+  "other": 149,
+  "Network": 54,
+  "GPU": 686,
+  "WebContent": 1808,
+  "total": 2696
+ },
+ "geo": {
+  "totalMB": 377.6,
+  "kinds": {
+   "terrain": {
+    "MB": 49.9,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "color": 0,
+     "normal": 0,
+     "gmat": 0,
+     "index": 0,
+     "released": 49.9
+    }
+   },
+   "roads": {
+    "MB": 151.9,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 151.9
+    }
+   },
+   "pools+piers": {
+    "MB": 10.3,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 10.3
+    }
+   },
+   "bld chunk": {
+    "MB": 88.5,
+    "n": 139,
+    "attr": {
+     "position": 8.7,
+     "normal": 2.9,
+     "color": 2.9,
+     "facade": 5.8,
+     "index": 2.3,
+     "released": 65.9
+    }
+   },
+   "buildings-far": {
+    "MB": 24.8,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 24.8
+    }
+   },
+   "sea": {
+    "MB": 0,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "lamps": {
+    "MB": 0.7,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0,
+     "inst": 0.7
+    }
+   },
+   "lamp pools": {
+    "MB": 0.7,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0,
+     "inst": 0.7
+    }
+   },
+   "trees": {
+    "MB": 24.6,
+    "n": 65,
+    "attr": {
+     "position": 3.7,
+     "normal": 3.7,
+     "uv": 2.4,
+     "tpos": 1.3,
+     "inst": 12.3,
+     "index": 1.1
+    }
+   },
+   "grass": {
+    "MB": 10.7,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "blade": 10.7,
+     "index": 0
+    }
+   },
+   "ferry-dock": {
+    "MB": 0.1,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0
+    }
+   },
+   "ferry": {
+    "MB": 0,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0
+    }
+   },
+   "interior": {
+    "MB": 0.1,
+    "n": 5,
+    "attr": {
+     "position": 0.1,
+     "normal": 0,
+     "color": 0,
+     "index": 0
+    }
+   },
+   "far-ground": {
+    "MB": 7.1,
+    "n": 5,
+    "attr": {
+     "position": 1.7,
+     "color": 1.7,
+     "normal": 1.7,
+     "index": 2.1
+    }
+   },
+   "masonry-lod": {
+    "MB": 4.3,
+    "n": 15,
+    "attr": {
+     "position": 1.5,
+     "normal": 1.4,
+     "uv": 0.9,
+     "index": 0.5
+    }
+   },
+   "metal-lod": {
+    "MB": 0.1,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "uplights-lod": {
+    "MB": 0,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "index": 0
+    }
+   },
+   "windows-lod": {
+    "MB": 0.3,
+    "n": 12,
+    "attr": {
+     "position": 0.1,
+     "normal": 0.1,
+     "uv": 0.1,
+     "index": 0
+    }
+   },
+   "body-lod": {
+    "MB": 1.1,
+    "n": 6,
+    "attr": {
+     "normal": 0.2,
+     "position": 0.4,
+     "uv": 0.2,
+     "index": 0.2
+    }
+   },
+   "lamps-lod": {
+    "MB": 0.1,
+    "n": 6,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "scoreboard-lod": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "lantern-lod": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "index": 0
+    }
+   },
+   "glazing-lod": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "sconces-lod": {
+    "MB": 0,
+    "n": 2,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "index": 0
+    }
+   },
+   "shell-lod": {
+    "MB": 0.1,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "link link-ground": {
+    "MB": 1.8,
+    "n": 2,
+    "attr": {
+     "position": 0.4,
+     "color": 0.4,
+     "normal": 0.1,
+     "gmat": 0.1,
+     "index": 0.7
+    }
+   },
+   "link link-road": {
+    "MB": 0.5,
+    "n": 2,
+    "attr": {
+     "position": 0.2,
+     "normal": 0.1,
+     "color": 0.1,
+     "index": 0.2
+    }
+   }
+  },
+  "tiles": 5,
+  "calls": 119,
+  "tris": 11360730
+ },
+ "timeline": "2:735:191 3:1429:191 5:1683:420 6:1693:497 8:1720:540 9:1722:561 11:1805:562 12:1808:687 14:1808:686 15:1808:686",
+ "peakWebContent": 1808,
+ "rssFinal": {
+  "other": 149,
+  "Network": 54,
+  "GPU": 686,
+  "WebContent": 1808,
+  "total": 2696
+ },
+ "errors": 0,
+ "errorSample": []
+}
