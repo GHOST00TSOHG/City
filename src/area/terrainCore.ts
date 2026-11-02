@@ -19,7 +19,47 @@ export function decodeTerrain(buf: ArrayBuffer): TerrainGrid {
       h[i] = (src[i] * 4 + src[i - 1] + src[i + 1] + src[i - nx] + src[i + nx]) / 8;
     }
   }
+  easeShoreline(h, nx, nz);
   return { nx, nz, cell: cellCm / 100, x0: x0Cm / 100, z0: z0Cm / 100, h, cover };
+}
+
+/** Largest height change allowed between two grid vertices on opposite sides of the waterline (m). */
+export const SHORE_MAX_STEP = 0.9;
+/** Smallest |height| a vertex keeps (m): no triangle lies flat on the waterline, and land stays land / water stays water. */
+export const SHORE_MIN = 0.07;
+
+/** Shoreline ease: the baked bathymetry drops a bulkhead or a river bank straight into the water (steps of 1-8 m between neighbouring vertices at
+ *  the 0 m contour). Land and water vertices touching the waterline are pulled toward it so the crossing edge changes by at most SHORE_MAX_STEP,
+ *  then a short band around the shore is relaxed so the bank becomes a ramp, not a cliff + a stair. The waterline contour stays where it was
+ *  (every vertex keeps its sign) and ground more than 4 cells from the water is untouched. In place. */
+function easeShoreline(h: Float32Array, nx: number, nz: number) {
+  const n = nx * nz, N4 = [-1, 1, -nx, nx];
+  const near = (i: number, j: number) => { const ix = i % nx; return !((j === i - 1 && ix === 0) || (j === i + 1 && ix === nx - 1) || j < 0 || j >= n); };
+  // 1. cap the crossing edges (both sides move toward the waterline); repeat because a vertex can touch several crossings
+  const cap = SHORE_MAX_STEP / 2, capCrossings = () => {
+    for (let pass = 0; pass < 3; pass++) for (let i = 0; i < n; i++) {
+      if (h[i] < 0) continue;
+      for (const d of N4) { const j = i + d; if (!near(i, j) || h[j] >= 0) continue; if (h[i] - h[j] > SHORE_MAX_STEP) { if (h[i] > cap) h[i] = cap; if (h[j] < -cap) h[j] = -cap; } }
+    }
+  };
+  capCrossings();
+  // 2. distance (in cells) from the waterline, then relax the band with a weight that fades to nothing at 4 cells
+  const dist = new Uint8Array(n).fill(255), q: number[] = [];
+  for (let i = 0; i < n; i++) for (const d of N4) { const j = i + d; if (near(i, j) && (h[i] < 0) !== (h[j] < 0)) { dist[i] = 0; q.push(i); break; } }
+  for (let k = 0; k < q.length; k++) { const i = q[k]; if (dist[i] >= 4) continue; for (const d of N4) { const j = i + d; if (near(i, j) && dist[j] === 255) { dist[j] = dist[i] + 1; q.push(j); } } }
+  for (let pass = 0; pass < 4; pass++) {
+    const src = h.slice();
+    for (const i of q) {
+      if (dist[i] === 0) continue; // the waterline vertices keep their capped value
+      const w = (4 - dist[i]) / 5; let s = 0, c = 0; for (const d of N4) { const j = i + d; if (near(i, j)) { s += src[j]; c++; } }
+      if (!c) continue;
+      const v = src[i] * (1 - w) + (s / c) * w;
+      h[i] = src[i] >= 0 ? Math.max(v, SHORE_MIN) : Math.min(v, -SHORE_MIN); // keep the sign: the waterline does not move
+    }
+  }
+  capCrossings(); // the relaxed band must not lift a vertex back over a crossing
+  // 3. nothing hugs the waterline closer than SHORE_MIN (no flat triangle at sea level)
+  for (let i = 0; i < n; i++) if (Math.abs(h[i]) < SHORE_MIN) h[i] = h[i] >= 0 ? SHORE_MIN : -SHORE_MIN;
 }
 
 /** Bilinear-on-triangles height, same split as the mesh triangles (a-c diagonal) so things sit exactly on the rendered ground. */
