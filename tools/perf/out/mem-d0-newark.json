@@ -1,0 +1,319 @@
+{
+ "label": "d0-newark",
+ "rssAfterFirstTile": {
+  "other": 130,
+  "Network": 43,
+  "GPU": 502,
+  "WebContent": 1127,
+  "total": 1803
+ },
+ "loadMs": 10581,
+ "rssAllTiles": {
+  "other": 130,
+  "Network": 43,
+  "GPU": 503,
+  "WebContent": 1109,
+  "total": 1786
+ },
+ "geo": {
+  "totalMB": 266,
+  "kinds": {
+   "terrain": {
+    "MB": 34,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "color": 0,
+     "normal": 0,
+     "gmat": 0,
+     "index": 0,
+     "released": 34
+    }
+   },
+   "roads": {
+    "MB": 109.8,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 109.8
+    }
+   },
+   "pools+piers": {
+    "MB": 3.4,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 3.4
+    }
+   },
+   "bld chunk": {
+    "MB": 66.5,
+    "n": 90,
+    "attr": {
+     "position": 0.2,
+     "normal": 0.1,
+     "color": 0.1,
+     "facade": 0.2,
+     "index": 0.1,
+     "released": 65.9
+    }
+   },
+   "buildings-far": {
+    "MB": 18.5,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 18.5
+    }
+   },
+   "sea": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "lamps": {
+    "MB": 0.5,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0,
+     "inst": 0.5
+    }
+   },
+   "lamp pools": {
+    "MB": 0.5,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0,
+     "inst": 0.5
+    }
+   },
+   "trees": {
+    "MB": 13.9,
+    "n": 39,
+    "attr": {
+     "position": 2.2,
+     "normal": 2.2,
+     "uv": 1.5,
+     "tpos": 0.7,
+     "inst": 6.6,
+     "index": 0.7
+    }
+   },
+   "grass": {
+    "MB": 6.4,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "blade": 6.4,
+     "index": 0
+    }
+   },
+   "ferry-dock": {
+    "MB": 0.1,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0
+    }
+   },
+   "ferry": {
+    "MB": 0,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0
+    }
+   },
+   "interior": {
+    "MB": 0.1,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0
+    }
+   },
+   "far-ground": {
+    "MB": 4.6,
+    "n": 3,
+    "attr": {
+     "position": 1.1,
+     "color": 1.1,
+     "normal": 1.1,
+     "index": 1.4
+    }
+   },
+   "masonry-lod": {
+    "MB": 4.3,
+    "n": 15,
+    "attr": {
+     "position": 1.5,
+     "normal": 1.4,
+     "uv": 0.9,
+     "index": 0.5
+    }
+   },
+   "metal-lod": {
+    "MB": 0.1,
+    "n": 3,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "uplights-lod": {
+    "MB": 0,
+    "n": 5,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "index": 0
+    }
+   },
+   "windows-lod": {
+    "MB": 0.3,
+    "n": 12,
+    "attr": {
+     "position": 0.1,
+     "normal": 0.1,
+     "uv": 0.1,
+     "index": 0
+    }
+   },
+   "body-lod": {
+    "MB": 1.1,
+    "n": 6,
+    "attr": {
+     "normal": 0.2,
+     "position": 0.4,
+     "uv": 0.2,
+     "index": 0.2
+    }
+   },
+   "lamps-lod": {
+    "MB": 0.1,
+    "n": 6,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "scoreboard-lod": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "lantern-lod": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "index": 0
+    }
+   },
+   "glazing-lod": {
+    "MB": 0,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "sconces-lod": {
+    "MB": 0,
+    "n": 2,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "index": 0
+    }
+   },
+   "shell-lod": {
+    "MB": 0.1,
+    "n": 3,
+    "attr": {
+     "normal": 0,
+     "position": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "link link-ground": {
+    "MB": 1.5,
+    "n": 1,
+    "attr": {
+     "position": 0.3,
+     "color": 0.3,
+     "normal": 0.1,
+     "gmat": 0.1,
+     "index": 0.6
+    }
+   },
+   "link link-road": {
+    "MB": 0.4,
+    "n": 1,
+    "attr": {
+     "position": 0.2,
+     "normal": 0.1,
+     "color": 0.1,
+     "index": 0.2
+    }
+   }
+  },
+  "tiles": 3,
+  "calls": 98,
+  "tris": 7556162
+ },
+ "timeline": "2:636:190 3:1162:190 5:1481:183 6:1387:440 8:1205:438 9:1178:504 11:1127:502 12:1123:503 14:1113:503",
+ "peakWebContent": 1481,
+ "rssFinal": {
+  "other": 130,
+  "Network": 43,
+  "GPU": 503,
+  "WebContent": 1110,
+  "total": 1786
+ },
+ "errors": 0,
+ "errorSample": []
+}
