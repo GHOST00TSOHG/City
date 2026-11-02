@@ -46,5 +46,18 @@ add('sandyhook-edge-high-S', 'sandyhook', [0, 1500, 2500], [0, 0, 5000]);
 add('passaic-aerial', 'passaic', [-600, 320, 800], [150, 0, -150]);
 add('passaic-dock', 'passaic', [0, 30, 0], [0, 0, 0]);
 add('passaic-edge-high-S', 'passaic', [0, 1200, 800], [0, 0, 2600]);
+// --- Boat docks / piers up close (centres from area.json piers; 25-60 m out, 8-25 m up) and Penn-side river docks
+add('keywest-dock-pier90', 'keywest', [790, 14, -2070], [827, 0.5, -2121]);
+add('keywest-dock-pier90-low', 'keywest', [800, 3, -2095], [827, 1, -2121]);
+add('keywest-dock-pier51', 'keywest', [-510, 16, -1790], [-544, 0.5, -1827]);
+add('keywest-dock-pier4-shore', 'keywest', [-640, 20, 150], [-661, 0.5, 207]);
+add('bayshore-dock-29', 'bayshore', [-1210, 12, -1560], [-1235, 0.5, -1597]);
+add('bayshore-dock-80', 'bayshore', [500, 25, -2080], [531, 0.5, -2124]);
+add('sandyhook-dock-70', 'sandyhook', [-420, 16, -440], [-450, 0.5, -481]);
+add('sandyhook-dock-66', 'sandyhook', [-90, 22, 820], [-119, 0.5, 859]);
+add('newark-dock-11', 'newark', [1600, 14, 2050], [1635, 0.5, 2085]);
+add('newark-dock-4', 'newark', [1550, 14, 2450], [1580, 0.5, 2487]);
+add('passaic-dock-2', 'passaic', [520, 14, 40], [549, 0.5, 10]);
+add('passaic-ferry-dock', 'passaic', [-35, 18, -30], [30, 1, 0]);
 fs.writeFileSync('tools/map-views.json', JSON.stringify(V, null, 1));
 console.log(V.length, 'views');

@@ -5,3 +5,4 @@ export { buildBuildings } from '../src/area/buildings';
 export { buildTerrain, buildRoads, buildPoolsPiers } from '../src/area/ground';
 export { flattenUnderLandmarks, cullUnderLandmarks } from '../src/area/landmarks';
 export { styleFor } from '../src/area/textures';
+export { farGroundData as farGround, FAR_RADIUS } from '../src/area/farGround';

@@ -219,7 +219,7 @@ for (const id of ids) {
   const terrain = S.makeTerrain(grid), { kept: bl, culled } = S.cullUnderLandmarks(area.buildings, lm.footprints);
   const style = S.styleFor(id), dummy = new THREE.MeshBasicMaterial();
   const C = { buildings: bl.length, landmarks: lm.list.length };
-  const cls = { a_floating: 0, b_sunk: 0, c_road_floating: 0, c_road_sunk: 0, d_in_water: 0, e_overlap_buildings: 0, f_shore_steps: 0, f_waterline_flat_tris: 0, f_pier_floating: 0, f_pier_sunk: 0, f_edge_steps: 0, g_void_rays: 0, h_nonsolid_buildings: 0, h_leaking_buildings: 0 };
+  const cls = { a_floating: 0, b_sunk: 0, c_road_floating: 0, c_road_sunk: 0, d_in_water: 0, e_overlap_buildings: 0, f_shore_steps: 0, f_waterline_flat_tris: 0, f_pier_floating: 0, f_pier_sunk: 0, f_pier_unconnected: 0, f_pier_open_shells: 0, f_edge_steps: 0, g_void_rays: 0, h_nonsolid_buildings: 0, h_leaking_buildings: 0 };
   const ex = {}; const note = (k, v) => { (ex[k] ??= []).length < (ALL ? 1e6 : 8) && ex[k].push(v); };
 
   // ---- buildings: a, b, d, h, and collect volumes for e
@@ -291,14 +291,28 @@ for (const id of ids) {
     if (ix + 1 < nx && iz + 1 < nz && Math.abs(h[i]) < T.flatWaterline && Math.abs(h[i + 1]) < T.flatWaterline && Math.abs(h[i + nx]) < T.flatWaterline && Math.abs(h[i + nx + 1]) < T.flatWaterline) flat++;
   }
   cls.f_shore_steps = steps; cls.f_waterline_flat_tris = flat;
-  const DY = S.pierDeckY ?? 1.3; // runtime deck height (fixed 1.3 before the fix)
-  for (let pi = 0; pi < area.piers.length; pi++) {
-    const p = area.piers[pi], pts = ring(p.poly ?? p.line), dense = []; const n = pts.length;
-    for (let i = 0; i < (p.poly ? n : n - 1); i++) { const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % n], L = Math.hypot(x1 - x0, z1 - z0), k = Math.max(1, Math.ceil(L / 2)); for (let s = 0; s < k; s++) dense.push([x0 + ((x1 - x0) * s) / k, z0 + ((z1 - z0) * s) / k]); }
-    if (!dense.length) continue; const deck = S.pierDeck ? S.pierDeck(p, terrain) : DY; let sunkN = 0, land = 0, hover = 0;
-    for (const [x, z] of dense) { const hh = terrain.heightAt(x, z); if (hh > deck - 0.05) sunkN++; if (hh > 0.3) { land++; if (deck - hh > 0.8) hover++; } }
-    if (sunkN / dense.length > 0.25) { cls.f_pier_sunk++; note('f_pier_sunk', { pier: pi, at: [Math.round(dense[0][0]), Math.round(dense[0][1])] }); }
-    if (land / dense.length > 0.9 && hover / dense.length > 0.5) { cls.f_pier_floating++; note('f_pier_floating', { pier: pi, at: [Math.round(dense[0][0]), Math.round(dense[0][1])] }); }
+  { // piers/docks: build each pier ALONE with the runtime builder (buildPoolsPiers), then measure the real geometry: deck top vs terrain, solidity, land contact
+    const landNear = (x, z, r) => { for (let dx = -r; dx <= r; dx += 1) for (let dz = -r; dz <= r; dz += 1) if (dx * dx + dz * dz <= r * r && terrain.heightAt(x + dx, z + dz) > 0.05) return true; return false; };
+    let open = 0, unconnected = 0, thin = 0;
+    for (let pi = 0; pi < area.piers.length; pi++) {
+      const p = area.piers[pi], pts = ring(p.poly ?? p.line), dense = []; const n = pts.length;
+      for (let i = 0; i < (p.poly ? n : n - 1); i++) { const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % n], L = Math.hypot(x1 - x0, z1 - z0), k = Math.max(1, Math.ceil(L / 2)); for (let s = 0; s < k; s++) dense.push([x0 + ((x1 - x0) * s) / k, z0 + ((z1 - z0) * s) / k]); }
+      if (!dense.length) continue;
+      const m = S.buildPoolsPiers({ ...area, pools: [], piers: [p] }, terrain, dummy), P = m.geometry.attributes.position.array, nT = P.length / 9;
+      if (nT === 0) { thin++; continue; }
+      const up = []; // up-facing triangles (deck tops), for the deck height under a sample
+      for (let t = 0; t < nT; t++) { const o = t * 9, e1 = [P[o + 3] - P[o], P[o + 4] - P[o + 1], P[o + 5] - P[o + 2]], e2 = [P[o + 6] - P[o], P[o + 7] - P[o + 1], P[o + 8] - P[o + 2]]; const ny = e1[2] * e2[0] - e1[0] * e2[2], nl = Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], ny, e1[0] * e2[1] - e1[1] * e2[0]); if (nl > 1e-9 && ny / nl > 0.9) up.push(t); }
+      const deckAt = (x, z) => { let best = null; for (const t of up) { const o = t * 9, ax = P[o], az = P[o + 2], bx = P[o + 3], bz = P[o + 5], cx = P[o + 6], cz = P[o + 8], d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz); if (Math.abs(d) < 1e-12) continue; const u = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d, v = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d, e = 0.02; if (u >= -e && v >= -e && u + v <= 1 + e) { const y = u * P[o + 1] + v * P[o + 4] + (1 - u - v) * P[o + 7]; if (best === null || y > best) best = y; } } return best; };
+      let sunkN = 0, land = 0, hover = 0, tot = 0;
+      for (const [x, z] of dense) { const dy = deckAt(x, z); if (dy === null) continue; tot++; const hh = terrain.heightAt(x, z); if (hh > dy - 0.05) sunkN++; if (hh > 0.3) { land++; if (dy - hh > 0.8) hover++; } }
+      if (!tot) { thin++; continue; }
+      if (sunkN / tot > 0.25) { cls.f_pier_sunk++; note('f_pier_sunk', { pier: pi, at: [Math.round(dense[0][0]), Math.round(dense[0][1])] }); }
+      if (land / tot > 0.9 && hover / tot > 0.5) { cls.f_pier_floating++; note('f_pier_floating', { pier: pi, at: [Math.round(dense[0][0]), Math.round(dense[0][1])] }); }
+      let linked = false; for (let i = 0; i < P.length && !linked; i += 3) if (landNear(P[i], P[i + 2], 2)) linked = true; // any piece of the dock within 2 m of ground above the sea
+      if (!linked) { unconnected++; note('f_pier_unconnected', { pier: pi, at: [Math.round(dense[0][0]), Math.round(dense[0][1])] }); }
+      const sr = openEdgeReport(P); if (sr.free > 0) { open++; note('f_pier_open', { pier: pi, free: sr.free, at: [Math.round(dense[0][0]), Math.round(dense[0][1])] }); }
+    }
+    cls.f_pier_unconnected = unconnected; cls.f_pier_open_shells = open; C.pierNoGeometry = thin; C.piers = area.piers.length;
   }
   if (area.dock) { // ferry dock: deck 1.6 m, local +x out to water; sample the deck plan
     const x = area.dock.x / 10, z = area.dock.z / 10, a = area.dock.a / 1000, c = Math.cos(a), s = Math.sin(a); let buried = 0, n = 0;
@@ -314,7 +328,7 @@ for (const id of ids) {
 
   // ---- g: void rays (see header). Layers modelled from the runtime: tile heightfield (front faces), far-ground/skirt/sea.
   const gv = voidScan(id, area, grid, terrain);
-  cls.g_void_rays = gv.void; C.voidRaysTested = gv.tested; C.voidDetail = gv.by;
+  cls.g_void_rays = gv.void; C.voidRaysTested = gv.tested; C.voidDetail = gv.by; if (gv.holes.length) ex.g_hole = gv.holes;
 
   // ---- h (landmarks): GLB solidity per LOD
   const lmRep = {};
@@ -338,15 +352,16 @@ function voidScan(id, area, grid, terrain) {
     for (let t = t0 + 6; t <= t1 + 6; t += 6) { const tt = Math.min(t, t1), above = oy + dy * tt > terrain.heightAt(ox + dx * tt, oz + dz * tt); if (prevAbove && !above) return tt; prevAbove = above; if (tt >= t1) break; }
     return null;
   };
+  const ringGround = (x, z) => { const t = rayTris(far, x, 1e5, z, 0, -1, 0); return Number.isFinite(t) ? 1e5 - t : 0; };
   const planeHit = (oy, dy, y) => { const t = (y - oy) / dy; return t > 0 ? t : null; };
-  let tested = 0, bad = 0; const by = { skirt: 0, escape: 0, underTile: 0 };
+  const holes = []; let tested = 0, bad = 0; const by = { skirt: 0, escape: 0, underTile: 0, hole: 0, horizonFog: 0 };
   const sides = [['W', x0, null], ['E', x1, null], ['N', null, z0], ['S', null, z1]];
   const offs = [-300, 0, 300, 3000, 12000], alts = [3, 40, 200, 800, 2500, 6000];
   const dirs = []; for (let az = 0; az < 24; az++) for (const p of [-70, -35, -15, -6, -2, -0.5]) { const a = (az / 24) * Math.PI * 2, pr = (p * Math.PI) / 180; dirs.push([Math.cos(pr) * Math.sin(a), Math.sin(pr), Math.cos(pr) * Math.cos(a)]); }
   for (const [, ex0, ez0] of sides) for (const f of [0.15, 0.5, 0.85]) for (const off of offs) for (const alt of alts) {
     const sign = ex0 !== null ? (ex0 === x0 ? -1 : 1) : (ez0 === z0 ? -1 : 1);
     const px = ex0 !== null ? ex0 + sign * off : x0 + W * f, pz = ez0 !== null ? ez0 + sign * off : z0 + H * f;
-    const gy = rects(px, pz) ? terrain.heightAt(px, pz) : (inland ? skirtY : 0), py = Math.max(gy, 0) + alt;
+    const gy = rects(px, pz) ? terrain.heightAt(px, pz) : far ? ringGround(px, pz) : (inland ? skirtY : 0), py = Math.max(gy, 0) + alt;
     for (const [dx, dy, dz] of dirs) {
       tested++; let best = Infinity, kind = null;
       const th = heightHit(px, py, pz, dx, dy, dz); if (th !== null) { best = th; kind = 'tile'; }
@@ -354,10 +369,14 @@ function voidScan(id, area, grid, terrain) {
       else if (inland) { const t = planeHit(py, dy, skirtY); if (t !== null && t < best) { const hx = px + dx * t, hz = pz + dz * t; if (Math.abs(hx) <= HALF && Math.abs(hz) <= HALF && !(hx > x0 + 2 && hx < x1 - 2 && hz > z0 + 2 && hz < z1 - 2) && t <= FAR) { best = t; kind = 'skirt'; } } }
       else { const t = planeHit(py, dy, 0); if (t !== null && t < best) { const hx = px + dx * t, hz = pz + dz * t; if (Math.abs(hx) <= HALF && Math.abs(hz) <= HALF && t <= FAR) { best = t; kind = 'sea'; } } }
       if (kind === 'skirt') { bad++; by.skirt++; }                                     // lands on the dark unlit-looking skirt (the black void)
+      else if (kind === null && far) {                                              // ring + tile cover the plane out to FAR_RADIUS: a downward ray that misses both
+        const run = (Math.max(py - 60, 1) / -dy) * Math.hypot(dx, dz);                // runs off the ring's end before it could reach the ground: it lands on the dome
+        if (run < S.FAR_RADIUS * 0.9) { bad++; by.hole++; (holes.length < 12) && holes.push([Math.round(px), Math.round(py), Math.round(pz), +dx.toFixed(2), +dy.toFixed(3), +dz.toFixed(2), +gy.toFixed(1)]); } else by.horizonFog++;     // below the horizon the dome is the fog colour (sky.ts), so that is not black
+      }
       else if (kind === null) { bad++; if (heightEntersBelow(px, py, pz, dx, dy, dz)) by.underTile++; else by.escape++; } // sees nothing front-facing before the far plane
     }
   }
-  return { void: bad, tested, by };
+  return { void: bad, tested, by, holes };
   function heightEntersBelow(ox, oy, oz, dx, dy, dz) { const t = Math.max(0, Math.min(...[(x0 - ox) / dx, (x1 - ox) / dx].filter(Number.isFinite).map((v) => (v < 0 ? Infinity : v)))); return Number.isFinite(t) && t < FAR && oy + dy * t < terrain.heightAt(ox + dx * t, oz + dz * t); }
 }
 function rayTris(far, ox, oy, oz, dx, dy, dz) { // Moller-Trumbore, front faces only (CCW seen from the ray origin), indexed triangles
@@ -366,8 +385,8 @@ function rayTris(far, ox, oy, oz, dx, dy, dz) { // Moller-Trumbore, front faces 
     const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3, e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2], e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
     const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x; if (nx * dx + ny * dy + nz * dz >= 0) continue; // back face
     const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x, det = e1x * px + e1y * py + e1z * pz; if (Math.abs(det) < 1e-12) continue;
-    const tx = ox - P[a], ty = oy - P[a + 1], tz = oz - P[a + 2], u = (tx * px + ty * py + tz * pz) / det; if (u < 0 || u > 1) continue;
-    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x, v = (dx * qx + dy * qy + dz * qz) / det; if (v < 0 || u + v > 1) continue;
+    const tx = ox - P[a], ty = oy - P[a + 1], tz = oz - P[a + 2], u = (tx * px + ty * py + tz * pz) / det; if (u < -1e-7 || u > 1 + 1e-7) continue; // slack: a ray exactly along a shared edge must not slip between two triangles
+    const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x, v = (dx * qx + dy * qy + dz * qz) / det; if (v < -1e-7 || u + v > 1 + 1e-7) continue;
     const tt = (e2x * qx + e2y * qy + e2z * qz) / det; if (tt > 0 && tt < best) best = tt;
   }
   return best;

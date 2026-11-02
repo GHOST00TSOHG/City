@@ -502,5 +502,173 @@
    0,
    2600
   ]
+ },
+ {
+  "name": "keywest-dock-pier90",
+  "area": "keywest",
+  "pos": [
+   790,
+   14,
+   -2070
+  ],
+  "look": [
+   827,
+   0.5,
+   -2121
+  ]
+ },
+ {
+  "name": "keywest-dock-pier90-low",
+  "area": "keywest",
+  "pos": [
+   800,
+   3,
+   -2095
+  ],
+  "look": [
+   827,
+   1,
+   -2121
+  ]
+ },
+ {
+  "name": "keywest-dock-pier51",
+  "area": "keywest",
+  "pos": [
+   -510,
+   16,
+   -1790
+  ],
+  "look": [
+   -544,
+   0.5,
+   -1827
+  ]
+ },
+ {
+  "name": "keywest-dock-pier4-shore",
+  "area": "keywest",
+  "pos": [
+   -640,
+   20,
+   150
+  ],
+  "look": [
+   -661,
+   0.5,
+   207
+  ]
+ },
+ {
+  "name": "bayshore-dock-29",
+  "area": "bayshore",
+  "pos": [
+   -1210,
+   12,
+   -1560
+  ],
+  "look": [
+   -1235,
+   0.5,
+   -1597
+  ]
+ },
+ {
+  "name": "bayshore-dock-80",
+  "area": "bayshore",
+  "pos": [
+   500,
+   25,
+   -2080
+  ],
+  "look": [
+   531,
+   0.5,
+   -2124
+  ]
+ },
+ {
+  "name": "sandyhook-dock-70",
+  "area": "sandyhook",
+  "pos": [
+   -420,
+   16,
+   -440
+  ],
+  "look": [
+   -450,
+   0.5,
+   -481
+  ]
+ },
+ {
+  "name": "sandyhook-dock-66",
+  "area": "sandyhook",
+  "pos": [
+   -90,
+   22,
+   820
+  ],
+  "look": [
+   -119,
+   0.5,
+   859
+  ]
+ },
+ {
+  "name": "newark-dock-11",
+  "area": "newark",
+  "pos": [
+   1600,
+   14,
+   2050
+  ],
+  "look": [
+   1635,
+   0.5,
+   2085
+  ]
+ },
+ {
+  "name": "newark-dock-4",
+  "area": "newark",
+  "pos": [
+   1550,
+   14,
+   2450
+  ],
+  "look": [
+   1580,
+   0.5,
+   2487
+  ]
+ },
+ {
+  "name": "passaic-dock-2",
+  "area": "passaic",
+  "pos": [
+   520,
+   14,
+   40
+  ],
+  "look": [
+   549,
+   0.5,
+   10
+  ]
+ },
+ {
+  "name": "passaic-ferry-dock",
+  "area": "passaic",
+  "pos": [
+   -35,
+   18,
+   -30
+  ],
+  "look": [
+   30,
+   1,
+   0
+  ]
  }
 ]
