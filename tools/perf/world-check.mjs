@@ -14,8 +14,10 @@ import { execFileSync } from 'node:child_process';
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= `${os.homedir()}/builds/.pw-browsers`;
 const { webkit } = await import('@playwright/test');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const LEGS = Number(arg('legs', '99')), PORT = arg('port', '5199'), ONLY = arg('only', 'all'), OUT = arg('out', 'tools/perf/out'), SHOTS = `${OUT}/connect-shots`, W = 1920, H = 1080, POP_DIST = 8000;
+const LEGS = Number(arg('legs', '99')), PORT = arg('port', '5199'), ONLY = arg('only', 'all'), OUT = arg('out', 'tools/perf/out'), SHOTS = arg('shots', `${OUT}/connect-shots`), W = 1920, H = 1080, POP_DIST = 8000;
 fs.mkdirSync(SHOTS, { recursive: true });
+/** Playwright's WebKit WebContent process RSS in MB (ps; the page process). */
+const rss = () => { let m = 0; for (const l of execFileSync('ps', ['-axo', 'rss=,command='], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\n')) if (/pw-browsers|ms-playwright/.test(l) && /WebContent/.test(l)) m = Math.max(m, Math.round(parseInt(l) / 1024)); return m; };
 const results = { when: new Date().toISOString(), viewport: [W, H], budget: { fps: 50, calls: 150 } };
 const errorsAll = [];
 
@@ -44,6 +46,7 @@ const HELPERS = () => {
       const scan = (n) => { try { n.traverse?.((x) => { if (x.isTextureNode || x.isTexture3DNode) addTex(x.value); }); } catch { /* node graph walk is best-effort */ } };
       window.__cityScene.traverse((o) => {
         const g = o.geometry;
+        if (g?.userData?.gpuBytes && !seen.has(g)) { seen.add(g); geo += g.userData.gpuBytes; } // CPU arrays freed after upload: count the GPU bytes recorded at release
         if (g) for (const a of Object.values(g.attributes)) { const arr = a.array; if (arr && !seen.has(arr)) { seen.add(arr); (a.isInstancedBufferAttribute ? (inst += arr.byteLength) : (geo += arr.byteLength)); } }
         if (g?.index && !seen.has(g.index.array)) { seen.add(g.index.array); geo += g.index.array.byteLength; }
         for (const a of [o.instanceMatrix, o.instanceColor]) if (a && !seen.has(a.array)) { seen.add(a.array); inst += a.array.byteLength; }
@@ -108,10 +111,10 @@ async function staticPhase() {
     await p.evaluate(([x, y, z, lx, ly, lz]) => { const c = window.__cityCam; c.position.set(x, y, z); c.lookAt(lx, ly, lz); window.__cityControls.syncAngles(); }, [x, y, z, lx, ly, lz]);
     await p.waitForTimeout(2500);
     const f = await p.evaluate(() => window.__h.frames(4000)); const st = await p.evaluate((f) => window.__h.stats(f), f);
-    await p.screenshot({ path: `${SHOTS}/${name}.png` });
+    await p.screenshot({ type: 'jpeg', quality: 80, path: `${SHOTS}/${name}.jpg` });
     per.push({ view: name, ...st }); console.log('static', name, JSON.stringify(st));
   }
-  const mem = await p.evaluate(() => window.__h.memory());
+  const mem = await p.evaluate(() => window.__h.memory()); mem.webContentRssMB = rss();
   const med = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
   results.static = { tilesBuilt: await p.evaluate(() => window.__world().tiles.map((t) => t.id)), memory: mem, views: per,
     fpsMedian: med(per.map((v) => v.fpsMedian)), fpsMin: Math.min(...per.map((v) => v.fpsMin)), callsMax: Math.max(...per.map((v) => v.calls)), trianglesMax: Math.max(...per.map((v) => v.triangles)), consoleErrors: errors.length };
@@ -178,19 +181,19 @@ async function flightPhase(kind) {
     F.stop = () => { clearInterval(iv); clearInterval(sampler); };
   }, { inspect, POP_DIST, LEGS });
   await p.evaluate(() => { const c = window.__robot.ctl; c.press('Space', true); setTimeout(() => c.press('Space', false), 100); });
-  let shotN = 0, nextShot = 15; const t0 = Date.now();
+  let shotN = 0, nextShot = 15; const t0 = Date.now(), rssSamples = [];
   while (Date.now() - t0 < 600000) {
-    await p.waitForTimeout(1000);
+    await p.waitForTimeout(1000); rssSamples.push(rss());
     const done = await p.evaluate(() => window.__flight.done);
     const el = (Date.now() - t0) / 1000;
-    if (inspect && el > nextShot) { nextShot += 22; const st = await p.evaluate(() => window.__h.state()); const name = `flight-${String(shotN++).padStart(2, '0')}-${st.area}-${Math.round(st.speed)}ms-${st.alt}m`; await p.screenshot({ path: `${SHOTS}/${name}.png` }); shots.push(name + '.png'); }
+    if (inspect && el > nextShot) { nextShot += 22; const st = await p.evaluate(() => window.__h.state()); const name = `flight-${String(shotN++).padStart(2, '0')}-${st.area}-${Math.round(st.speed)}ms-${st.alt}m`; await p.screenshot({ type: 'jpeg', quality: 80, path: `${SHOTS}/${name}.jpg` }); shots.push(name + '.jpg'); }
     if (done) break;
   }
-  if (inspect) { const st = await p.evaluate(() => window.__h.state()); await p.waitForTimeout(2500); await p.screenshot({ path: `${SHOTS}/flight-arrival-${st.area}.png` }); shots.push(`flight-arrival-${st.area}.png`); }
+  if (inspect) { const st = await p.evaluate(() => window.__h.state()); await p.waitForTimeout(2500); await p.screenshot({ type: 'jpeg', quality: 80, path: `${SHOTS}/flight-arrival-${st.area}.jpg` }); shots.push(`flight-arrival-${st.area}.jpg`); }
   const F = await p.evaluate(() => { window.__flight.stop(); const f = window.__flight; return { samples: f.samples, pop: f.pop, voids: f.voids, events: f.events, done: f.done, route: f.route, voidTests: f.voidTests ?? 0 }; });
   const med = (a) => [...a].sort((x, y) => x - y)[a.length >> 1] ?? 0, s = F.samples.filter((x) => x.frames > 5);
   const memMax = (k) => Math.max(...F.samples.filter((x) => x.mem).map((x) => x.mem[k]));
-  const summary = { done: F.done, seconds: F.samples.length, shots,
+  const summary = { webContentRssMB: { peak: Math.max(...rssSamples), median: [...rssSamples].sort((a, b) => a - b)[rssSamples.length >> 1] }, done: F.done, seconds: F.samples.length, shots,
     fpsMedian: med(s.map((x) => x.fpsMedian)), fpsMinWindowMedian: Math.min(...s.map((x) => x.fpsMedian)), fpsMinFrame: Math.min(...s.map((x) => x.fpsMin)), worstFrameMs: Math.max(...s.map((x) => x.worstMs)), framesOver33: s.reduce((a, x) => a + x.over33, 0), frames: s.reduce((a, x) => a + x.frames, 0),
     windowsBelow50: s.filter((x) => x.fpsMedian < 50).length, callsMax: Math.max(...s.map((x) => x.callsMax)), callsMedian: med(s.map((x) => x.callsMax)), trianglesMax: 0, speedMax: Math.max(...s.map((x) => x.speed)), tilesMax: Math.max(...s.map((x) => x.tiles.split(',').length)),
     mem: { gpuMBmax: memMax('gpuMB'), geoMBmax: memMax('geoMB'), instMBmax: memMax('instMB'), texMBmax: memMax('texMB'), hostArraysMBmax: memMax('hostArraysMB'), heapMBmax: F.samples.some((x) => x.mem?.heapMB != null) ? memMax('heapMB') : null },

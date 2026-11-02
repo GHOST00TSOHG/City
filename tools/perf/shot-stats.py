@@ -6,7 +6,7 @@ from PIL import Image
 
 out = {}
 for name in sorted(os.listdir(sys.argv[1])):
-    if not name.startswith('flight-') or not name.endswith('.png'):
+    if not name.startswith('flight-') or not name.endswith(('.png', '.jpg')):
         continue
     a = np.asarray(Image.open(os.path.join(sys.argv[1], name)).convert('RGB')).astype(np.float32)
     h, w, _ = a.shape

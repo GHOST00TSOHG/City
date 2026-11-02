@@ -1,5 +1,5 @@
 {
- "when": "2026-11-02T03:21:48.428Z",
+ "when": "2026-11-02T06:39:52.830Z",
  "viewport": [
   1920,
   1080
@@ -17,71 +17,72 @@
    "bayshore"
   ],
   "memory": {
-   "geoMB": 877,
+   "geoMB": 353.4,
    "instMB": 25.9,
    "texMB": 106.5,
-   "gpuMB": 1009.4,
+   "gpuMB": 485.8,
    "hostArraysMB": 6.7,
    "heapMB": null,
    "infoGeometries": 319,
    "infoTextures": 45,
-   "tiles": 5
+   "tiles": 5,
+   "webContentRssMB": 2283
   },
   "views": [
    {
     "view": "aerial-keywest",
-    "frames": 219,
-    "fpsMedian": 55.6,
-    "fpsMin": 50,
-    "worstMs": 20,
-    "over33": 0,
-    "calls": 76,
-    "callsMedian": 76,
-    "triangles": 9663196
-   },
-   {
-    "view": "mid-keywest",
-    "frames": 241,
-    "fpsMedian": 58.8,
-    "fpsMin": 52.6,
-    "worstMs": 19,
-    "over33": 0,
-    "calls": 87,
-    "callsMedian": 87,
-    "triangles": 10051477
-   },
-   {
-    "view": "aerial-bayshore",
-    "frames": 227,
-    "fpsMedian": 55.6,
-    "fpsMin": 43.5,
-    "worstMs": 23,
-    "over33": 0,
-    "calls": 71,
-    "callsMedian": 71,
-    "triangles": 8075458
-   },
-   {
-    "view": "aerial-sandyhook",
     "frames": 240,
     "fpsMedian": 58.8,
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 64,
-    "callsMedian": 64,
-    "triangles": 7468285
+    "calls": 68,
+    "callsMedian": 68,
+    "triangles": 8052636
    },
    {
-    "view": "aerial-newark",
-    "frames": 239,
+    "view": "mid-keywest",
+    "frames": 240,
     "fpsMedian": 58.8,
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 36,
-    "callsMedian": 36,
-    "triangles": 5347793
+    "calls": 79,
+    "callsMedian": 79,
+    "triangles": 8440917
+   },
+   {
+    "view": "aerial-bayshore",
+    "frames": 241,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 78,
+    "callsMedian": 78,
+    "triangles": 7038863
+   },
+   {
+    "view": "aerial-sandyhook",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 50,
+    "worstMs": 20,
+    "over33": 0,
+    "calls": 59,
+    "callsMedian": 59,
+    "triangles": 6444049
+   },
+   {
+    "view": "aerial-newark",
+    "frames": 240,
+    "fpsMedian": 58.8,
+    "fpsMin": 52.6,
+    "worstMs": 19,
+    "over33": 0,
+    "calls": 29,
+    "callsMedian": 29,
+    "triangles": 3805477
    },
    {
     "view": "aerial-passaic",
@@ -90,9 +91,9 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 44,
-    "callsMedian": 44,
-    "triangles": 6475905
+    "calls": 95,
+    "callsMedian": 95,
+    "triangles": 7344693
    },
    {
     "view": "mid-passaic",
@@ -101,9 +102,9 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 54,
-    "callsMedian": 54,
-    "triangles": 7889358
+    "calls": 42,
+    "callsMedian": 42,
+    "triangles": 5985723
    },
    {
     "view": "ground-nj-passaic-hook",
@@ -112,9 +113,9 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 70,
-    "callsMedian": 70,
-    "triangles": 6829354
+    "calls": 65,
+    "callsMedian": 65,
+    "triangles": 5829326
    },
    {
     "view": "aerial-nj-passaic-hook",
@@ -123,9 +124,9 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 61,
-    "callsMedian": 61,
-    "triangles": 5793314
+    "calls": 56,
+    "callsMedian": 56,
+    "triangles": 4793286
    },
    {
     "view": "ground-nj-hook-highlands",
@@ -134,9 +135,9 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 59,
-    "callsMedian": 59,
-    "triangles": 5626638
+    "calls": 52,
+    "callsMedian": 52,
+    "triangles": 4480994
    },
    {
     "view": "aerial-nj-hook-highlands",
@@ -145,9 +146,9 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 66,
-    "callsMedian": 66,
-    "triangles": 5642630
+    "calls": 59,
+    "callsMedian": 59,
+    "triangles": 4496986
    },
    {
     "view": "ground-keywest-duval",
@@ -156,15 +157,15 @@
     "fpsMin": 52.6,
     "worstMs": 19,
     "over33": 0,
-    "calls": 81,
-    "callsMedian": 81,
-    "triangles": 9806552
+    "calls": 73,
+    "callsMedian": 73,
+    "triangles": 8195992
    }
   ],
   "fpsMedian": 58.8,
-  "fpsMin": 43.5,
-  "callsMax": 87,
-  "trianglesMax": 10051477,
+  "fpsMin": 50,
+  "callsMax": 95,
+  "trianglesMax": 8440917,
   "consoleErrors": 0
  },
  "consoleErrors": []
