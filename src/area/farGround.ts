@@ -28,11 +28,21 @@ export function farGroundData(t: TerrainGrid, inland: boolean, seaSides: string[
   const N = px.length, K = FAR_LAYERS.length + 1;
   // Sides of an inland tile that face open water (Passaic's south side is Newark Bay): the ring there falls from the edge level to a seabed instead of
   // climbing to a land plain, with a wavy cut so the new shoreline is not a straight line parallel to the tile edge.
-  const sea = new Uint8Array(N), wob = new Float32Array(N);
+  // Run F: coastal tiles (not inland) face open sea on every side, so their ring falls to a seabed all round (it used to keep the edge level: Highlands' +70 m hills became a flat olive
+  // plateau over the sea). The sea weight eases along the perimeter (~700 m) so the sea/land change at a corner is a ramp, not a step between neighbouring vertices
+  // (that step made the jagged triangles at Passaic's south-east corner).
+  const raw = new Uint8Array(N), wob = new Float32Array(N), sea = new Float32Array(N);
   for (let i = 0; i < N; i++) {
-    sea[i] = inland && ((seaSides.includes('s') && oz[i] > 0) || (seaSides.includes('n') && oz[i] < 0) || (seaSides.includes('e') && ox[i] > 0) || (seaSides.includes('w') && ox[i] < 0)) ? 1 : 0;
+    raw[i] = !inland || (seaSides.includes('s') && oz[i] > 0) || (seaSides.includes('n') && oz[i] < 0) || (seaSides.includes('e') && ox[i] > 0) || (seaSides.includes('w') && ox[i] < 0) ? 1 : 0;
     wob[i] = 0.5 + 0.28 * Math.sin(i * cell / 410) + 0.22 * Math.sin(i * cell / 133 + 1.7);
   }
+  const dd = new Float32Array(N);
+  for (let i = 0; i < N; i++) dd[i] = raw[i] ? 0 : 1e9;
+  for (let r = 0; r < 2; r++) {
+    for (let i = 0; i < N; i++) dd[i] = Math.min(dd[i], dd[(i + N - 1) % N] + 1);
+    for (let i = N - 1; i >= 0; i--) dd[i] = Math.min(dd[i], dd[(i + 1) % N] + 1);
+  }
+  for (let i = 0; i < N; i++) sea[i] = 1 - smooth(dd[i] * cell / 700);
   const H: Float32Array[] = [Float32Array.from(ph)];
   for (let k = 1; k < K; k++) {
     const d = FAR_LAYERS[k - 1], prev = H[k - 1], rad = Math.min(N >> 1, Math.round(d / cell / 2)); // tangential blur grows with distance: edge bumps smear out, the plain follows the local edge level
@@ -41,7 +51,9 @@ export function farGroundData(t: TerrainGrid, inland: boolean, seaSides: string[
     const f = smooth(d / 70);
     for (let i = 0; i < N; i++) {
       const lo = i - rad + N, hi = i + rad + N, avg = rad ? (pre[hi + 1] - pre[lo]) / (2 * rad + 1) : prev[i];
-      out[i] = sea[i] ? avg + (-2.6 - avg) * smooth(d / (160 + 240 * wob[i])) : inland ? avg + (Math.max(avg, 0.3) - avg) * f : avg; // inland has no sea: a river bed at the edge climbs to the plain; coastal keeps its seabed under the sea plane
+      const land = inland ? avg + (Math.max(avg, 0.3) - avg) * f : avg; // inland has no sea: a river bed at the edge climbs to the plain
+      const seaH = avg + (Math.min(avg, -2.6) - avg) * smooth(d / (160 + 240 * wob[i] + 12 * Math.max(avg, 0))); // land at the edge ramps down to the seabed (gentler the higher it is)
+      out[i] = land + (seaH - land) * sea[i];
     }
     H.push(out);
   }
@@ -49,9 +61,10 @@ export function farGroundData(t: TerrainGrid, inland: boolean, seaSides: string[
   for (let k = 0; k < K; k++) {
     const d = k ? FAR_LAYERS[k - 1] : 0;
     for (let i = 0; i < N; i++) {
-      const v = k * N + i, y = H[k][i];
+      // far seabed keeps falling with distance: at 9 km the 24-bit depth buffer cannot separate it from the sea plane 2.6 m above (blocky z-fighting seen from altitude)
+      const v = k * N + i, y = H[k][i] - sea[i] * 0.005 * Math.max(0, d - 1000);
       pos[v * 3] = px[i] + ox[i] * d; pos[v * 3 + 1] = y; pos[v * 3 + 2] = pz[i] + oz[i] * d;
-      if (y < 0 && (!inland || sea[i])) { const m = Math.min(1, -y / 2.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = seabed[q] + (deep[q] - seabed[q]) * m; }
+      if (y < 0 && sea[i] > 0.5) { const m = Math.min(1, -y / 2.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = seabed[q] + (deep[q] - seabed[q]) * m; }
       else for (let q = 0; q < 3; q++) col[v * 3 + q] = land3[q];
     }
   }

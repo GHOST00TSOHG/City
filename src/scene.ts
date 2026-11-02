@@ -247,7 +247,10 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const t = priorityTile(x, z);
     if (t) return t.interiors.floorAt(x, z) ?? Math.max(t.roads.surfaceAt(x, z), 0); // road/sidewalk top, not the terrain under it
     const l = linkAt(x, z); if (l) return l.floorAt(x, z) ?? 0;
-    const n = nearestTile(x, z); return n ? Math.max(n.terrain.heightAt(x, z), 0) : 0; // outside every tile: the ring continues the nearest edge; sea is 0
+    const n = nearestTile(x, z); if (!n) return 0;
+    const h = Math.max(n.terrain.heightAt(x, z), 0); // outside every tile: an inland tile's ring continues its edge level; a coastal one's ring falls to the seabed (farGround.ts), so past it the floor is sea level
+    if ((n.area as { inland?: number }).inland || h <= 0) return h;
+    const k = Math.min(1, registry.distTo(n.id, x, z) / (280 + 12 * h)); return h * (1 - k * k * (3 - 2 * k));
   };
   const controls = createFlyControls(camera, canvas, ground);
   const setView = (v0: View) => {
