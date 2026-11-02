@@ -4,13 +4,10 @@ import * as THREE from 'three/webgpu';
 import { attribute, positionLocal, vec3, sin, float, time, uniform, texture, uv, instanceColor, cameraPosition, step } from 'three/tsl';
 import { A6, budget } from '../perf/frame';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Tree as EzTree } from '@eztree/tree.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import oakLeafUrl from '@eztree/assets/leaves/oak_color.png';
 import ashLeafUrl from '@eztree/assets/leaves/ash_color.png';
 import oakBarkUrl from '@eztree/assets/bark/oak_color_1k.jpg';
-import oakPreset from '@eztree/presets/oak_medium.json';
-import ashPreset from '@eztree/presets/ash_medium.json';
 import type { Terrain } from './data';
 
 /** Procedural palms and broadleaf trees: alpha-tested frond/leaf cards from a canvas-drawn atlas, spherical canopy normals,
@@ -129,21 +126,25 @@ function loadTex(url: string) {
 }
 function tex(url: string, repeat = false) { const t = loadTex(url); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
 
-function ezGeometry(preset: any, lod: number) {
-  const tr = new EzTree(); tr.loadFromJson(structuredClone(preset));
-  const o: any = tr.options; o.seed = preset.seed;
-  if (lod === 1) { // mid LOD: fewer segments/sections, fewer but larger leaves
-    for (const k of Object.keys(o.branch.segments)) o.branch.segments[k] = Math.max(3, Math.ceil(o.branch.segments[k] / 2));
-    for (const k of Object.keys(o.branch.sections)) o.branch.sections[k] = Math.max(1, Math.ceil(o.branch.sections[k] / 2));
-    o.branch.levels = Math.max(1, o.branch.levels - 1); o.leaves.count = Math.max(4, Math.round(o.leaves.count * 0.8)); o.leaves.size *= 2.6;
-  }
-  tr.generate();
-  const b = (tr.branchesMesh.geometry as any).clone() as THREE.BufferGeometry, l = (tr.leavesMesh.geometry as any).clone() as THREE.BufferGeometry;
-  normalise([b, l]);
-  l.computeBoundingBox(); const c = l.boundingBox!.getCenter(new THREE.Vector3());
-  sphereNormals(l, c.setY(c.y - 1.5));
-  return { b, l };
+/** The ez-tree broadleaf LODs are baked offline (tools/trees/bake.mjs -> public/trees/ez.bin): the generator allocated ~100 MB of temporary arrays in the page. */
+type EzEntry = { name: string; lod: number; part: 'b' | 'l'; n: number; m: number; pos: number; nrm: number; uv: number; idx: number; idx32: boolean };
+async function loadEz(): Promise<Map<string, THREE.BufferGeometry>> {
+  const out = new Map<string, THREE.BufferGeometry>();
+  try {
+    const base = import.meta.env.BASE_URL + 'trees/';
+    const [list, buf] = await Promise.all([fetch(base + 'ez.json').then((r) => r.json() as Promise<EzEntry[]>), fetch(base + 'ez.bin').then((r) => r.arrayBuffer())]);
+    for (const e of list) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(buf, e.pos, e.n * 3), 3));
+      g.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(buf, e.nrm, e.n * 3), 3));
+      g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(buf, e.uv, e.n * 2), 2));
+      g.setIndex(new THREE.BufferAttribute(e.idx32 ? new Uint32Array(buf, e.idx, e.m) : new Uint16Array(buf, e.idx, e.m), 1));
+      g.computeBoundingSphere(); out.set(`${e.name}:${e.lod}:${e.part}`, g);
+    }
+  } catch (err) { console.warn('ez tree geometry missing', err); }
+  return out;
 }
+const ezGeometry = (ez: Map<string, THREE.BufferGeometry>, name: string, lod: number) => ({ b: ez.get(`${name}:${lod}:b`)!, l: ez.get(`${name}:${lod}:l`)! });
 
 function windMaterial(mat: THREE.MeshLambertNodeMaterial, uWind: any, map: THREE.Texture, alpha: boolean) {
   const t = texture(map, uv());
@@ -165,7 +166,7 @@ function windMaterial(mat: THREE.MeshLambertNodeMaterial, uWind: any, map: THREE
   return mat;
 }
 
-function builtinSpecies(uWind: any): TreeSpecies[] {
+function builtinSpecies(uWind: any, ezg: Map<string, THREE.BufferGeometry>): TreeSpecies[] {
   const atlasTex = atlas();
   const cards = windMaterial(new THREE.MeshLambertNodeMaterial({ side: THREE.DoubleSide, alphaTest: 0.5 }), uWind, atlasTex, true);
   const bark = windMaterial(new THREE.MeshLambertNodeMaterial(), uWind, tex(oakBarkUrl, true), false);
@@ -175,8 +176,8 @@ function builtinSpecies(uWind: any): TreeSpecies[] {
     { maxDist: 120 * quality.treeDist, parts: [{ geometry: palm(true), material: cards }] },
     { maxDist: 420 * quality.treeDist, parts: [{ geometry: palm(false), material: cards }] },
     { maxDist: 3200, parts: [{ geometry: palm(false, true), material: cards }] }] };
-  const ez = [oakPreset, ashPreset].map((pr, i) => {
-    const hi = ezGeometry(pr, 0), mid = ezGeometry(pr, 1);
+  const ez = (ezg.size ? ['ez-oak', 'ez-ash'] : []).map((nm, i) => {
+    const hi = ezGeometry(ezg, nm, 0), mid = ezGeometry(ezg, nm, 1);
     return { name: i ? 'ez-ash' : 'ez-oak', kind: 1 as const, lods: [
       { maxDist: 85 * quality.treeDist, parts: [{ geometry: hi.b, material: bark }, { geometry: hi.l, material: leafMats[i] }] },
       { maxDist: 200 * quality.treeDist, parts: [{ geometry: mid.b, material: bark }, { geometry: mid.l, material: leafMats[i] }] },
@@ -213,7 +214,7 @@ async function gltfSpecies(uWind: any): Promise<TreeSpecies[]> {
 let sharedSpecies: Promise<{ uWind: any; extra: TreeSpecies[]; species: TreeSpecies[]; materials: Set<THREE.Material> }> | null = null;
 function loadShared() {
   return (async () => {
-    const uWind = uniform(1), extra = await gltfSpecies(uWind), species = [...builtinSpecies(uWind), ...extra];
+    const uWind = uniform(1), extra = await gltfSpecies(uWind), species = [...builtinSpecies(uWind, await loadEz()), ...extra];
     const materials = new Set<THREE.Material>(); species.forEach((sp) => sp.lods.forEach((l) => l.parts.forEach((p) => materials.add(p.material))));
     return { uWind, extra, species, materials };
   })();

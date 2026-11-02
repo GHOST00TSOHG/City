@@ -11,7 +11,8 @@ const CLASS_TINT = [1, 1, 1, 1, 0.72, 0.78, 1.08];
 
 // Landcover codes from the bake: land0 grass1 sand2 paved3 wood4 wetland5 pitch6
 const COVER = [0x8a8470, 0x5d7444, 0xd8cba4, 0x7c7a74, 0x46603a, 0x5a6646, 0x5a8a44].map((h) => new THREE.Color(h));
-const SEABED = new THREE.Color(0xb9b08a), DEEP = new THREE.Color(0x2c6a70);
+const TW = [0, 0, 0, 0];
+const SEABED =new THREE.Color(0xb9b08a), DEEP = new THREE.Color(0x2c6a70);
 
 /** Terrain grid as one indexed mesh with per-vertex landcover colour; under-water cells tint toward a sandy-teal seabed. */
 export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaStyle = styleFor(''), skip: Rect[] = []) {
@@ -26,7 +27,7 @@ export function terrainGeometry(t: Terrain, style: AreaStyle, skip: Rect[]) {
   const c = new THREE.Color(), tint = new THREE.Color(style.groundTint);
   for (let iz = 0; iz < nz; iz++) for (let ix = 0; ix < nx; ix++) {
     const i = iz * nx + ix, y = h[i];
-    pos.set([x0 + ix * cell, y, z0 + iz * cell], i * 3);
+    pos[i * 3] = x0 + ix * cell; pos[i * 3 + 1] = y; pos[i * 3 + 2] = z0 + iz * cell;
     if (y < 0) c.copy(SEABED).lerp(DEEP, Math.min(1, -y / 2.5));
     else {
       // soften: average landcover colour over the 3x3 neighbourhood so classes blend instead of stepping
@@ -38,7 +39,7 @@ export function terrainGeometry(t: Terrain, style: AreaStyle, skip: Rect[]) {
       c.setRGB(r / n, g / n, b / n);
       if (y < 0.6) c.lerp(COVER[2], 0.25); // beach edge
       // texture weights over the same 3x3 neighbourhood; sand creeps up near the shoreline (more in sandy areas)
-      const w = [0, 0, 0, 0]; let tk = 0, m = 0;
+      const w = TW; w[0] = w[1] = w[2] = w[3] = 0; let tk = 0, m = 0; // scratch weights, no per-vertex array
       for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) {
         const jx = ix + dx, jz = iz + dz; if (jx < 0 || jz < 0 || jx >= nx || jz >= nz) continue;
         const k = cover[jz * nx + jx], cw = CLASS_W[k] ?? CLASS_W[0]; for (let q = 0; q < 4; q++) w[q] += cw[q]; tk += CLASS_TINT[k] ?? 1; m++;
@@ -48,7 +49,7 @@ export function terrainGeometry(t: Terrain, style: AreaStyle, skip: Rect[]) {
       // land: the vertex colour becomes a tint (≈1) over the true texture colour
       const tt = tk / m; c.setRGB(tint.r * tt, tint.g * tt, tint.b * tt);
     }
-    col.set([c.r, c.g, c.b], i * 3);
+    col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
   }
   const idx = new Uint32Array((nx - 1) * (nz - 1) * 6); let k = 0;
   // cells whose centre lies inside a higher-priority tile (skip rects, shrunk 12 m so the two terrains overlap a little instead of cracking) are not drawn
@@ -56,7 +57,7 @@ export function terrainGeometry(t: Terrain, style: AreaStyle, skip: Rect[]) {
   for (let iz = 0; iz < nz - 1; iz++) for (let ix = 0; ix < nx - 1; ix++) {
     if (skip.length && skipped(x0 + (ix + 0.5) * cell, z0 + (iz + 0.5) * cell)) continue;
     const a = iz * nx + ix, b = a + 1, cc = a + nx + 1, d = a + nx;
-    idx.set([a, cc, b, a, d, cc], k); k += 6; // CCW from above (y up, z south)
+    idx[k] = a; idx[k + 1] = cc; idx[k + 2] = b; idx[k + 3] = a; idx[k + 4] = d; idx[k + 5] = cc; k += 6; // CCW from above (y up, z south)
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));

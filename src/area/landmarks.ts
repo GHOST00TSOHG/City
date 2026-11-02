@@ -29,6 +29,23 @@ let ktx2: KTX2Loader | null = null;
 let index: Promise<Record<string, string[]>> | null = null;
 
 /** Area origins come from the baked area manifest (same point the bake projected from). */
+/** Drops the decoded CPU copy of every texture (ImageBitmap) once the renderer has uploaded it (onUpdate runs after the upload), so the page keeps only the GPU copy. */
+function releaseTextureSources(root: THREE.Object3D) {
+  const seen = new Set<THREE.Texture>();
+  root.traverse((o) => {
+    for (const m of [(o as THREE.Mesh).material].flat()) {
+      if (!m) continue;
+      for (const v of Object.values(m) as unknown[]) {
+        const t = v as THREE.Texture;
+        if (!t?.isTexture || seen.has(t) || (t as any).isCompressedTexture) continue;
+        seen.add(t);
+        // ImageBitmap (Chrome) is closed; an <img> (Safari/WebKit) is detached so its decoded pixels can be dropped
+        t.onUpdate = () => { const im = t.image as ImageBitmap | HTMLImageElement | undefined; t.onUpdate = null; if (!im) return; if (typeof (im as ImageBitmap).close === 'function') (im as ImageBitmap).close(); else if ((im as HTMLImageElement).src) { (im as HTMLImageElement).removeAttribute('src'); t.source.data = null; } };
+      }
+    }
+  });
+}
+
 export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer, off: { x: number; z: number } = { x: 0, z: 0 }) {
   const group = new THREE.Group(); group.name = 'landmarks';
   const colliders: LandmarkCollider[] = [], footprints: LandmarkFootprint[] = [], pads: LandmarkPad[] = [];
@@ -65,6 +82,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       const baseY = m.elevationM ?? Math.max(groundY, 0);
       lod.position.y = baseY; lod.updateMatrixWorld(true);
       tuneLandmarkMaterials(lod, m.id);
+      releaseTextureSources(lod);
       if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
       group.add(lod);
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
