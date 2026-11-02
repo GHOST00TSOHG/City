@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { player } from './world/player';
 
 /**
  * Free fly / walk camera for laptops.
@@ -10,7 +11,7 @@ import * as THREE from 'three/webgpu';
  */
 export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElement, ground: (x: number, z: number) => number | null) {
   const keys = new Set<string>();
-  const vel = new THREE.Vector3();
+  const vel = player.vel; // the free-fly camera's velocity IS the shared player velocity
   let yaw = 0, pitch = 0;
   let walk = false;
   let dragging = false, lx = 0, ly = 0;
@@ -62,7 +63,7 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
     get walk() { return walk; },
     get enabled() { return enabled; },
     /** Off while the robot drives the camera; on re-enable, angles resync from wherever the camera is. */
-    setEnabled(v: boolean) { enabled = v; keys.clear(); vel.set(0, 0, 0); wheelMove = 0; pivotOrbit.dYaw = pivotOrbit.dPitch = 0; if (v) syncAngles(); },
+    setEnabled(v: boolean) { enabled = v; keys.clear(); if (v) vel.set(0, 0, 0); wheelMove = 0; pivotOrbit.dYaw = pivotOrbit.dPitch = 0; if (v) syncAngles(); },
     setWalk(v: boolean) { walk = v; },
     update(dt: number) {
       dt = Math.min(dt, 0.1);
@@ -107,6 +108,8 @@ export function createFlyControls(camera: THREE.PerspectiveCamera, dom: HTMLElem
         if (camera.position.y < eye) camera.position.y = eye;
       }
       camera.position.y = Math.min(camera.position.y, 6000);
+      // publish the player state: the camera is the player in free / walk mode
+      player.pos.copy(camera.position); player.avatar = false; player.mode = walk ? 'walk' : 'free'; player.update(groundY ?? 0);
     },
     syncAngles,
   };

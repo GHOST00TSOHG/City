@@ -1,4 +1,5 @@
 import { MPH, type RobotController } from './controller';
+import { player } from '../world/player';
 
 /** Flight panel (mode, mph, altitude, vertical speed, BURST meter), key legend and reticle with altitude. */
 export function createRobotHud() {
@@ -19,8 +20,8 @@ export function createRobotHud() {
       const air = r.mode === 'ROCKETS' || r.mode === 'SKYDIVING';
       mode.textContent = r.mode === 'ROCKETS' ? (r.burstOn > 0.5 ? 'ROCKETS · BURST' : 'ROCKETS') : r.mode === 'SKYDIVING' ? 'SKYDIVING' : r.mode === 'ROLL' ? 'ROLL' : 'ON FOOT';
       mode.dataset.m = r.mode;
-      mph.textContent = (Math.hypot(r.vel.x, r.vel.y, r.vel.z) * MPH).toFixed(0);
-      const a = Math.max(0, (r.pos.y - r.floor.y) * 3.281); alt.textContent = a.toFixed(0); vs.textContent = (r.vel.y * 3.281).toFixed(0);
+      mph.textContent = (player.speed * MPH).toFixed(0);
+      const a = player.altitude * 3.281; alt.textContent = a.toFixed(0); vs.textContent = (player.vel.y * 3.281).toFixed(0);
       bar.style.width = `${(r.burst * 100).toFixed(0)}%`; bar.classList.toggle('low', r.burst < 0.2);
       ralt.textContent = air ? `${a.toFixed(0)} ft` : '';
     },

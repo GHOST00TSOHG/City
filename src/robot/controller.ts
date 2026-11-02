@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { A6 } from '../perf/frame';
 import type { RobotModel, RobotAnim, LandKind } from './model';
+import { player } from '../world/player';
 
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
 export interface World { floorAt(x: number, z: number, y: number): { y: number; water: boolean; roof: boolean }; blocked(x: number, z: number, y: number): boolean }
@@ -20,7 +21,7 @@ export const MPH = 2.23694;
  */
 export function createRobotController(model: RobotModel, camera: THREE.PerspectiveCamera, dom: HTMLElement, world: World) {
   const keys = new Set<string>();
-  const pos = new THREE.Vector3(), vel = new THREE.Vector3();
+  const pos = player.pos, vel = player.vel; // the shared player state: position and velocity live there, not here
   let heading = 0, mode: RobotMode = 'SKYDIVING', burst = 1, rollT = 0, landT = 0, airT = 0, phase = 0, t = 0;
   let lean = 0, bank = 0, yawRate = 0, power = 0, burstOn = 0, enabled = true, charging = false, hero = false;
   // per-type take-off: launchT = s into the crouch wind-up (-1 idle), launchDur from TYPES[t].flight.launch; flyT = s on rockets
@@ -117,12 +118,14 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
     /** A6: physics runs at a fixed 120 Hz; the pose and camera are drawn interpolated between the last two steps. */
     update(dt0: number) {
       const fdt = Math.min(dt0, 1 / 20);
-      if (!A6) { step(fdt); present(1, fdt); return; }
+      if (!A6) { step(fdt); present(1, fdt); publish(); return; }
       acc = Math.min(acc + fdt, STEP * 8);
       while (acc >= STEP) { pPos.copy(pos); pHead = heading; pLean = lean; pBank = bank; step(STEP); acc -= STEP; }
-      present(acc / STEP, fdt);
+      present(acc / STEP, fdt); publish();
     },
   };
+  /** Refresh the shared player state's derived fields (mode walk/fly, heading, speed, altitude) once per frame. */
+  function publish() { player.avatar = true; player.mode = mode === 'ROCKETS' || mode === 'SKYDIVING' ? 'fly' : 'walk'; player.heading = heading; player.update(floor.y); }
   function step(dt: number) {
       t += dt;
       // camera-relative input basis (ground) / heading basis (air)

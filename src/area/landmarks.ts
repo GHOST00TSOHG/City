@@ -7,6 +7,7 @@ import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import type { Building, Terrain } from './data';
 import { ringPts } from './geom';
+import { projectLatLon } from '../world/registry';
 
 export interface LandmarkManifest {
   id: string; name: string; area: string; file: string; lat: number; lon: number;
@@ -24,7 +25,6 @@ export interface LandmarkPad { id: string; pts: [number, number][]; y: number; m
 export interface LandmarkCollider { tris: Float32Array; minX: number; maxX: number; minZ: number; maxZ: number }
 
 const BASE = import.meta.env.BASE_URL;
-const R = 6378137; // same sphere as tools/bake/lib.mjs projector
 let ktx2: KTX2Loader | null = null;
 let index: Promise<Record<string, string[]>> | null = null;
 
@@ -38,7 +38,6 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
   if (!slugs.length) return { group, colliders, footprints, pads };
   ktx2 ??= new KTX2Loader().setTranscoderPath(BASE + 'basis/').detectSupport(renderer);
   const loader = new GLTFLoader().setKTX2Loader(ktx2).setMeshoptDecoder(MeshoptDecoder);
-  const k = (Math.PI / 180) * R, c = Math.cos((origin.lat * Math.PI) / 180);
   for (const slug of slugs) {
     try {
       const dir = `${BASE}landmarks/${areaId}/${slug}/`;
@@ -58,7 +57,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       // glTF front is -Z (north at heading 0); headingDeg is clockwise from north, three's +Y rotation is counter-clockwise.
       lod.rotation.y = -THREE.MathUtils.degToRad(m.headingDeg ?? 0);
       lod.scale.setScalar(m.scale ?? 1);
-      const x = (m.lon - origin.lon) * k * c, z = -(m.lat - origin.lat) * k;
+      const [x, z] = projectLatLon(origin, m.lat, m.lon);
       lod.position.set(x, 0, z); lod.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(levels[0]);
       let groundY = Infinity;
@@ -70,7 +69,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       group.add(lod);
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
       const pts: [number, number][] = m.footprint?.length! >= 3
-          ? m.footprint!.map(([la, lo]) => [(lo - origin.lon) * k * c, -(la - origin.lat) * k])
+          ? m.footprint!.map(([la, lo]) => projectLatLon(origin, la, lo))
           : ([[local.min.x, local.min.z], [local.max.x, local.min.z], [local.max.x, local.max.z], [local.min.x, local.max.z]] as const)
               .map(([px, pz]) => { const v = new THREE.Vector3(px, 0, pz).applyMatrix4(lod.matrixWorld); return [v.x, v.z] as [number, number]; });
       // the pad is the union of the outline and the model's own plan box (a tower or steps can overhang an OSM outline)

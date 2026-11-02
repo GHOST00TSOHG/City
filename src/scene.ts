@@ -3,7 +3,8 @@ import { diag } from './perf/diag';
 import * as THREE from 'three/webgpu';
 import { createSky } from './sky';
 import { createFlyControls } from './flyControls';
-import { loadArea } from './area/data';
+import { registry, type AreaView } from './world/registry';
+import { player } from './world/player';
 import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
 import { buildBuildings } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
@@ -19,7 +20,6 @@ import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
 import { createCollision } from './robot/collision';
 import { buildLandmarks, cullUnderLandmarks, cullTreesUnderLandmarks, flattenUnderLandmarks, treesOutsideLandmarks, blockGrassUnderLandmarks } from './area/landmarks';
-import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import { createWeatherState, type WeatherKind } from './weather';
@@ -27,32 +27,7 @@ import { createWeatherState, type WeatherKind } from './weather';
 /** Night haze: the fog colour. Lifted from 0x15171d (which tone-mapped to near black) so the far ground reads as a hazy blue-grey and meets the horizon glow. */
 const FOG_NIGHT = 0x1e2638;
 
-export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
-/** Start views per area (public places only). Key West origin = Southernmost Point Buoy. */
-export const VIEWS: Record<string, View[]> = {
-  keywest: [
-    { name: 'aerial', pos: [650, 420, 700], look: [-900, 0, -1300] },
-    { name: 'oldtown', pos: [-520, 140, -760], look: [-1050, 0, -1350] },
-    { name: 'duval', pos: [-905, 1.7, -1180], look: [-1060, 3, -1520], snap: true },
-  ],
-  // Origins: Twin Lights (Highlands), Sandy Hook Lighthouse, Newark Schools Stadium, Riverfront Park (Newark). Public places only.
-  bayshore: [
-    { name: 'aerial', pos: [500, 260, 300], look: [-700, 0, -1300] },
-    { name: 'street', pos: [-700, 1.7, -1450], look: [-1300, 3, -1500], snap: true },
-  ],
-  sandyhook: [
-    { name: 'aerial', pos: [900, 420, 1300], look: [-200, 0, -600] },
-    { name: 'street', pos: [60, 1.7, 80], look: [60, 3, -400], snap: true },
-  ],
-  newark: [
-    { name: 'aerial', pos: [650, 360, 650], look: [0, 0, 0] },
-    { name: 'street', pos: [200, 1.7, 120], look: [700, 3, 120], snap: true },
-  ],
-  passaic: [
-    { name: 'aerial', pos: [-600, 320, 800], look: [150, 0, -150] },
-    { name: 'dock', pos: [0, 30, 0], look: [0, 0, 0] },
-  ],
-};
+export type View = AreaView;
 
 export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const qs = new URLSearchParams(location.search);
@@ -118,10 +93,10 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
   /** Builds one area's meshes into a group (not yet in the scene). Data comes from the preload cache when warm. */
   async function buildContent(id: string) {
-    const { area, terrain, mask } = await loadArea(id);
+    const { area, terrain, mask } = await registry.loadData(id);
     const group = new THREE.Group(); group.name = 'area:' + id;
     // Landmarks first: their footprints decide which generated buildings are never built (once per area load).
-    const origin = (areaDefs as Record<string, any>)[id]?.origin as { lat: number; lon: number } | undefined;
+    const origin = registry.get(id).origin;
     const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [], pads: [] } : await buildLandmarks(id, origin, terrain, renderer);
     // Seat each landmark: level the ground under its pad to its base height (before the terrain mesh, roads, trees and grass sample it),
     // and keep trees and grass out of the pad.
@@ -148,7 +123,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   let cur = await buildContent(areaId);
-  scene.add(cur.group);
+  scene.add(cur.group); registry.setTile(areaId, cur); registry.setActive(areaId); player.area = areaId;
 
   const ground = (x: number, z: number) => cur.interiors.floorAt(x, z) ?? Math.max(cur.roads.surfaceAt(x, z), 0); // road/sidewalk top, not the terrain under it
   const controls = createFlyControls(camera, canvas, ground);
@@ -180,7 +155,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     }
     return out;
   }
-  const viewsOf = (id: string) => VIEWS[id] ?? [{ name: 'aerial', pos: [0, 400, 600], look: [0, 0, 0] }];
+  const viewsOf = (id: string) => registry.get(id).views;
   setView(viewsOf(areaId).find((v) => v.name === qs.get('view')) ?? viewsOf(areaId)[0]);
   const wx = createWeatherState();
   const cRain = new THREE.Color(), cTmp = new THREE.Color();
@@ -201,8 +176,6 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
 
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight, false); });
   addEventListener('keydown', (e) => { if (e.code === 'KeyG' && controls.enabled) controls.setWalk(!controls.walk); });
-  /** Robot mode hands the camera to the robot; `focus` is the point that drives interiors/streaming. */
-  let focus: THREE.Vector3 | null = null;
   /** Robot world queries: walkable floor (interior slab, roof when above it, ground, sea level) and wall blocking. */
   const world = {
     floorAt(x: number, z: number, y: number) {
@@ -216,14 +189,13 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
 
   return {
     renderer, scene, camera, controls, sky, backend, setView, world,
-    setFocus(p: THREE.Vector3 | null) { focus = p; },
     /** Drop-in point: the street start view (on a road) if the area has one, else the first view's look target. */
     spawnPoint() { const vs = viewsOf(cur.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
-    get areaId() { return cur.id; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
+    get areaId() { return registry.activeId!; }, get area() { return cur.area; }, get views() { return viewsOf(cur.id); },
     get stats() { const a = cur.area; return { buildings: cur.blds.count, trees: a.trees.length / 5, palms: cur.trees.palms, lamps: a.lamps.length, chunks: cur.blds.group.children.length, landmarkCull: cur.landmarkCull, interiorCands: cur.interiors.count, interior: cur.interiors.current, roads: a.roads.length }; },
     /** Warm the fetch cache for an area (data only; cheap, run when idle). */
     interiorEntry(x: number, z: number) { return cur.interiors.entry(x, z); },
-    preload(id: string) { return loadArea(id).then(() => undefined, () => undefined); },
+    preload(id: string) { return registry.loadData(id).then(() => undefined, () => undefined); },
     /** Build the next area off-scene, compile its shaders, then swap in one frame and drop the old one. */
     async switchArea(id: string, viewName?: string) {
       if (id === cur.id) return;
@@ -232,12 +204,12 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const tmp = new THREE.Scene(); tmp.add(next.group);
       if (A6) await prewarm(renderer, tmp, camera, scene); // includes hidden/empty meshes, and the real scene's lights
       else try { await renderer.compileAsync(tmp, camera); } catch { /* compile is a warm-up only */ }
-      const old = cur; scene.remove(old.group); scene.add(next.group); cur = next;
+      const old = cur; scene.remove(old.group); scene.add(next.group); cur = next; registry.setTile(id, next); registry.setActive(id); player.area = id;
       const vs = viewsOf(id); setView(vs.find((v) => v.name === viewName) ?? vs[0]);
       applyWeather();
-      old.dispose();
+      old.dispose(); registry.setTile(old.id, null);
     },
-    update(dt: number, t = 0) { if (wx.tick(Math.min(dt, 0.1))) applyWeather(); if (!focus) controls.update(dt); const f = focus ?? camera.position; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(focus ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
+    update(dt: number, t = 0) { if (wx.tick(Math.min(dt, 0.1))) applyWeather(); if (controls.enabled) controls.update(dt); const f = player.pos; sky.follow(camera); cur.trees.update(camera.position); cur.grass.update(camera.position); cur.ferry?.update(t); cur.interiors.update(player.avatar ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); },
     /** Stand outside (or inside) a generated interior near the area origin; loads it immediately. */
     enterBuilding(inside = false) { const e = cur.interiors.entry(); if (!e) return null; e.show(); const p = inside ? e.in : e.out; camera.position.set(p[0], p[1] + 1.7, p[2]); camera.lookAt(...e.look); if (inside) { const d = new THREE.Vector3(...e.look).sub(camera.position).setY(0).normalize(); camera.lookAt(camera.position.x + d.x, camera.position.y, camera.position.z + d.z); } controls.syncAngles(); controls.setWalk(true); return e.i; },
     /** Set the weather target; the live mix eases toward it in update() (see WeatherState). */
