@@ -7,7 +7,7 @@ import { buildBuildings, buildBuildingsFar } from './buildings';
 import { buildRoads, buildTerrain, roadSurfaceFrom, type RoadSurface, type Rect } from './ground';
 
 const USE_WORKER = typeof Worker !== 'undefined' && new URLSearchParams(location.search).get('geoworker') !== '0';
-export interface TileGeo { roads: THREE.Mesh & { surface: RoadSurface }; blds: { group: THREE.Group; count: number }; far: THREE.Mesh; ground: THREE.Mesh; workerMs: number }
+export interface TileGeo { roads: THREE.Group & { surface: RoadSurface }; blds: { group: THREE.Group; count: number }; far: THREE.Mesh; ground: THREE.Mesh; workerMs: number }
 
 const geometryOf = (c: CompactGeo) => { const g = new THREE.BufferGeometry(); applyCompact(g, c); return g; };
 
@@ -16,7 +16,8 @@ const geometryOf = (c: CompactGeo) => { const g = new THREE.BufferGeometry(); ap
 export async function buildTileGeo(terrain: Terrain, buildings: Building[], roads: AreaData['roads'], style: AreaStyle, roadMat: THREE.Material, bldMat: THREE.Material, farMat: THREE.Material, groundMat: THREE.Material, skip: Rect[]): Promise<TileGeo> {
   if (!USE_WORKER) {
     const r = buildRoads({ roads } as AreaData, terrain, roadMat);
-    return { roads: r, blds: buildBuildings(buildings, terrain, bldMat, style), far: buildBuildingsFar(buildings, terrain, farMat), ground: buildTerrain(terrain, groundMat, style, skip), workerMs: 0 };
+    const rg = new THREE.Group() as THREE.Group & { surface: RoadSurface }; rg.name = 'roads'; rg.add(r); rg.surface = r.surface;
+    return { roads: rg, blds: buildBuildings(buildings, terrain, bldMat, style), far: buildBuildingsFar(buildings, terrain, farMat), ground: buildTerrain(terrain, groundMat, style, skip), workerMs: 0 };
   }
   const w = new Worker(new URL('./geo.worker.ts', import.meta.url), { type: 'module' });
   try {
@@ -27,7 +28,8 @@ export async function buildTileGeo(terrain: Terrain, buildings: Building[], road
       const job: GeoJob = { seq: 1, terrain: { nx, nz, cell, x0, z0, h, cover }, buildings, roads, style, far: true, skip };
       w.postMessage(job);
     });
-    const rm = new THREE.Mesh(geometryOf(res.roads), roadMat) as THREE.Mesh & { surface: RoadSurface }; rm.name = 'roads';
+    const rm = new THREE.Group() as THREE.Group & { surface: RoadSurface }; rm.name = 'roads';
+    for (const [key, c] of res.roads) { const m = new THREE.Mesh(geometryOf(c), roadMat); m.name = `roads ${key}`; rm.add(m); }
     rm.surface = roadSurfaceFrom(res.segs, terrain);
     const group = new THREE.Group(); group.name = 'buildings';
     for (const [key, c] of res.chunks) { const m = new THREE.Mesh(geometryOf(c), bldMat); m.name = `bld ${key}`; m.castShadow = m.receiveShadow = false; group.add(m); }

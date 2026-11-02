@@ -4,7 +4,7 @@ import { Soup, ringPts, signedArea, flatPoly } from './geom';
 import { foundation } from './foundation';
 import { type AreaStyle, styleFor, pick, WALL, ROOF, SHINGLE } from './textures';
 
-const CHUNK = 600; // m — one merged mesh per chunk keeps draw calls low and still frustum-culls
+export const CHUNK = 600; // m — one merged mesh per chunk keeps draw calls low and still frustum-culls
 const UP: [number, number, number] = [0, 1, 0];
 
 /** Solid, clean building shells from baked footprints: walls + roof (flat / gabled / hipped / pyramidal / skillion). */

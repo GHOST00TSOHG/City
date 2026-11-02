@@ -106,15 +106,30 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, la
 }
 
 /** Road triangles as a Soup plus the segment list (x0 z0 x1 z1 halfWidth lift per segment) for the height query. Pure: runs in the geometry worker. */
-export function roadsSoup(a: AreaData, t: Terrain) {
+/** Road chunks of ROAD_CHUNK metres. The worker builds one chunk at a time (roads whose bounds touch it, cells whose centre is inside it) and ships it, so the
+ *  build's live set and garbage stay small: the page process keeps the worker's high-water heap, which used to be the whole tile's road soup. */
+export const ROAD_CHUNK = 1280;
+export type Rect4 = [number, number, number, number]; // x0 z0 x1 z1
+export function roadChunkRects(a: AreaData, t: Terrain): { key: string; rect: Rect4; roads: AreaData['roads'] }[] {
+  const out = new Map<string, { key: string; rect: Rect4; roads: AreaData['roads'] }>(), C = ROAD_CHUNK;
+  for (const r of a.roads) {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity; const pad = r.w / 2 + WALK_W + 1;
+    for (let i = 0; i < r.p.length; i += 2) { const x = r.p[i] / 10, z = r.p[i + 1] / 10; if (x < x0) x0 = x; if (x > x1) x1 = x; if (z < z0) z0 = z; if (z > z1) z1 = z; }
+    for (let i = Math.floor((x0 - pad) / C); i <= Math.floor((x1 + pad) / C); i++) for (let j = Math.floor((z0 - pad) / C); j <= Math.floor((z1 + pad) / C); j++) {
+      const key = `${i},${j}`; let e = out.get(key); if (!e) out.set(key, (e = { key, rect: [i * C, j * C, (i + 1) * C, (j + 1) * C], roads: [] })); e.roads.push(r);
+    }
+  }
+  void t; return [...out.values()];
+}
+export function roadsSoup(a: AreaData, t: Terrain, rect?: Rect4) {
   const s = new Soup(), segs: number[] = [];
   const order = [...a.roads].sort((p, q) => q.c - p.c); // paths first, majors last (on top)
-  const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number) => { segs.push(x0, z0, x1, z1, hw, lift); };
+  const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number) => { if (!rect) segs.push(x0, z0, x1, z1, hw, lift); };
   for (const r of order) {
     const w = r.w / 2, col = ROAD[r.c] ?? ROAD[1], lift = LIFT[r.c] ?? 0.05;
     const pts = ringPts(r.p); if (pts.length < 2) continue;
     // every layer is cut along the terrain triangles under it, so its vertices lie exactly on the rendered ground + a fixed lift
-    const layer = (c: THREE.Color, lf: number): Tri => (a, b, d) => drapedTri(s, t, a, b, d, c, lf);
+    const layer = (c: THREE.Color, lf: number): Tri => (a, b, d) => drapedTri(s, t, a, b, d, c, lf, rect);
     if (r.c <= 2 && r.w >= 5) { // sidewalks
       ribbon(pts, w + WALK_W, layer(WALK, WALK_LIFT), w - 0.05);
       for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w + WALK_W, WALK_LIFT);
@@ -125,6 +140,17 @@ export function roadsSoup(a: AreaData, t: Terrain) {
     if (r.c <= 1 && r.w >= 6) dashes(pts, layer(MARK[r.c], lift + 0.006), r.c === 0 ? 0 : 1);
   }
   return { s, segs };
+}
+
+/** The segment list `roadsSoup` produces (x0 z0 x1 z1 halfWidth lift), without any triangles: the road height query needs only this. */
+export function roadSegments(a: AreaData): number[] {
+  const segs: number[] = [], order = [...a.roads].sort((p, q) => q.c - p.c);
+  for (const r of order) {
+    const w = r.w / 2, lift = LIFT[r.c] ?? 0.05, pts = ringPts(r.p); if (pts.length < 2) continue;
+    if (r.c <= 2 && r.w >= 5) for (let i = 0; i < pts.length - 1; i++) segs.push(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w + WALK_W, WALK_LIFT);
+    for (let i = 0; i < pts.length - 1; i++) segs.push(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w, lift);
+  }
+  return segs;
 }
 
 /** Height query over road segments (spatial hash), built from the `roadsSoup` segment list. */
@@ -172,13 +198,15 @@ function clipConvex(subject: XZ[], clipper: XZ[]): XZ[] {
 /** Adds the plan triangle (a, b, c) cut along every terrain triangle under it (same split as the ground mesh: diagonal A-C), each piece lifted
  *  by `lift` over its terrain plane, so the surface follows the rendered ground exactly (zero deviation) with no resampling. Heights are
  *  kept at or above `minY` (the sea plane). */
-function drapedTri(s: Soup, t: Terrain, a: XZ, b: XZ, c: XZ, col: THREE.Color, lift: number, minY = 0.05) {
+function drapedTri(s: Soup, t: Terrain, a: XZ, b: XZ, c: XZ, col: THREE.Color, lift: number, rect?: Rect4, minY = 0.05) {
   const { nx, nz, cell, x0, z0, h } = t;
   const ix0 = Math.max(0, Math.floor((Math.min(a[0], b[0], c[0]) - x0) / cell)), ix1 = Math.min(nx - 2, Math.floor((Math.max(a[0], b[0], c[0]) - x0) / cell));
   const iz0 = Math.max(0, Math.floor((Math.min(a[1], b[1], c[1]) - z0) / cell)), iz1 = Math.min(nz - 2, Math.floor((Math.max(a[1], b[1], c[1]) - z0) / cell));
   const subject: XZ[] = [a, b, c];
   for (let iz = iz0; iz <= iz1; iz++) for (let ix = ix0; ix <= ix1; ix++) {
-    const X0 = x0 + ix * cell, X1 = X0 + cell, Z0 = z0 + iz * cell, Z1 = Z0 + cell, i = iz * nx + ix, hA = h[i], hB = h[i + 1], hC = h[i + nx + 1], hD = h[i + nx];
+    const X0 = x0 + ix * cell, X1 = X0 + cell, Z0 = z0 + iz * cell, Z1 = Z0 + cell;
+    if (rect) { const mx = X0 + cell / 2, mz = Z0 + cell / 2; if (mx < rect[0] || mx >= rect[2] || mz < rect[1] || mz >= rect[3]) continue; } // this cell belongs to another chunk
+    const i = iz * nx + ix, hA = h[i], hB = h[i + 1], hC = h[i + nx + 1], hD = h[i + nx];
     for (let k = 0; k < 2; k++) {
       const piece = clipConvex(subject, k === 0 ? [[X0, Z0], [X1, Z0], [X1, Z1]] : [[X0, Z0], [X1, Z1], [X0, Z1]]);
       if (piece.length < 3) continue;
