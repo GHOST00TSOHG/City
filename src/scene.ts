@@ -177,12 +177,32 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       for (const t of treeMeshes) { t.o.visible = !tiny && (!f || t.hi >= maxHi); (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
     };
     const roadChunks = roads.children as THREE.Mesh[];
-    return { id, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
+    // Point lights (stadium flood banks) must not come and go with a tile: a changed light count re-lights, i.e. recompiles, EVERY lit material (an 80-330 ms frame on
+    // Newark load/unload, run G). They are lifted out of the group and drawn by a fixed pool of scene lights (floodPool) that exists from boot.
+    group.updateMatrixWorld(true);
+    const floods: Flood[] = [];
+    group.traverse((o) => { const l = o as THREE.PointLight; if (l.isPointLight) floods.push({ parent: l.parent!, pos: l.getWorldPosition(new THREE.Vector3()), color: l.color.clone(), intensity: l.intensity, distance: l.distance, decay: l.decay }); });
+    for (const f of floods) for (const l of f.parent.children.filter((c) => (c as any).isPointLight)) f.parent.remove(l);
+    return { id, floods, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   type Content = Awaited<ReturnType<typeof buildContent>>;
+  interface Flood { parent: THREE.Object3D; pos: THREE.Vector3; color: THREE.Color; intensity: number; distance: number; decay: number }
+  const FLOOD_POOL = 12;
+  const floodPool = Array.from({ length: FLOOD_POOL }, () => { const l = new THREE.PointLight(0xfff1dc, 0, 160, 1.6); l.position.set(0, -1e5, 0); scene.add(l); return l; });
+  /** Hands the tiles' flood lights to the fixed pool (visible ones only). Cheap; changes intensity/position, never the light count. */
+  function assignFloods() {
+    let n = 0;
+    for (const t of tiles.values()) for (const f of t.floods) {
+      if (n >= FLOOD_POOL) break;
+      let vis = (t as any).ready !== false; for (let o: THREE.Object3D | null = f.parent; o && vis; o = o.parent) if (!o.visible) vis = false;
+      if (!vis) continue;
+      const l = floodPool[n++]; l.position.copy(f.pos); l.color.copy(f.color); l.intensity = f.intensity; l.distance = f.distance; l.decay = f.decay;
+    }
+    for (; n < FLOOD_POOL; n++) { floodPool[n].intensity = 0; floodPool[n].position.set(0, -1e5, 0); }
+  }
 
   // ---- the world: every built tile lives in the one scene (data is already in world coordinates); links and rings are re-derived when the set changes ----
   const tiles = new Map<string, Content>(), links = new Map<string, Link>(), building = new Map<string, Promise<Content | null>>();
@@ -247,10 +267,12 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   }
   function dropTile(id: string) {
     const t = tiles.get(id); if (!t) return;
-    scene.remove(t.group); tiles.delete(id); registry.setTile(id, null); refreshWorld();
+    const td0 = performance.now(); scene.remove(t.group); tiles.delete(id); registry.setTile(id, null); refreshWorld();
+    if (TILELOG) console.info(`[City] dropTile ${id} sync part ${(performance.now() - td0).toFixed(0)} ms`);
     // free it a few objects per tick (one dispose of a whole city is a 0.5-0.8 s stall)
     const objs: any[] = []; t.group.traverse((o) => objs.push(o)); t.grass.dispose();
-    const step = () => { for (let i = 0; i < 6 && objs.length; i++) { const o = objs.pop(); o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); } if (objs.length) setTimeout(step, 4); };
+    const DISP = qs.get('disp') ?? 'default'; // debug: ?disp=none keeps the GPU buffers (A/B for the unload hitch)
+    const step = () => { if (DISP === 'none') return; const ts0 = performance.now(); for (let i = 0; i < 6 && objs.length; i++) { const o = objs.pop(); o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); } if (TILELOG && performance.now() - ts0 > 8) console.info(`[City] dispose step ${id} ${(performance.now() - ts0).toFixed(0)} ms, ${objs.length} left`); if (objs.length) setTimeout(step, 4); };
     setTimeout(step, 50);
     console.info(`[City] tile ${id} unloaded`);
   }
@@ -341,6 +363,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const stream = { radius: 0, lead: 0, want: [] as string[], aim: {} as Record<string, number>, builds: 0, unloads: 0, lastTick: 0, ring0: 1500, base: Number(qs.get('ring') ?? 8000), enabled: qs.get('stream') !== '0' };
   const dirV = new THREE.Vector3();
   function streamTick(dt: number) {
+    assignFloods();
     const p = player.pos, v = player.vel, speed = v.length(), alt = player.altitude;
     // simple detail when high or fast (hysteresis)
     fastHigh = fastHigh ? !(alt < 320 && speed < 72) : (alt > 400 || speed > 88); // thresholds raised (was 250 m / 70 m/s) so the full -> flat-top building switch happens where it is harder to see; real-GPU headroom allows it
@@ -387,7 +410,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   }
 
   return {
-    renderer, scene, camera, controls, sky, backend, setView, world, flight, stream,
+    renderer, scene, camera, controls, sky, backend, setView, world, flight, stream, dropTile,
     /** Drop-in point: the street start view (on a road) if the area has one, else the first view's look target. World coordinates. */
     spawnPoint() { const vs = viewsOf(act.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
     get areaId() { return registry.activeId!; }, get area() { return act.area; }, get views() { return viewsOf(act.id); },

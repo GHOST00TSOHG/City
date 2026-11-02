@@ -20,13 +20,15 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const rss = () => { let m = 0; for (const l of execFileSync('ps', ['-axo', 'rss=,command='], { encoding: 'utf8', maxBuffer: 1 << 26 }).split('\n')) if (/pw-browsers|ms-playwright/.test(l) && /WebContent/.test(l)) m = Math.max(m, Math.round(parseInt(l) / 1024)); return m; };
 const results = { when: new Date().toISOString(), viewport: [W, H], budget: { fps: 50, calls: 150 } };
 const errorsAll = [];
+const EXTRA = arg('q', ''); // extra query string, e.g. tilelog=1
+const T0 = Date.now();
 
 async function open(query) {
   const b = await webkit.launch({ headless: false });
   const p = await b.newPage({ viewport: { width: W, height: H } });
   const errors = [];
   p.on('pageerror', (e) => errors.push(e.message));
-  p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (m.type() === 'warning' || /City\]/.test(m.text())) console.log('  [page]', m.text().slice(0, 160)); });
+  p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (m.type() === 'warning' || /City\]/.test(m.text())) console.log(`  [page ${((Date.now() - T0) / 1000).toFixed(1)}s]`, m.text().slice(0, 160)); });
   p.on('crash', () => console.log('  PAGE CRASHED'));
   p.on('close', () => console.log('  page closed'));
   await p.goto(`http://localhost:${PORT}/?join=0&${query}`, { waitUntil: 'load', timeout: 300000 });
@@ -102,7 +104,7 @@ const HELPERS = () => {
 
 // ---------------------------------------------------------------- static
 async function staticPhase() {
-  const { b, p, errors } = await open('area=newark');
+  const { b, p, errors } = await open('area=newark' + (EXTRA ? '&' + EXTRA : ''));
   await p.evaluate(HELPERS);
   await p.evaluate(() => window.__app.loadAll());
   await p.evaluate(() => { window.__app.stream.enabled = false; });
@@ -135,7 +137,7 @@ async function staticPhase() {
 // ---------------------------------------------------------------- flight
 async function flightPhase(kind) {
   const inspect = kind === 'inspect';
-  const { b, p, errors } = await open('area=newark');
+  const { b, p, errors } = await open('area=newark' + (EXTRA ? '&' + EXTRA : ''));
   await p.evaluate(HELPERS);
   await p.evaluate(() => window.__h.memory()); // one full pass for the texture estimate
   const shots = [];
@@ -159,6 +161,7 @@ async function flightPhase(kind) {
     let tuned = -1, lastSample = performance.now(), lastPop = 0, lastVoid = 0, lastMem = 0, win = { dts: [], calls: 0, tris: 0 }, prev = 0;
     const r = window.__renderer.info.render;
     const frame = (t) => {
+      if (prev && t - prev > 33) (window.__long ??= []).push({ wall: Date.now(), ms: +(t - prev).toFixed(0), pos: window.__player.pos.toArray().map(Math.round), tiles: window.__world().tiles.map((x) => x.id).join(','), building: window.__world().building.join(',') });
       if (prev) { win.dts.push(t - prev); win.calls = Math.max(win.calls, r.drawCalls ?? r.calls); win.tris = Math.max(win.tris, r.triangles); } prev = t;
       requestAnimationFrame(frame);
     };
@@ -200,7 +203,8 @@ async function flightPhase(kind) {
     if (done) break;
   }
   if (inspect) { const st = await p.evaluate(() => window.__h.state()); await p.waitForTimeout(2500); await p.screenshot({ type: 'jpeg', quality: 80, path: `${SHOTS}/flight-arrival-${st.area}.jpg` }); shots.push(`flight-arrival-${st.area}.jpg`); }
-  const F = await p.evaluate(() => { window.__flight.stop(); const f = window.__flight; return { samples: f.samples, pop: f.pop, voids: f.voids, events: f.events, done: f.done, route: f.route, voidTests: f.voidTests ?? 0 }; });
+  const F = await p.evaluate(() => { window.__flight.stop(); const f = window.__flight; return { samples: f.samples, pop: f.pop, voids: f.voids, events: f.events, done: f.done, route: f.route, voidTests: f.voidTests ?? 0, long: window.__long ?? [] }; });
+  for (const l of F.long) console.log('  LONG', ((l.wall - T0) / 1000).toFixed(1) + 's', l.ms + 'ms', l.pos.join(','), 'tiles=' + l.tiles, 'building=' + l.building);
   const med = (a) => [...a].sort((x, y) => x - y)[a.length >> 1] ?? 0, s = F.samples.filter((x) => x.frames > 5);
   const memMax = (k) => Math.max(...F.samples.filter((x) => x.mem).map((x) => x.mem[k]));
   const summary = { webContentRssMB: { peak: Math.max(...rssSamples), median: [...rssSamples].sort((a, b) => a - b)[rssSamples.length >> 1] }, done: F.done, seconds: F.samples.length, shots,
