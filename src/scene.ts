@@ -154,7 +154,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     await nextTask();
     const roads = tg.roads;
-    group.add(tg.ground, roads, buildPoolsPiers(area, terrain, roadMat), blds.group, farBlds, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
+    mark('ferry'); await nextTask(); lap = performance.now();
+    const poolsPiers = buildPoolsPiers(area, terrain, roadMat); mark('pools+piers'); await nextTask(); lap = performance.now();
+    group.add(tg.ground, roads, poolsPiers, blds.group, farBlds, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group); mark('terrain+roads+pools');
     await nextTask(); lap = performance.now();
@@ -183,6 +185,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const floods: Flood[] = [];
     group.traverse((o) => { const l = o as THREE.PointLight; if (l.isPointLight) floods.push({ parent: l.parent!, pos: l.getWorldPosition(new THREE.Vector3()), color: l.color.clone(), intensity: l.intensity, distance: l.distance, decay: l.decay }); });
     for (const f of floods) for (const l of f.parent.children.filter((c) => (c as any).isPointLight)) f.parent.remove(l);
+    if (floods.length) console.info(`[City] ${id}: ${floods.length} flood point lights moved to the scene pool`);
     return { id, floods, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
@@ -190,7 +193,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   }
   type Content = Awaited<ReturnType<typeof buildContent>>;
   interface Flood { parent: THREE.Object3D; pos: THREE.Vector3; color: THREE.Color; intensity: number; distance: number; decay: number }
-  const FLOOD_POOL = 12;
+  const FLOOD_POOL = Number(qs.get('pool') ?? 4);
   const floodPool = Array.from({ length: FLOOD_POOL }, () => { const l = new THREE.PointLight(0xfff1dc, 0, 160, 1.6); l.position.set(0, -1e5, 0); scene.add(l); return l; });
   /** Hands the tiles' flood lights to the fixed pool (visible ones only). Cheap; changes intensity/position, never the light count. */
   function assignFloods() {
@@ -257,7 +260,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       kids.forEach((k) => (k.visible = false)); scene.add(next.group); tiles.set(id, next); registry.setTile(id, next);
       refreshWorld();
       kids.sort((a, b) => ((a as any).geometry?.attributes?.position?.count ?? 0) - ((b as any).geometry?.attributes?.position?.count ?? 0));
-      for (const k of kids) { await new Promise<void>((r) => requestAnimationFrame(() => r())); k.visible = want[next.group.children.indexOf(k)] ?? true; }
+      let tprev = performance.now(); for (const k of kids) { await new Promise<void>((r) => requestAnimationFrame(() => r())); const dtk = performance.now() - tprev; if (TILELOG && dtk > 33) console.info(`[City] reveal ${id} frame ${dtk.toFixed(0)} ms before showing ${k.name || k.type} (${(k as any).geometry?.attributes?.position?.count ?? 0} verts)`); k.visible = want[next.group.children.indexOf(k)] ?? true; tprev = performance.now(); }
       next.setReady(true);
       console.info(`[City] tile ${id} built in ${(performance.now() - tb).toFixed(0)} ms (build ${(tc - tb).toFixed(0)}, compile ${(tr - tc).toFixed(0)}, reveal ${(performance.now() - tr).toFixed(0)})`);
       return next;

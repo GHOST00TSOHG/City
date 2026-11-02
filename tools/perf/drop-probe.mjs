@@ -5,7 +5,7 @@ process.env.PLAYWRIGHT_BROWSERS_PATH ??= `${os.homedir()}/builds/.pw-browsers`;
 const { webkit } = await import('@playwright/test');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const b = await webkit.launch({ headless: false }), p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
-p.on('console', (m) => { if (/dropTile|dispose step|unloaded/.test(m.text())) console.log('  [page]', m.text().slice(0, 140)); });
+p.on('console', (m) => { if (/dropTile|dispose step|unloaded|flood|reveal/.test(m.text())) console.log('  [page]', m.text().slice(0, 140)); });
 await p.goto(`http://localhost:${arg('port', '5199')}/?join=0&area=newark&tilelog=1&${arg('q', '')}`, { waitUntil: 'load', timeout: 300000 });
 await p.waitForFunction(() => window.__city?.ready, null, { timeout: 300000 });
 await p.waitForTimeout(12000);
