@@ -11,7 +11,11 @@ config.private.json
 __pycache__/
 robot-clips/
 
+# map audit bundle (rebuilt on every run)
+tools/map-audit.out/.build/
+
 # raw mocap / Mixamo sources are read in place, never committed (docs/ANIM-SOURCES.md)
 *.fbx
 *.bvh
 *.blend
+tools/map-audit.out/shots-*/*.png

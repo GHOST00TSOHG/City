@@ -6,7 +6,7 @@ import { time, sin, mx_noise_float, mx_fractal_noise_float, clamp, abs, position
 export function createSky(moonDir: THREE.Vector3) {
   const group = new THREE.Group(); group.name = 'sky';
   const R = 30000;
-  const uMoon = uniform(moonDir.clone().normalize()), uHaze = uniform(0), uVis = uniform(1), uCloud = uniform(0.22), uHazeCol = uniform(new THREE.Color(0x26334a));
+  const uMoon = uniform(moonDir.clone().normalize()), uHaze = uniform(0), uVis = uniform(1), uCloud = uniform(0.22), uHazeCol = uniform(new THREE.Color(0x26334a)), uFogCol = uniform(new THREE.Color(0x1e2638));
   const zenith = color(0x040817), mid = color(0x0c142a);
   const warm = color(0x3a3440), cool = color(0x26334a);
   const domeMat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
@@ -21,7 +21,9 @@ export function createSky(moonDir: THREE.Vector3) {
   const dust = mx_fractal_noise_float(d.mul(6), 4).mul(0.5).add(0.5);
   c = c.add(vec3(0.05, 0.055, 0.07).mul(bandW).mul(dust).mul(smoothstep(0.02, 0.3, h)).mul(uVis));
   c = mix(c, uHazeCol, uHaze.mul(0.85));
-  domeMat.colorNode = select(d.y.lessThan(0), horizon.mul(0.9), c);
+  // At and below the horizon the dome is exactly the scene fog colour (the far ground ring is fully fogged out there), so ground and sky meet
+  // with no seam and there is never a black gap; the glow band fades in over the first ~6 degrees above the horizon.
+  domeMat.colorNode = select(d.y.lessThan(0), uFogCol.mul(1), mix(uFogCol.mul(1), c, smoothstep(0, 0.1, h)));
   const dome = new THREE.Mesh(new THREE.SphereGeometry(R, 48, 24), domeMat);
   dome.renderOrder = -3; dome.frustumCulled = false; group.add(dome);
 
@@ -80,6 +82,8 @@ export function createSky(moonDir: THREE.Vector3) {
     group,
     /** 0 = clear, 1 = overcast (rain): hides stars/moon, hazes the dome. */
     setOvercast(k: number) { uVis.value = 1 - k; uMoonVis.value = 1 - 0.85 * k; uHaze.value = k; },
+    /** the scene fog colour: the dome shows it at and below the horizon */
+    setFog(c: THREE.ColorRepresentation) { uFogCol.value.set(c); },
     /** cloud coverage 0..1 and the colour the haze/fog blends the sky toward */
     setClouds(c: number, haze?: THREE.ColorRepresentation) { uCloud.value = c; if (haze !== undefined) uHazeCol.value.set(haze); },
     follow(cam: THREE.Camera) { group.position.copy(cam.position); },

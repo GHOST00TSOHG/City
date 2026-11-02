@@ -13,6 +13,7 @@ import { buildTrees } from './area/trees';
 import { A6 } from './perf/frame';
 import { prewarm } from './perf/prewarm';
 import { buildOcean } from './area/water';
+import { buildFarGround } from './area/farGround';
 import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
@@ -22,6 +23,9 @@ import areaDefs from '../tools/bake/areas.json';
 import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import { createWeatherState, type WeatherKind } from './weather';
+
+/** Night haze: the fog colour. Lifted from 0x15171d (which tone-mapped to near black) so the far ground reads as a hazy blue-grey and meets the horizon glow. */
+const FOG_NIGHT = 0x1e2638;
 
 export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
 /** Start views per area (public places only). Key West origin = Southernmost Point Buoy. */
@@ -63,7 +67,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const scene = new THREE.Scene();
   const eye = new THREE.Vector3(); // reused per frame (A6: no per-frame allocations)
   scene.background = new THREE.Color(0x070c1a);
-  scene.fog = new THREE.FogExp2(0x15171d, 0.00016);
+  scene.fog = new THREE.FogExp2(FOG_NIGHT, 0.00016);
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 40000);
 
   // Night lighting that keeps material colours honest: neutral moonlight key + soft sky/ground fill.
@@ -137,15 +141,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     group.add(landmarks.group);
     const interiors = createInteriors(buildings, terrain); group.add(interiors.group);
     const collision = createCollision(buildings, terrain, landmarks.colliders);
-    if (inland) { // land skirt beyond the bake so an inland city doesn't float in a void; fog hides the seam
-      const { nx, nz, h, cell, x0, z0 } = terrain; const edge: number[] = [];
-      for (let i = 0; i < nx; i++) edge.push(h[i], h[(nz - 1) * nx + i]); for (let j = 0; j < nz; j++) edge.push(h[j * nx], h[j * nx + nx - 1]);
-      edge.sort((a, b) => a - b); const y = Math.max(edge[edge.length >> 1], 0) - 0.6;
-      const W = cell * (nx - 1), H = cell * (nz - 1), ring = new THREE.Shape([new THREE.Vector2(-30000, -30000), new THREE.Vector2(30000, -30000), new THREE.Vector2(30000, 30000), new THREE.Vector2(-30000, 30000)]);
-      ring.holes.push(new THREE.Path([new THREE.Vector2(x0 + 2, -(z0 + 2)), new THREE.Vector2(x0 + 2, -(z0 + H - 2)), new THREE.Vector2(x0 + W - 2, -(z0 + H - 2)), new THREE.Vector2(x0 + W - 2, -(z0 + 2))]));
-      const skirt = new THREE.Mesh(new THREE.ShapeGeometry(ring).rotateX(-Math.PI / 2), new THREE.MeshLambertNodeMaterial({ color: 0x2b2a22 }));
-      skirt.position.y = y; skirt.name = 'skirt'; group.add(skirt);
-    }
+    group.add(buildFarGround(terrain, inland)); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
     return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
@@ -190,7 +186,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const applyWeather = () => {
     const { ocean, trees, grass, lamps } = cur; const { rain, snow, fog, wet, snowCover } = wx.mix;
     const f = scene.fog as THREE.FogExp2;
-    f.color.set(0x15171d).lerp(cTmp.set(0x34373e), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3e4148), Math.min(1, fog));
+    f.color.set(FOG_NIGHT).lerp(cTmp.set(0x34373e), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3e4148), Math.min(1, fog));
+    sky.setFog(f.color);
     f.density = 0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016;
     const cover = Math.min(1, rain + snow + fog * 0.9); sky.setOvercast(cover);
     sky.setClouds(0.22 + cover * 0.78, cRain.set(0x26334a).lerp(cTmp.set(0x2a303c), snow).lerp(cTmp.set(0x2a3140), Math.min(1, fog)));

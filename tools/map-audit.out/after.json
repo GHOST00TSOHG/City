@@ -1,0 +1,809 @@
+{
+ "label": "after",
+ "at": "2026-11-02T00:46:57.769Z",
+ "thresholds": {
+  "floatBase": 0.15,
+  "buriedWall": 1,
+  "buriedRoof": 0.5,
+  "deepSkirt": 1,
+  "water": 0.1,
+  "overlapArea": 1,
+  "overlapY": 1,
+  "roadFloat": 0.1,
+  "roadSunk": -0.005,
+  "shoreStep": 1,
+  "flatWaterline": 0.05,
+  "weld": 0.002,
+  "embed": 0.02
+ },
+ "total": {
+  "a_floating": 0,
+  "b_sunk": 0,
+  "c_road_floating": 0,
+  "c_road_sunk": 0,
+  "d_in_water": 0,
+  "e_overlap_buildings": 0,
+  "f_shore_steps": 0,
+  "f_waterline_flat_tris": 0,
+  "f_pier_floating": 0,
+  "f_pier_sunk": 0,
+  "f_pier_unconnected": 0,
+  "f_pier_open_shells": 0,
+  "f_edge_steps": 0,
+  "g_void_rays": 0,
+  "h_nonsolid_buildings": 0,
+  "h_leaking_buildings": 0
+ },
+ "areas": {
+  "keywest": {
+   "counts": {
+    "a_floating": 0,
+    "b_sunk": 0,
+    "c_road_floating": 0,
+    "c_road_sunk": 0,
+    "d_in_water": 0,
+    "e_overlap_buildings": 0,
+    "f_shore_steps": 0,
+    "f_waterline_flat_tris": 0,
+    "f_pier_floating": 0,
+    "f_pier_sunk": 0,
+    "f_pier_unconnected": 0,
+    "f_pier_open_shells": 0,
+    "f_edge_steps": 0,
+    "g_void_rays": 0,
+    "h_nonsolid_buildings": 0,
+    "h_leaking_buildings": 0
+   },
+   "context": {
+    "buildings": 7574,
+    "landmarks": 0,
+    "overlapPairs": 0,
+    "landmarkOverlaps": 0,
+    "roadTris": 964739,
+    "roadTrisOverWater": 3327,
+    "pierNoGeometry": 13,
+    "piers": 213,
+    "edgeVerts": 1790,
+    "voidRaysTested": 51840,
+    "voidDetail": {
+     "skirt": 0,
+     "escape": 0,
+     "underTile": 0,
+     "hole": 0,
+     "horizonFog": 8576
+    },
+    "culledUnderLandmarks": {}
+   },
+   "landmarks": {},
+   "examples": {},
+   "ms": 18228
+  },
+  "bayshore": {
+   "counts": {
+    "a_floating": 0,
+    "b_sunk": 0,
+    "c_road_floating": 0,
+    "c_road_sunk": 0,
+    "d_in_water": 0,
+    "e_overlap_buildings": 0,
+    "f_shore_steps": 0,
+    "f_waterline_flat_tris": 0,
+    "f_pier_floating": 0,
+    "f_pier_sunk": 0,
+    "f_pier_unconnected": 0,
+    "f_pier_open_shells": 0,
+    "f_edge_steps": 0,
+    "g_void_rays": 0,
+    "h_nonsolid_buildings": 0,
+    "h_leaking_buildings": 0
+   },
+   "context": {
+    "buildings": 120,
+    "landmarks": 0,
+    "overlapPairs": 0,
+    "landmarkOverlaps": 0,
+    "roadTris": 344763,
+    "roadTrisOverWater": 4552,
+    "pierNoGeometry": 1,
+    "piers": 81,
+    "edgeVerts": 1300,
+    "voidRaysTested": 51840,
+    "voidDetail": {
+     "skirt": 0,
+     "escape": 0,
+     "underTile": 0,
+     "hole": 0,
+     "horizonFog": 8616
+    },
+    "culledUnderLandmarks": {}
+   },
+   "landmarks": {},
+   "examples": {},
+   "ms": 12435
+  },
+  "sandyhook": {
+   "counts": {
+    "a_floating": 0,
+    "b_sunk": 0,
+    "c_road_floating": 0,
+    "c_road_sunk": 0,
+    "d_in_water": 0,
+    "e_overlap_buildings": 0,
+    "f_shore_steps": 0,
+    "f_waterline_flat_tris": 0,
+    "f_pier_floating": 0,
+    "f_pier_sunk": 0,
+    "f_pier_unconnected": 0,
+    "f_pier_open_shells": 0,
+    "f_edge_steps": 0,
+    "g_void_rays": 0,
+    "h_nonsolid_buildings": 0,
+    "h_leaking_buildings": 0
+   },
+   "context": {
+    "buildings": 69,
+    "landmarks": 0,
+    "overlapPairs": 0,
+    "landmarkOverlaps": 0,
+    "roadTris": 208271,
+    "roadTrisOverWater": 295,
+    "pierNoGeometry": 26,
+    "piers": 95,
+    "edgeVerts": 2336,
+    "voidRaysTested": 51840,
+    "voidDetail": {
+     "skirt": 0,
+     "escape": 0,
+     "underTile": 0,
+     "hole": 0,
+     "horizonFog": 8544
+    },
+    "culledUnderLandmarks": {}
+   },
+   "landmarks": {},
+   "examples": {},
+   "ms": 22245
+  },
+  "newark": {
+   "counts": {
+    "a_floating": 0,
+    "b_sunk": 0,
+    "c_road_floating": 0,
+    "c_road_sunk": 0,
+    "d_in_water": 0,
+    "e_overlap_buildings": 0,
+    "f_shore_steps": 0,
+    "f_waterline_flat_tris": 0,
+    "f_pier_floating": 0,
+    "f_pier_sunk": 0,
+    "f_pier_unconnected": 0,
+    "f_pier_open_shells": 0,
+    "f_edge_steps": 0,
+    "g_void_rays": 0,
+    "h_nonsolid_buildings": 0,
+    "h_leaking_buildings": 0
+   },
+   "context": {
+    "buildings": 16046,
+    "landmarks": 8,
+    "overlapPairs": 0,
+    "landmarkOverlaps": 0,
+    "roadTris": 2242883,
+    "roadTrisOverWater": 4878,
+    "pierNoGeometry": 0,
+    "piers": 18,
+    "edgeVerts": 2022,
+    "voidRaysTested": 51840,
+    "voidDetail": {
+     "skirt": 0,
+     "escape": 0,
+     "underTile": 0,
+     "hole": 0,
+     "horizonFog": 8556
+    },
+    "landmarkFreeEdgesLOD0": 16068,
+    "culledUnderLandmarks": {
+     "cathedral-basilica-sacred-heart": 1,
+     "newark-schools-stadium": 99,
+     "branch-brook-park-bridge": 0,
+     "branch-brook-park-pavilion": 0,
+     "branch-brook-park-octagon-shelter": 1,
+     "wars-of-america": 0,
+     "military-park-pavilion": 1,
+     "newark-penn-station": 4
+    }
+   },
+   "landmarks": {
+    "cathedral-basilica-sacred-heart": {
+     "LOD0": {
+      "open": 11663,
+      "free": 9401,
+      "tris": 27653,
+      "sample": [
+       [
+        -21.33,
+        0,
+        -39.95
+       ],
+       [
+        -10.82,
+        0,
+        -39.95
+       ],
+       [
+        -17.83,
+        56.8,
+        -39.95
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 5166,
+      "free": 4296,
+      "tris": 8082,
+      "sample": [
+       [
+        -21.34,
+        0,
+        -39.95
+       ],
+       [
+        -14.32,
+        0,
+        -39.95
+       ],
+       [
+        -14.32,
+        56.8,
+        -39.95
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 1148,
+      "free": 1031,
+      "tris": 1626,
+      "sample": [
+       [
+        -21.34,
+        0,
+        -39.95
+       ],
+       [
+        -7.32,
+        56.8,
+        -39.95
+       ],
+       [
+        -7.32,
+        0,
+        -53.97
+       ]
+      ]
+     }
+    },
+    "newark-schools-stadium": {
+     "LOD0": {
+      "open": 3393,
+      "free": 2471,
+      "tris": 8736,
+      "sample": [
+       [
+        -38.47,
+        1.01,
+        17.47
+       ],
+       [
+        4.97,
+        1.01,
+        50.61
+       ],
+       [
+        71.16,
+        1.01,
+        -37.79
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 2121,
+      "free": 1533,
+      "tris": 5116,
+      "sample": [
+       [
+        -38.47,
+        1.01,
+        17.47
+       ],
+       [
+        4.97,
+        1.01,
+        50.61
+       ],
+       [
+        71.16,
+        1.01,
+        -37.79
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 1371,
+      "free": 1002,
+      "tris": 2654,
+      "sample": [
+       [
+        -38.46,
+        0.99,
+        17.47
+       ],
+       [
+        4.97,
+        0.99,
+        50.62
+       ],
+       [
+        71.17,
+        0.99,
+        -37.79
+       ]
+      ]
+     }
+    },
+    "branch-brook-park-bridge": {
+     "LOD0": {
+      "open": 450,
+      "free": 259,
+      "tris": 1392,
+      "sample": [
+       [
+        -2.29,
+        0,
+        -1.22
+       ],
+       [
+        -1.19,
+        0,
+        -1.83
+       ],
+       [
+        -2.29,
+        0,
+        -1.83
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 178,
+      "free": 116,
+      "tris": 484,
+      "sample": [
+       [
+        -2.29,
+        0,
+        -1.22
+       ],
+       [
+        -1.19,
+        0,
+        -1.83
+       ],
+       [
+        -2.29,
+        0,
+        -1.83
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 136,
+      "free": 70,
+      "tris": 314,
+      "sample": [
+       [
+        -2.29,
+        0,
+        -1.22
+       ],
+       [
+        -1.19,
+        0,
+        -1.83
+       ],
+       [
+        -2.29,
+        0,
+        -1.83
+       ]
+      ]
+     }
+    },
+    "branch-brook-park-pavilion": {
+     "LOD0": {
+      "open": 2374,
+      "free": 1462,
+      "tris": 5772,
+      "sample": [
+       [
+        8.76,
+        0,
+        2.33
+       ],
+       [
+        10.13,
+        0,
+        2.33
+       ],
+       [
+        11.51,
+        0,
+        2.33
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 814,
+      "free": 546,
+      "tris": 2100,
+      "sample": [
+       [
+        8.76,
+        0,
+        2.33
+       ],
+       [
+        11.51,
+        0,
+        2.33
+       ],
+       [
+        11.51,
+        0,
+        -2.55
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 814,
+      "free": 546,
+      "tris": 2100,
+      "sample": [
+       [
+        8.76,
+        0,
+        2.33
+       ],
+       [
+        11.51,
+        0,
+        2.33
+       ],
+       [
+        11.51,
+        0,
+        -2.55
+       ]
+      ]
+     }
+    },
+    "branch-brook-park-octagon-shelter": {
+     "LOD0": {
+      "open": 1000,
+      "free": 120,
+      "tris": 3836,
+      "sample": [
+       [
+        2.15,
+        0,
+        -5.18
+       ],
+       [
+        -1.93,
+        0,
+        -4.66
+       ],
+       [
+        -2.15,
+        0,
+        -5.18
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 376,
+      "free": 104,
+      "tris": 1932,
+      "sample": [
+       [
+        2.15,
+        0,
+        -5.18
+       ],
+       [
+        -1.93,
+        0,
+        -4.66
+       ],
+       [
+        -2.15,
+        0,
+        -5.18
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 104,
+      "free": 64,
+      "tris": 292,
+      "sample": [
+       [
+        2.15,
+        0,
+        -5.18
+       ],
+       [
+        -1.93,
+        0,
+        -4.66
+       ],
+       [
+        -2.15,
+        0,
+        -5.18
+       ]
+      ]
+     }
+    },
+    "wars-of-america": {
+     "LOD0": {
+      "open": 160,
+      "free": 10,
+      "tris": 10184,
+      "sample": [
+       [
+        6.36,
+        1.36,
+        2.7
+       ],
+       [
+        -6.36,
+        1.36,
+        -2.7
+       ],
+       [
+        -6.36,
+        1.36,
+        2.7
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 84,
+      "free": 10,
+      "tris": 2688,
+      "sample": [
+       [
+        6.37,
+        1.36,
+        2.71
+       ],
+       [
+        -6.37,
+        1.36,
+        -2.71
+       ],
+       [
+        -6.37,
+        1.36,
+        2.71
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 40,
+      "free": 10,
+      "tris": 1140,
+      "sample": [
+       [
+        6.4,
+        1.36,
+        2.74
+       ],
+       [
+        -6.4,
+        1.36,
+        -2.74
+       ],
+       [
+        -6.4,
+        1.36,
+        2.74
+       ]
+      ]
+     }
+    },
+    "military-park-pavilion": {
+     "LOD0": {
+      "open": 424,
+      "free": 200,
+      "tris": 1684,
+      "sample": [
+       [
+        -7.86,
+        0.46,
+        6.1
+       ],
+       [
+        -6.78,
+        3.18,
+        6.1
+       ],
+       [
+        -6.69,
+        0.46,
+        6.1
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 48,
+      "free": 38,
+      "tris": 248,
+      "sample": [
+       [
+        -7.91,
+        0.46,
+        6.1
+       ],
+       [
+        9.71,
+        0.46,
+        6.1
+       ],
+       [
+        9.71,
+        3.18,
+        6.1
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 48,
+      "free": 38,
+      "tris": 104,
+      "sample": [
+       [
+        -7.91,
+        0.46,
+        6.1
+       ],
+       [
+        9.71,
+        0.46,
+        6.1
+       ],
+       [
+        9.71,
+        3.18,
+        6.1
+       ]
+      ]
+     }
+    },
+    "newark-penn-station": {
+     "LOD0": {
+      "open": 13650,
+      "free": 2145,
+      "tris": 28168,
+      "sample": [
+       [
+        17.85,
+        3.62,
+        -57.34
+       ],
+       [
+        59,
+        3.62,
+        -57.34
+       ],
+       [
+        -12.2,
+        3.45,
+        -48.2
+       ]
+      ]
+     },
+     "LOD1": {
+      "open": 3975,
+      "free": 701,
+      "tris": 7206,
+      "sample": [
+       [
+        -12.2,
+        3.45,
+        -48.2
+       ],
+       [
+        -182.86,
+        -0.3,
+        -33.46
+       ],
+       [
+        -182.7,
+        -0.3,
+        -33.46
+       ]
+      ]
+     },
+     "LOD2": {
+      "open": 1116,
+      "free": 261,
+      "tris": 1650,
+      "sample": [
+       [
+        17.85,
+        3.62,
+        -57.34
+       ],
+       [
+        59,
+        3.62,
+        -57.34
+       ],
+       [
+        79.4,
+        4.42,
+        -57.34
+       ]
+      ]
+     }
+    }
+   },
+   "examples": {},
+   "ms": 24130
+  },
+  "passaic": {
+   "counts": {
+    "a_floating": 0,
+    "b_sunk": 0,
+    "c_road_floating": 0,
+    "c_road_sunk": 0,
+    "d_in_water": 0,
+    "e_overlap_buildings": 0,
+    "f_shore_steps": 0,
+    "f_waterline_flat_tris": 0,
+    "f_pier_floating": 0,
+    "f_pier_sunk": 0,
+    "f_pier_unconnected": 0,
+    "f_pier_open_shells": 0,
+    "f_edge_steps": 0,
+    "g_void_rays": 0,
+    "h_nonsolid_buildings": 0,
+    "h_leaking_buildings": 0
+   },
+   "context": {
+    "buildings": 5046,
+    "landmarks": 0,
+    "overlapPairs": 0,
+    "landmarkOverlaps": 0,
+    "roadTris": 856181,
+    "roadTrisOverWater": 1523,
+    "pierNoGeometry": 0,
+    "piers": 6,
+    "edgeVerts": 1150,
+    "voidRaysTested": 51840,
+    "voidDetail": {
+     "skirt": 0,
+     "escape": 0,
+     "underTile": 0,
+     "hole": 0,
+     "horizonFog": 8616
+    },
+    "culledUnderLandmarks": {}
+   },
+   "landmarks": {},
+   "examples": {},
+   "ms": 13061
+  }
+ }
+}

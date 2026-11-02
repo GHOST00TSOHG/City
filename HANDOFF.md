@@ -47,6 +47,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Landmark: Branch Brook Park Octagon Shelter (`newark` / `branch-brook-park-octagon-shelter`) | jonn/newark-branch-brook-park-octagon-shelter | Grok Bot for Jonn (BlvckFish) | PR open | 2026-11-01 |
 | Landmark: clear vegetation + flatten terrain under footprints | bot/websmith-landmarks-terrain | Grok Bot (Websmith) | PR open | 2026-11-01 |
 | Landmark: Military Park, Wars of America + park pavilion (`newark` / `wars-of-america`, `military-park-pavilion`) | jonn/newark-military-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
+| Map cleanup: floating/sunk buildings and roads, water, overlaps, coast/docks, ground void, solid shells (all areas) | bot/websmith-map-cleanup-v2 | Claude (Websmith) | PR #46 open, work complete (landmark GLB open edges left) | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
@@ -223,3 +224,40 @@ Branch on top of main + Jonn's PR #35 model. Not pushed, deployed or merged.
 - **Tools added:** `tools/penn-views.py`, `tools/contact-sheet.py`, `tools/glb-info.py` (plus `orbit.py`, `close-lm.mjs` committed); `.blend` removed from the repo (`*.blend` is gitignored).
 - **Rebuild:** `python3 build_penn.py` (textures) then `blender -b --factory-startup --python build_penn.py`; check with `python3 audit_penn.py`.
 - **Known issues:** auto-LOD shots from street level are often blocked by neighbouring city buildings, so the 220/700 m crossing was verified with forced LODs plus a few auto views, not a clean walk-up. The city draws its own rail/road strips on the shed roof (not part of the model). Shed ends are brick with windows only. Eagles/columns are stylised masses, not copies of the carvings. gitleaks is not installed here, so it was not run.
+
+## Map cleanup (bot/websmith-map-cleanup-v2, PR #46, 2026-11-01, done)
+Audit: `node tools/map-audit.mjs <label>` -> `tools/map-audit.out/<label>.json` (before.json = a3cd4bb, mid.json = d94115e, `mid-d94115e-newclasses.json` = d94115e measured with the final audit, after.json = this head). WebKit stills: `node tools/map-shots.mjs <port> <outdir> [views.json] [name-substring]` (48 views in tools/map-views.json, regenerate with `tools/map-views-gen.mjs`).
+
+| class (all 5 areas) | before (a3cd4bb) | after |
+|---|---|---|
+| a floating buildings | 294 | 0 |
+| b sunk buildings | 7839 | 0 |
+| c road tris floating / sunk | 566469 / 37393 | 0 / 0 |
+| d buildings in water | 226 | 0 |
+| e overlapping buildings | 162 | 0 |
+| f shore steps (>0.9 m across the waterline) | 5520 | 0 |
+| f coast-edge steps | 8482 | 0 |
+| f flat waterline tris | 1 | 0 |
+| f piers floating / sunk | 1 / 39 | 0 / 0 |
+| f piers not connected to land (new check; d94115e) | 259 | 0 |
+| f dock shells with open edges (new check; d94115e) | 340 | 0 |
+| g ground-void rays | 115678 | 0 |
+| h non-solid buildings / leaking | 29016 / 0 | 0 / 0 |
+
+What changed:
+- **Shoreline** (`terrainCore.ts` `easeShoreline`, runs in `decodeTerrain`, so game, bake clean and audit agree): crossing edges capped at 0.9 m, a 4-cell band relaxed to a ramp, every vertex keeps its sign (waterline contour does not move), |h| >= 0.07 so no flat sea-level triangles.
+- **Docks** (`piers.ts`): closed timber slab (top, underside, sides) on pilings (closed boxes into the seabed/ground). One deck height per dock: 1.0 m over open water, raised to clear the bank it touches (boardwalks mostly on land sit near ground), max 5 m. Docks that do not touch land get a ramped, piled landing walkway to the nearest bank (<= 80 m); docks with no land within 80 m (Key West 13, Highlands 1, Sandy Hook 26: terrain/mask mismatch, not docks) are not drawn.
+- **Void** (`farGround.ts`, one draw call, ~65k tris): a ring that starts on the tile's edge vertices (no step/crack) and runs 38 km out, smoothed to the local edge level (inland: kept above ground; coastal: seabed under the sea plane). Replaces the old dark inland skirt. The sky dome below the horizon is exactly the fog colour and fades into the glow above it. Fog colour lifted 0x15171d -> 0x1e2638 (the old one tone-mapped to near black, so the far field read as a black void); it is one constant `FOG_NIGHT` in scene.ts. Far-field is a hazy blue-grey, not black.
+- Audit g model: rays that miss tile+ring and run past the ring end land on the fog-coloured dome (counted `horizonFog`, not void); a miss before that would count as `hole` (0).
+
+Real-GPU WebKit (headless:false, 48 views, `tools/map-audit.out/shots-after/`, PNGs not committed; `shots-info.json` is): fps median 59.98, min 58.77 (vsync-capped 60); draw calls 11-82 (max newark-penn-edge-low-W); triangles up to 6.8 M; console errors 0. Includes Penn/Newark edge views at street/mid/high/max altitude + horizon, Key West/Highlands/Sandy Hook shores and 12 dock views. Run areas separately: a multi-area run while the machine is loaded gave transient 6-30 fps (not the code).
+
+Tests: `npm run build` ok. `npm run test:smoke` 9/9 pass on this box with `READY_MS=400000 TEST_TIMEOUT_MS=700000 CITY_URL=http://localhost:4180 npx playwright test --workers=1`: headless SwiftShader needs ~110 s to reach `ready` (same at d94115e), over the old 60/90 s limits, so the specs/config now read those env vars (defaults unchanged). Port 4173 on this machine is held by an unrelated `python -m http.server` (old city-live), so use another port via `CITY_URL`. gitleaks not installed here, not run.
+
+Remaining / not done:
+- Landmark GLBs (Jonn's Blender models) still have open edges counted by the audit (LOD0: cathedral 9401, stadium 2471, Penn 2145 ...); generated buildings are solid. Penn is rebuilt on bot/websmith-penn-fix. Not touched here.
+- Far ring is flat-coloured (no texture/landcover) and has no water inland (river ends at the tile edge as a ramp up to land).
+- Dropped far-from-land docks (above) could be restored if the bake gets a better land mask.
+
+### Next after that: area connection build (not started)
+Short NJ road + Key West fly-over; profile trees first; ring streaming + flight-aware preload scaled by speed/altitude with simpler detail when high/fast; one world registry and one player-state object; fps/memory tested with all areas loaded. Note for the connection work: every area now draws its own far-ground ring (`farGround.ts`, 38 km) and the sea plane; neighbouring areas' rings overlap, so fade/skip a ring where another tile is loaded. Shoreline ease and docks live in `terrainCore.ts`/`piers.ts` and apply per area automatically.

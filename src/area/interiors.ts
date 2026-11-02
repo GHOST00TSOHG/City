@@ -5,6 +5,7 @@ import { A6, budget } from '../perf/frame';
 import { vertexColor, positionWorld, normalWorld, uniform, vec3, float, floor, clamp, max, dot, normalize, length, mix, hash, select } from 'three/tsl';
 import type { Building, Terrain } from './data';
 import { Soup, ringPts, signedArea, flatPoly } from './geom';
+import { foundation } from './foundation';
 
 /**
  * Real ground-floor rooms, generated from a footprint only when the player is near (or inside) a building.
@@ -29,6 +30,7 @@ export function createInteriors(list: Building[], terrain: Terrain) {
     for (const [x, z] of ring) { const g = terrain.heightAt(x, z); gmin = Math.min(gmin, g); gmax = Math.max(gmax, g); cx += x / ring.length; cz += z / ring.length; }
     gmin = Math.max(gmin, 0.2); gmax = Math.max(gmax, 0.2);
     if (gmax - gmin > 0.9) return; // sloped lots: skip (floor would float)
+    gmin = foundation(rings, terrain).floor; // same floor the shell is built on (slopes raise it)
     const pitched = b.s !== 'flat' && b.rh > 0.2, house = (pitched || b.h < 7.5) && area < 400;
     const base = gmin - 0.4, fh = house ? 3.1 : 3.4, ceil = base + 0.35 + fh;
     if (ceil > gmin + b.h - (pitched ? b.rh : 0) + 0.01) return;

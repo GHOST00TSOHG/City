@@ -1,0 +1,341 @@
+{
+ "views": {
+  "newark-penn-edge-street-S": {
+   "triangles": 5478972,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 20
+  },
+  "newark-penn-edge-street-E": {
+   "triangles": 6212718,
+   "area": "newark",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 29
+  },
+  "newark-penn-edge-street-SE": {
+   "triangles": 6806819,
+   "area": "newark",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 30
+  },
+  "newark-penn-edge-mid-S": {
+   "triangles": 5826928,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 29
+  },
+  "newark-penn-edge-mid-E": {
+   "triangles": 5510428,
+   "area": "newark",
+   "fpsMedian": 59.94005994005994,
+   "fpsMin": 59.94005994005994,
+   "calls": 25
+  },
+  "newark-penn-edge-mid-SE": {
+   "triangles": 5680548,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 26
+  },
+  "newark-penn-edge-high-S": {
+   "triangles": 5524556,
+   "area": "newark",
+   "fpsMedian": 59.880239520958085,
+   "fpsMin": 59.880239520958085,
+   "calls": 27
+  },
+  "newark-penn-edge-high-E": {
+   "triangles": 5484742,
+   "area": "newark",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.94005994005994,
+   "calls": 26
+  },
+  "newark-penn-edge-high-SE": {
+   "triangles": 5488810,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 26
+  },
+  "newark-penn-edge-max-S": {
+   "triangles": 5772120,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 47
+  },
+  "newark-penn-edge-max-SE": {
+   "triangles": 5740050,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 47
+  },
+  "newark-penn-edge-max-horizon-S": {
+   "triangles": 2175705,
+   "area": "newark",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 11
+  },
+  "newark-penn-edge-max-horizon-E": {
+   "triangles": 2175705,
+   "area": "newark",
+   "fpsMedian": 60.09852216748769,
+   "fpsMin": 59.86261040235525,
+   "calls": 11
+  },
+  "newark-penn-edge-low-W": {
+   "triangles": 6302186,
+   "area": "newark",
+   "fpsMedian": 59.94005994005994,
+   "fpsMin": 59.94005994005994,
+   "calls": 82
+  },
+  "newark-aerial": {
+   "triangles": 5720306,
+   "area": "newark",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 34
+  },
+  "newark-overview-N": {
+   "triangles": 6221914,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 68
+  },
+  "newark-edge-N-high": {
+   "triangles": 5522738,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 21
+  },
+  "newark-edge-W-high": {
+   "triangles": 5714966,
+   "area": "newark",
+   "fpsMedian": 59.94005994005994,
+   "fpsMin": 59.94005994005994,
+   "calls": 28
+  },
+  "newark-edge-E-mid": {
+   "triangles": 5502124,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 19
+  },
+  "newark-dock-11": {
+   "triangles": 5562007,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 27
+  },
+  "newark-dock-4": {
+   "triangles": 6537519,
+   "area": "newark",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 36
+  },
+  "keywest-aerial": {
+   "triangles": 4243558,
+   "area": "keywest",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.94005994005994,
+   "calls": 39
+  },
+  "keywest-oldtown": {
+   "triangles": 4072146,
+   "area": "keywest",
+   "fpsMedian": 58.765915768854065,
+   "fpsMin": 58.765915768854065,
+   "calls": 23
+  },
+  "keywest-shore-S": {
+   "triangles": 4019954,
+   "area": "keywest",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 60.039370078740156,
+   "calls": 21
+  },
+  "keywest-shore-N": {
+   "triangles": 3992480,
+   "area": "keywest",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 18
+  },
+  "keywest-harbor-docks": {
+   "triangles": 3992480,
+   "area": "keywest",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 18
+  },
+  "keywest-edge-high-W": {
+   "triangles": 3992480,
+   "area": "keywest",
+   "fpsMedian": 60.09852216748769,
+   "fpsMin": 60.09852216748769,
+   "calls": 18
+  },
+  "keywest-edge-max-E": {
+   "triangles": 4164720,
+   "area": "keywest",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 34
+  },
+  "keywest-dock-pier90": {
+   "triangles": 3996834,
+   "area": "keywest",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 20
+  },
+  "keywest-dock-pier90-low": {
+   "triangles": 5926523,
+   "area": "keywest",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 60.039370078740156,
+   "calls": 34
+  },
+  "keywest-dock-pier51": {
+   "triangles": 4030400,
+   "area": "keywest",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 20
+  },
+  "keywest-dock-pier4-shore": {
+   "triangles": 3993706,
+   "area": "keywest",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 19
+  },
+  "bayshore-aerial": {
+   "triangles": 2661976,
+   "area": "bayshore",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.9803343166175,
+   "calls": 30
+  },
+  "bayshore-shore": {
+   "triangles": 2691472,
+   "area": "bayshore",
+   "fpsMedian": 59.880239520958085,
+   "fpsMin": 59.880239520958085,
+   "calls": 27
+  },
+  "bayshore-edge-N-high": {
+   "triangles": 2637896,
+   "area": "bayshore",
+   "fpsMedian": 59.94005994005994,
+   "fpsMin": 59.94005994005994,
+   "calls": 17
+  },
+  "bayshore-edge-max-W": {
+   "triangles": 2655314,
+   "area": "bayshore",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.94005994005994,
+   "calls": 26
+  },
+  "bayshore-dock-29": {
+   "triangles": 2640764,
+   "area": "bayshore",
+   "fpsMedian": 59.94005994005994,
+   "fpsMin": 59.880239520958085,
+   "calls": 18
+  },
+  "bayshore-dock-80": {
+   "triangles": 2637896,
+   "area": "bayshore",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 17
+  },
+  "sandyhook-aerial": {
+   "triangles": 3302998,
+   "area": "sandyhook",
+   "fpsMedian": 59.921414538310415,
+   "fpsMin": 59.921414538310415,
+   "calls": 23
+  },
+  "sandyhook-shore": {
+   "triangles": 3556734,
+   "area": "sandyhook",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 26
+  },
+  "sandyhook-edge-high-S": {
+   "triangles": 3295378,
+   "area": "sandyhook",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 22
+  },
+  "sandyhook-dock-70": {
+   "triangles": 3299866,
+   "area": "sandyhook",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 20
+  },
+  "sandyhook-dock-66": {
+   "triangles": 3294278,
+   "area": "sandyhook",
+   "fpsMedian": 59.82053838484546,
+   "fpsMin": 59.82053838484546,
+   "calls": 19
+  },
+  "passaic-aerial": {
+   "triangles": 2015822,
+   "area": "passaic",
+   "fpsMedian": 59.94005994005994,
+   "fpsMin": 59.94005994005994,
+   "calls": 35
+  },
+  "passaic-dock": {
+   "triangles": 1943010,
+   "area": "passaic",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.880239520958085,
+   "calls": 22
+  },
+  "passaic-edge-high-S": {
+   "triangles": 1750576,
+   "area": "passaic",
+   "fpsMedian": 60.039370078740156,
+   "fpsMin": 59.94005994005994,
+   "calls": 16
+  },
+  "passaic-dock-2": {
+   "triangles": 2027757,
+   "area": "passaic",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 24
+  },
+  "passaic-ferry-dock": {
+   "triangles": 1911977,
+   "area": "passaic",
+   "fpsMedian": 59.9803343166175,
+   "fpsMin": 59.9803343166175,
+   "calls": 26
+  }
+ },
+ "errors": []
+}

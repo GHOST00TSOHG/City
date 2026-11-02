@@ -7,7 +7,7 @@
   },
   "waterPolys": 44,
   "counts": {
-    "buildings": 241,
+    "buildings": 69,
     "roads": 1489,
     "pools": 0,
     "piers": 95,
@@ -38,12 +38,21 @@
   },
   "sizes": {
     "area.json": {
-      "bytes": 971545,
-      "gzip": 368299
+      "bytes": 928857,
+      "gzip": 354232
     },
     "terrain.bin": {
       "bytes": 981420,
       "gzip": 63585
     }
+  },
+  "clean": {
+    "in": 241,
+    "inWater": 172,
+    "duplicatesDropped": 0,
+    "holed": 0,
+    "trimmed": 0,
+    "droppedAfterTrim": 0,
+    "out": 69
   }
 }

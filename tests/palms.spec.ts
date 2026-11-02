@@ -7,7 +7,7 @@ for (const [area, want] of [['keywest', true], ['bayshore', false], ['sandyhook'
     page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(`/?gl=1&join=0&area=${area}`);
-    await page.waitForFunction(() => (window as any).__city?.ready, null, { timeout: 90_000 });
+    await page.waitForFunction(() => (window as any).__city?.ready, null, { timeout: Number(process.env.READY_MS ?? 90_000) });
     const palms = await page.evaluate(() => (window as any).__stats().palms);
     if (want) expect(palms).toBeGreaterThan(0); else expect(palms).toBe(0);
     expect(errors).toEqual([]);

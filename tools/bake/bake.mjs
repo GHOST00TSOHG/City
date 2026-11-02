@@ -14,6 +14,8 @@ import Pbf from 'pbf';
 import { VectorTile } from '@mapbox/vector-tile';
 import { loadArea, cacheDir, outDir, projector, loadMasks, ringArea, pointInRing, centroid, simplifyRing, q } from './lib.mjs';
 import { inferBuilding } from './infer.mjs';
+import { cleanBuildings } from './clean.mjs';
+import { decodeTerrain } from '../../src/area/terrainCore.ts';
 
 const id = process.argv[2];
 if (!id) { console.error('usage: bake.mjs <area>'); process.exit(1); }
@@ -202,6 +204,10 @@ for (const b of all) {
   });
 }
 buildings.sort((a, b) => a.r[0][0] - b.r[0][0] || a.r[0][1] - b.r[0][1]);
+// Clean step (tools/bake/clean.mjs): drop buildings standing in water, resolve overlapping buildings. Uses the ground exactly as the game decodes it.
+const cleanBuf = Buffer.concat([Buffer.from(new Int32Array([0x43545231, NX, NZ, G * 100, gx0 * 100, gz0 * 100]).buffer), Buffer.from(hgt.buffer), Buffer.from(cover.buffer)]);
+const cleaned = cleanBuildings(buildings, decodeTerrain(cleanBuf.buffer.slice(cleanBuf.byteOffset, cleanBuf.byteOffset + cleanBuf.byteLength)));
+buildings.splice(0, buildings.length, ...cleaned.buildings); const cleanStats = cleaned.stats; console.log('clean:', JSON.stringify(cleanStats));
 
 // ---------- roads, pools, piers, trees, lamps
 const ROAD = { motorway: [0, 14], trunk: [0, 12], primary: [0, 11], secondary: [0, 10], tertiary: [0, 8.5], primary_link: [0, 7], secondary_link: [0, 7], tertiary_link: [0, 6], residential: [1, 6.5], unclassified: [1, 6], living_street: [1, 5], road: [1, 6], service: [2, 4], track: [2, 3], pedestrian: [3, 4.5], footway: [3, 1.8], path: [3, 1.5], cycleway: [3, 1.8], steps: [3, 1.8], bridleway: [3, 2] };
@@ -359,5 +365,6 @@ const attribution = {
 fs.writeFileSync(path.join(O, 'attribution.json'), JSON.stringify(attribution, null, 2) + '\n');
 const sizes = Object.fromEntries(['area.json', 'terrain.bin'].map((f) => { const b = fs.readFileSync(path.join(O, f)); return [f, { bytes: b.length, gzip: zlib.gzipSync(b, { level: 9 }).length }]; }));
 const manifest = { area: id, grid: { nx: NX, nz: NZ, m: G }, waterPolys, counts: { buildings: buildings.length, roads: roads.length, pools: pools.length, piers: piers.length, trees: treeOut.length / 5, treesMapped: trees.length, treesStreet: streetTrees, treesScattered: scattered, lamps: lamps.length, lampsInferred: inferredLamps }, buildingSources: { osm: stats.osm, overture: stats.overture, parts: stats.parts, outlinesReplacedByParts: stats.skippedOutlineWithParts }, masks: publicOnly ? `public-only fallback (no private mask): ${stats.masked} residential buildings dropped` : masks.length ? `${masks.length} private mask(s) applied, ${stats.masked} buildings removed` : 'none', heightSource: stats.notes, roofs: stats.roofs, sizes };
+manifest.clean = cleanStats;
 fs.writeFileSync(path.join(O, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
 console.log(JSON.stringify(manifest, null, 1));
