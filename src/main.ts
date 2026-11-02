@@ -212,7 +212,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__weather = () => ({ ...app.weatherMix });
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
-  w.__world = () => app.worldState(); w.__app = app; w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
+  w.__THREE = THREE; w.__world = () => app.worldState(); w.__app = app; w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };

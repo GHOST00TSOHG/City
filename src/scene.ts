@@ -140,15 +140,15 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const collision = createCollision(buildings, terrain, landmarks.colliders);
     const ring = buildFarGround(terrain, inland); group.add(ring); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
     const treeMeshes = trees.group.children.map((o) => ({ o: o as THREE.InstancedMesh, lo: (o as any).userData.lo as number, hi: (o as any).userData.hi as number }));
-    let far = false;
+    let far = false, ready = false;
     /** Simple detail (far tile, or high/fast flight): merged flat-top buildings, no lamps/grass/interiors/ferry, trees only as their far impostor. */
     const setFar = (f: boolean) => {
-      if (f === far) return; far = f;
+      if (f === far || !ready) return; far = f;
       blds.group.visible = !f; farBlds.visible = f; lamps.posts.visible = !f; lamps.pools.visible = !f; grass.mesh.visible = !f; interiors.group.visible = !f; if (ferry) ferry.group.visible = !f;
       const maxHi = Math.max(...treeMeshes.map((t) => t.hi));
       for (const t of treeMeshes) { t.o.visible = !f || t.hi >= maxHi; (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
     };
-    return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, get far() { return far; },
+    return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
@@ -195,12 +195,19 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const run = async () => {
       for (const d of WANT_DEPS(id)) await ensureTile(d);
       const tb = performance.now(); const next = await buildContent(id); diag.event('area build', performance.now() - tb);
-      const tmp = new THREE.Scene(); next.group.visible = true; tmp.add(next.group);
+      const tc = performance.now(); const tmp = new THREE.Scene(); next.group.visible = true; tmp.add(next.group);
       if (A6) await prewarm(renderer, tmp, camera, scene); else try { await renderer.compileAsync(tmp, camera); } catch { /* warm-up only */ }
       tmp.remove(next.group);
-      next.setFar(farWanted(next)); scene.add(next.group); tiles.set(id, next); registry.setTile(id, next);
+      const tr = performance.now(); next.setReady(true); next.setFar(farWanted(next)); next.setReady(false);
+      // Staged reveal: the group goes in with every child hidden, then one child per frame is shown, so the first draw of a tile uploads its
+      // buffers a mesh at a time instead of ~100-250 MB in one frame (that was a 0.5-1.9 s hitch).
+      const kids = next.group.children.slice(), want = kids.map((k) => k.visible);
+      kids.forEach((k) => (k.visible = false)); scene.add(next.group); tiles.set(id, next); registry.setTile(id, next);
       refreshWorld();
-      console.info(`[City] tile ${id} built in ${(performance.now() - tb).toFixed(0)} ms`);
+      kids.sort((a, b) => ((a as any).geometry?.attributes?.position?.count ?? 0) - ((b as any).geometry?.attributes?.position?.count ?? 0));
+      for (const k of kids) { await new Promise<void>((r) => requestAnimationFrame(() => r())); k.visible = want[next.group.children.indexOf(k)] ?? true; }
+      next.setReady(true);
+      console.info(`[City] tile ${id} built in ${(performance.now() - tb).toFixed(0)} ms (build ${(tc - tb).toFixed(0)}, compile ${(tr - tc).toFixed(0)}, reveal ${(performance.now() - tr).toFixed(0)})`);
       return next;
     };
     const p = run().catch((e) => { console.warn('[City] tile build failed', id, e); return null; }).finally(() => building.delete(id));
@@ -208,7 +215,11 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   }
   function dropTile(id: string) {
     const t = tiles.get(id); if (!t) return;
-    scene.remove(t.group); tiles.delete(id); registry.setTile(id, null); t.dispose(); refreshWorld();
+    scene.remove(t.group); tiles.delete(id); registry.setTile(id, null); refreshWorld();
+    // free it a few objects per tick (one dispose of a whole city is a 0.5-0.8 s stall)
+    const objs: any[] = []; t.group.traverse((o) => objs.push(o)); t.grass.dispose();
+    const step = () => { for (let i = 0; i < 6 && objs.length; i++) { const o = objs.pop(); o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); } if (objs.length) setTimeout(step, 4); };
+    setTimeout(step, 50);
     console.info(`[City] tile ${id} unloaded`);
   }
 
@@ -292,7 +303,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
 
   // ---- streaming: rings around the player, flight-aware ----
   const TICK = 0.25;
-  const stream = { radius: 0, lead: 0, want: [] as string[], aim: {} as Record<string, number>, builds: 0, unloads: 0, lastTick: 0, ring0: 1500, base: Number(qs.get('ring') ?? 4000), enabled: qs.get('stream') !== '0' };
+  const stream = { radius: 0, lead: 0, want: [] as string[], aim: {} as Record<string, number>, builds: 0, unloads: 0, lastTick: 0, ring0: 1500, base: Number(qs.get('ring') ?? 8000), enabled: qs.get('stream') !== '0' };
   const dirV = new THREE.Vector3();
   function streamTick(dt: number) {
     const p = player.pos, v = player.vel, speed = v.length(), alt = player.altitude;
@@ -300,14 +311,14 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     fastHigh = fastHigh ? !(alt < 200 && speed < 55) : (alt > 250 || speed > 70);
     for (const t of tiles.values()) t.setFar(farWanted(t));
     const T = Math.min(6, Math.max(1, 0.5 + alt / 200));
-    const R = stream.base + speed * T + 1.5 * alt; // design note: 1.5 km + speed*T + 1.5*alt; base raised to 4 km because tiles are small and fog allows ~10 km of view
+    const R = stream.base + speed * T + 1.5 * alt; // design note: 1.5 km + speed*T + 1.5*alt; base raised to 8 km because tiles are small and the night fog (density 0.00016) still shows ~30% at 8 km; far tiles use simple detail, so they are cheap
     stream.radius = R; stream.lead = speed * T;
     if (speed > 1) dirV.copy(v).divideScalar(speed);
     const wanted = new Set<string>();
     for (const id of AREA_IDS) {
       const d = registry.distTo(id, p.x, p.z), e = registry.get(id);
       if (d < 3 * R) void registry.loadData(id).catch(() => {}); // ring 2: data only
-      let aimed = d < stream.ring0 * 2 || d < stream.base * 0.6;
+      let aimed = d < stream.base; // everything inside the base ring (about the fog's view distance); beyond it only what we are flying toward
       if (!aimed && d < R && speed > 20) { // ring 1 ahead of us: the cone must point at it for ~1 s
         const cx = (e.bounds.minX + e.bounds.maxX) / 2 - p.x, cz = (e.bounds.minZ + e.bounds.maxZ) / 2 - p.z, cl = Math.hypot(cx, cz) || 1;
         const dot = (dirV.x * cx + dirV.z * cz) / cl;

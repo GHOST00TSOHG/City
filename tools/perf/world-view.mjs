@@ -10,7 +10,7 @@ const b = await webkit.launch({ headless: false });
 const p = await b.newPage({ viewport: { width: 1280, height: 800 } });
 const errors = [];
 p.on('pageerror', (e) => errors.push(e.message));
-p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); else if (/tile .* (built|unloaded)/.test(m.text())) console.log('  ', m.text()); });
 await p.goto(`http://localhost:${port}/?area=${area}&join=0`, { waitUntil: 'load', timeout: 300000 });
 await p.waitForFunction(() => window.__city?.ready, null, { timeout: 120000 });
 await p.waitForTimeout(3000);
