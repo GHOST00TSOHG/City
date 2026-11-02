@@ -58,9 +58,8 @@ createScene(canvas, areaId).then(async (app) => {
     fade.classList.remove('on'); bar.querySelectorAll('button').forEach((b) => (b.disabled = false)); busy = false;
   };
   bar.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.a) switchTo(b.dataset.a); });
-  // Preload the other areas' data one at a time once the first frame is up, so switching never waits on the network.
+  // (no blanket preload of every area's decoded data: it stayed resident for the whole session; streaming prefetches the areas near the player, scene.ts streamTick)
   const idle = (window as any).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
-  idle(async () => { for (const { id } of registry.areas) if (id !== areaId) await app.preload(id); });
   // Key West fly-over cue: distance + a heading arrow to the beacon, shown while the player is out over the water between NJ and Key West
   const cue = document.createElement('div'); cue.id = 'kwcue'; cue.innerHTML = '<span class="arrow">&#9650;</span> <b>Key West</b> <span class="km"></span>'; document.body.appendChild(cue);
   const cueArrow = cue.querySelector('.arrow') as HTMLElement, cueKm = cue.querySelector('.km') as HTMLElement, camDir = new THREE.Vector3();

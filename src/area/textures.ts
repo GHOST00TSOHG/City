@@ -25,6 +25,7 @@ export async function loadMaterialTextures(renderer: THREE.WebGPURenderer): Prom
     } catch (e) { console.warn('[City] texture fallback', name, e); return fallback(layers, [128, 128, 128]); }
   };
   const [ground, walls, roofs] = await Promise.all([one('ground', 4), one('walls', 5), one('roofs', 3)]);
+  loader.dispose(); loader = null; // frees the transcoder workers (each holds a wasm instance); they are not needed again
   return { ground, walls, roofs };
 }
 
