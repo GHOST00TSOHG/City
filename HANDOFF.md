@@ -48,7 +48,7 @@ Google 3D Tiles are gone. Each area is baked offline from OSM / OpenFreeMap / Ov
 | Landmark: clear vegetation + flatten terrain under footprints | bot/websmith-landmarks-terrain | Grok Bot (Websmith) | PR open | 2026-11-01 |
 | Landmark: Military Park, Wars of America + park pavilion (`newark` / `wars-of-america`, `military-park-pavilion`) | jonn/newark-military-park | Grok Bot (Jonn's Blender bot) + Jonn (BlvckFish) | PR open | 2026-11-01 |
 | Map cleanup: floating/sunk buildings and roads, water, overlaps, coast/docks, ground void, solid shells (all areas) | bot/websmith-map-cleanup-v2 | Claude (Websmith) | PR #46 open, work complete (landmark GLB open edges left) | 2026-11-01 |
-| Area connection build, run A: tree profile, world registry, player-state, design note | bot/websmith-area-connection | Claude (Websmith) | run A done (trees profiled + slimmed, world registry, player state, design note); run B = the connection build | 2026-11-01 |
+| Area connection build, run A: tree profile, world registry, player-state, design note | bot/websmith-area-connection | Claude (Websmith) | run A done; run B done (5 areas in one world, NJ link, Key West fly-over, ring streaming, world-check); open issues below | 2026-11-01 |
 
 ## How to run
 `npm ci && npm run dev`  |  `npm run build`  |  `npm run test:smoke`  |  `gitleaks detect --redact --config .gitleaks.toml`
@@ -303,5 +303,36 @@ Verification (real GPU, WebKit headless:false, `tools/perf/area-check.mjs`, prev
 
 Remaining / not done in run A: nothing above is built beyond registry + player state. Registry bounds before load come from the bake bbox (a few hundred m wider than the terrain on some sides); `areaAt` is exact only after `loadData`.
 
-### Next after that: area connection build, run B (see the design note above)
+### Area connection build, run B: the connected world (2026-11-01, not pushed)
+
+**What it is now.**
+- **One frame.** Every tile's data is shifted into the shared world frame at load (`src/world/shift.ts`, in the loader worker), so the player, camera, shaders and every query use world coordinates; no group offsets, no re-anchoring. `FRAME_SHIFT` centres the world (max |coord| ~23 km). Layout in `registry.ts`: Newark/Passaic true; Sandy Hook + Highlands slid by `SHORE_SLIDE` (-14,093, -25,966) so the Sandy Hook road end is straight south of Passaic's south-edge road, 1.2 km below it; Key West at `KEYWEST_OFFSET`, 25 km south of Highlands. `registry.areaAt` / `distTo` / `worldViews`; `player.pos` is world.
+- **Overlap.** Passaic owns the Newark overlap (`OVERLAP_OWNERS`, `PRIORITY`): Newark drops its buildings/trees/lamps there and skips its terrain cells (12 m shrink); its sea plane gets a hole. Owners always build first.
+- **NJ link** (`src/world/links.ts`, `LINKS`): Passaic south edge -> Sandy Hook north neck (1.2 km), and Sandy Hook south -> Highlands (0.2 km). Each is a 4 m heightfield strip (end rows = the tiles' edges exactly, tapering to a causeway), class-1 road draped on it, plus a stub inside Sandy Hook to its Hartshorne road, draped on that tile's terrain. 2 draw calls per link; nothing floats (road >= 0.4 m over the strip).
+- **Key West fly-over** (`src/world/flightpath.ts`): 51 cyan gate rings every 500 m at 150 m from Highlands to Key West (one instanced draw) + a light beam over Old Town (one draw), both fog-free; HUD chip with distance + arrow (`#kwcue`).
+- **Rings / sea.** Each far ring keeps only the triangles nearer to its own tile than to any other loaded tile or link strip (`ownedRingIndices`): no double ring, nothing poking through. One open-sea plane (200 km) with 8 rect holes where a tile has its own water plane (`buildOcean(null)`, `setHoles`). Tile sea planes are now tile-sized.
+- **Streaming** (`scene.ts` `streamTick`, 4 Hz): ring base 8 km (`?ring=`), radius `base + speed*T + 1.5*alt`, `T = clamp(0.5+alt/200, 1, 6)`; beyond the base ring a tile is built only after the velocity cone has pointed at it for 1 s; one build at a time, nearest first, owners first; unload at `1.5R + 2.5 km` after 8 s (never the active tile or an owner in use); data prefetched within 3R. `?stream=0` turns it off. A tile builds in stages (yields between them), compiles off-scene, then is revealed one mesh per frame; disposal is sliced.
+- **Simple detail** (`setFar`): when high (> 250 m) or fast (> 70 m/s) (hysteresis), or a tile is > 2.5 km away: one merged flat-top building mesh (`buildBuildingsFar`, 1 draw instead of 15-50 chunks), no lamps/grass/interiors/ferry, trees only as the 16-tri impostor (band lo = 0).
+- Tests/tools: `window.__world()`, `__app` (`loadAll`, `stream`, `flight`), `tools/perf/world-check.mjs` (`--only static|perf|inspect`), `world-view.mjs`, `mem-breakdown.mjs`, `shot-stats.py`, `merge-results.py`; results `tools/perf/out/world-check.json` (+ per-phase files); screenshots `tools/perf/out/connect-shots/` (37 PNGs, 70 MB, NOT committed).
+
+**Numbers** (real Mac GPU, WebKit headless:false, 1920x1080, vsync-capped 60 Hz; budgets >= 50 fps, <= 150 calls):
+| run | fps median / worst-second-median | worst frame | draw calls max (median) | triangles max | console errors |
+|---|---|---|---|---|---|
+| static, all 5 tiles built, 14 views (ground + aerial of every area, both link roads) | 58.8 / 58.8 (one 4 s window had a 23 ms frame = 43 fps) | 23 ms | 87 | 10.1 M | 0 |
+| scripted flight 432 s: Newark -> Passaic -> NJ link -> Sandy Hook -> Highlands at 60 m/s (120 -> 60 m), then 143.7 m/s at 150 m over the sea to Key West (test tuning cruise = burst = 140 m/s) | 58.8 / 58.8, 0 one-second windows under 50 | 545 ms (tile build); 38 frames > 33 ms of 25,878 | 126 (61) | n/a (not sampled in flight) | 0 |
+| inspect flight (void rays + 27 shots) | not representative (the ray test and screenshots stall it) | | 126 (65) | | 0 |
+Pop-in: 0 events (a built tile is always present when any part of its bounds is in the frustum within 8 km). Blank/sky-only frames: 0 of 27 flight shots (lower-half std >= 10, sky-like fraction <= 0.8 %). Ground-void rays: 15 flagged of 190 samples (2,805 rays), all near the Passaic -> Sandy Hook link / Sandy Hook north neck at 60 m/s, none visible in the screenshots; probably ray-vs-single-sided-mesh grazing at tile seams, not confirmed (see below).
+
+Memory (geometry + instance + texture bytes counted from the scene; WebKit has no `performance.memory`; host typed arrays 6.7 MB): all 5 tiles = 1,009 MB (geometry 877, instances 26, textures 107). Flight peak with 4 tiles (Newark+Passaic+Sandy Hook+Highlands) = 808 MB. Per tile (MB geometry): Newark roads 231, Newark building chunks 129, Passaic roads 88, Key West roads 99 / chunks 53, far-building meshes 0.5-31, terrain 6-24, trees ~5. **Over the 300 MB target.**
+
+**Remaining issues**
+1. **Memory** (above): roads (non-indexed soup, 36 B/vertex, 2.2 M tris in Newark) and building chunks (52 B/vertex) dominate; the same bytes also sit in JS arrays. Next: indexed/compact road geometry (drop the constant normal, Uint8 colour), free CPU arrays after upload, and a far tier that never builds the near road/chunk meshes (build them on promotion).
+2. **Tile-build hitches in flight**: the main-thread build stage is 0.6 s (Highlands) to 2.2 s (Key West) and 5 s (Newark at load); the worst flight frame was 545 ms (Key West/Highlands build; one earlier run 1.8 s on the Key West compile + reveal before staged reveal). Needs sub-stage slicing of `buildBuildings`/`buildRoads` (or a worker).
+3. Void rays: 15 flags unexplained (no void in shots). Re-test with double-sided ground materials in the ray test or a GPU readback.
+4. Far-ring seam between an inland tile (Passaic, land plain ~+3 m) and a coastal one (Sandy Hook, seabed) is a ~5 m step on the Voronoi line in the bay, outside the 360 m link strips; strips have no side skirts. Sea hides most of it; not checked from below.
+5. Newark landmarks inside the Passaic overlap are not cross-checked against Passaic's buildings (Passaic has no landmark list today).
+6. Simple-detail switch pops buildings (full -> flat-top) when crossing 250 m / 70 m/s; trees near LODs vanish in far mode by design.
+7. `npm run test:smoke` was not re-run (the smoke needs ~110 s per area in SwiftShader); `npm run build` ok. gitleaks not installed here.
+8. The perf flight uses test tuning (cruise = 140 m/s); the real BURST drains in about 4.5 s, so sustained 140 m/s is a worst case. Key West 25 km away is a 3-4 min flight at that speed.
+
 Short NJ road + Key West fly-over; profile trees first; ring streaming + flight-aware preload scaled by speed/altitude with simpler detail when high/fast; one world registry and one player-state object; fps/memory tested with all areas loaded. Note for the connection work: every area now draws its own far-ground ring (`farGround.ts`, 38 km) and the sea plane; neighbouring areas' rings overlap, so fade/skip a ring where another tile is loaded. Shoreline ease and docks live in `terrainCore.ts`/`piers.ts` and apply per area automatically.
