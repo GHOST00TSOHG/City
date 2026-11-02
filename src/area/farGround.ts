@@ -8,7 +8,7 @@ import type { TerrainGrid } from './terrainCore';
 export const FAR_LAYERS = [10, 24, 50, 100, 190, 340, 600, 1000, 1700, 2800, 4500, 7500, 12000, 19000, 30000, 38000];
 export const FAR_RADIUS = FAR_LAYERS[FAR_LAYERS.length - 1];
 
-const LAND = 0x5c5e4e, SEABED = 0xb9b08a, DEEP = 0x2c6a70;
+const LAND = 0x5c5e4e, SEABED = 0x8a8566, DEEP = 0x2c6a70;
 const rgb = (hex: number) => [(hex >> 16 & 255) / 255, (hex >> 8 & 255) / 255, (hex & 255) / 255];
 const lin = (c: number) => Math.pow(c, 2.2); // three's vertex colours are linear; the terrain colours above are authored in sRGB
 const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
@@ -64,7 +64,7 @@ export function farGroundData(t: TerrainGrid, inland: boolean, seaSides: string[
       // far seabed keeps falling with distance: at 9 km the 24-bit depth buffer cannot separate it from the sea plane 2.6 m above (blocky z-fighting seen from altitude)
       const v = k * N + i, y = H[k][i] - sea[i] * 0.005 * Math.max(0, d - 1000);
       pos[v * 3] = px[i] + ox[i] * d; pos[v * 3 + 1] = y; pos[v * 3 + 2] = pz[i] + oz[i] * d;
-      if (y < 0 && sea[i] > 0.5) { const m = Math.min(1, -y / 2.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = seabed[q] + (deep[q] - seabed[q]) * m; }
+      if (y < 0 && sea[i] > 0.5) { const m = Math.min(1, -y / 1.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = seabed[q] + (deep[q] - seabed[q]) * m; }
       else for (let q = 0; q < 3; q++) col[v * 3 + q] = land3[q];
     }
   }

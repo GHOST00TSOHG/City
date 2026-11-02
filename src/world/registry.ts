@@ -49,7 +49,9 @@ const META: Record<string, { label: string; title: string; views: AreaView[] }> 
   keywest: { label: 'Key West', title: 'Key West, FL · Old Town', views: [
     { name: 'aerial', pos: [650, 420, 700], look: [-900, 0, -1300] },
     { name: 'oldtown', pos: [-520, 140, -760], look: [-1050, 0, -1350] },
-    { name: 'duval', pos: [-905, 1.7, -1180], look: [-1060, 3, -1520], snap: true }] },
+    // run F: 'duval' was a street-level point that landed inside a porch. Now an 18 m view over the street grid looking toward the water (checked in WebKit); the snap view below keeps the street spawn.
+    { name: 'duval', pos: [-820, 18, -1354], look: [-1040, 4, -1554] },
+    { name: 'street', pos: [-905, 1.7, -1180], look: [-1060, 3, -1520], snap: true }] },
   bayshore: { label: 'Highlands', title: 'Highlands, NJ · Bayshore', views: [
     { name: 'aerial', pos: [500, 260, 300], look: [-700, 0, -1300] },
     { name: 'street', pos: [-700, 1.7, -1450], look: [-1300, 3, -1500], snap: true }] },
@@ -61,7 +63,7 @@ const META: Record<string, { label: string; title: string; views: AreaView[] }> 
     { name: 'street', pos: [200, 1.7, 120], look: [700, 3, 120], snap: true }] },
   passaic: { label: 'Passaic', title: 'Newark, NJ · Passaic waterfront', views: [
     { name: 'aerial', pos: [-600, 320, 800], look: [150, 0, -150] },
-    { name: 'dock', pos: [0, 30, 0], look: [0, 0, 0] }] },
+    { name: 'dock', pos: [76, 70, 171], look: [0, 3, 0] }] }, // run F: was a straight-down 30 m view of one road; now an oblique 70 m view of the waterfront, ferry and towers
 };
 /** Switcher order. */
 export const AREA_IDS = ['keywest', 'bayshore', 'sandyhook', 'newark', 'passaic'] as const;
