@@ -98,7 +98,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const farMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   shared.add(farMat);
   const SEA_SIDES: Record<string, string[]> = { passaic: ['s'] }; // inland tiles whose far ring faces open water on that side (see farGround.ts)
-  const TILELOG = qs.get('tilelog') === '1';
+  const SK = new Set((qs.get('skipstage') ?? '').split(',')); // debug: ?skipstage=int,col,trees,grass builds that stage empty (RSS attribution)
+  const TILELOG =qs.get('tilelog') === '1';
   const nextTask = () => new Promise<void>((r) => setTimeout(r, 0)); // let a frame render between the heavy stages of a tile build
   const inRect = (b: Bounds, x: number, z: number) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
   const inAny = (rs: Bounds[], x: number, z: number) => rs.some((r) => inRect(r, x, z));
@@ -132,9 +133,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const blds = tg.blds, farBlds = tg.far; farBlds.visible = false; mark('geo-worker');
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain); mark('ocean+lamps');
     await nextTask();
-    const trees = await buildTrees(cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
+    const trees = await buildTrees(SK.has('trees') ? [] : cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
     trees.materials.forEach((m) => shared.add(m)); // species materials + textures are built once and reused by every area
-    const grass = buildGrass(terrain, grassMask); mark('trees+grass');
+    const grass = buildGrass(terrain, SK.has('grass') ? null : grassMask); mark('trees+grass');
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     await nextTask();
     const roads = tg.roads;
@@ -142,8 +143,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group); mark('terrain+roads+pools');
     await nextTask(); lap = performance.now();
-    const interiors = await createInteriors(buildings, terrain); group.add(interiors.group);
-    const collision = await createCollision(buildings, terrain, landmarks.colliders); mark('interiors+collision');
+    const interiors = await createInteriors(SK.has('int') ? [] : buildings, terrain); group.add(interiors.group);
+    const collision = await createCollision(SK.has('col') ? [] : buildings, terrain, landmarks.colliders); mark('interiors+collision');
     const ring = buildFarGround(terrain, inland, SEA_SIDES[id] ?? []); group.add(ring); mark('far ring'); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
     group.traverse((o: any) => { if (o.isMesh && !o.isInstancedMesh && /^(roads|terrain|pools\+piers|buildings-far|bld )/.test(o.name)) freeCpuAfterFirstDraw(o); });
     const treeMeshes = trees.group.children.map((o) => ({ o: o as THREE.InstancedMesh, lo: (o as any).userData.lo as number, hi: (o as any).userData.hi as number }));
@@ -156,7 +157,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const maxHi = Math.max(...treeMeshes.map((t) => t.hi));
       for (const t of treeMeshes) { t.o.visible = !tiny && (!f || t.hi >= maxHi); (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
     };
-    return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
+    const roadChunks = roads.children as THREE.Mesh[];
+    return { id, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
@@ -322,6 +324,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     fastHigh = fastHigh ? !(alt < 320 && speed < 72) : (alt > 400 || speed > 88); // thresholds raised (was 250 m / 70 m/s) so the full -> flat-top building switch happens where it is harder to see; real-GPU headroom allows it
     veryHigh = veryHigh ? alt > 900 : alt > 1200;
     for (const t of tiles.values()) t.setFar(farWanted(t), veryHigh || registry.distTo(t.id, camera.position.x, camera.position.z) > 5000);
+    // road chunks (1280 m, one draw each) beyond the fog-visible range are hidden: keeps the draw calls of a four-tile flight inside the 150 budget
+    const roadRange = fastHigh ? 2500 : 4000, cp = camera.position;
+    for (const t of tiles.values()) for (const m of t.roadChunks) { const b = m.geometry.boundingBox; if (b) m.visible = b.distanceToPoint(cp) < roadRange; }
     const T = Math.min(6, Math.max(1, 0.5 + alt / 200));
     const R = stream.base + speed * T + 1.5 * alt; // design note: 1.5 km + speed*T + 1.5*alt; base raised to 8 km because tiles are small and the night fog (density 0.00016) still shows ~30% at 8 km; far tiles use simple detail, so they are cheap
     stream.radius = R; stream.lead = speed * T;

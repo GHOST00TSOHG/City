@@ -77,14 +77,24 @@ const HELPERS = () => {
     },
     // rays through the lower half of the screen: must hit ground (terrain / far ring / link) when the sea plane would be reached within 30 km
     voidRays() {
-      const cam = window.__cityCam, rc = new THREE.Raycaster(), ground = []; let miss = 0, tested = 0; const details = [];
-      window.__cityScene.traverse((o) => { if (o.isMesh && (o.name === 'terrain' || o.name === 'far-ground' || o.name === 'link-ground') && o.visible) ground.push(o); });
+      // The terrain mesh frees its CPU arrays after the first draw, so raycasting it hits nothing (it was the source of the earlier "void" flags, and a 470k-triangle
+      // raycast per ray stalled the flight). Terrain is tested analytically on the height grid instead; far ring / link strips (CPU arrays kept) by raycast.
+      const cam = window.__cityCam, rc = new THREE.Raycaster(), ground = []; let miss = 0, tested = 0, seaOnly = 0; const details = []; const sea = window.__cityScene.getObjectByName('sea-open');
+      window.__cityScene.traverse((o) => { if (o.isMesh && (o.name === 'far-ground' || o.name === 'link-ground') && o.visible && o.geometry.attributes.position.array.length) ground.push(o); });
+      const tiles = reg.areas.filter((a) => a.tile && a.bundle);
+      const hitTerrain = (o, d) => { // march the ray over every built tile's height grid (8 m steps, inside its bounds only)
+        for (const a of tiles) { const b = a.bounds, T = a.bundle.terrain; for (let t = 0; t < 40000; t += T.cell) { const x = o.x + d.x * t, y = o.y + d.y * t, z = o.z + d.z * t; if (y < -60) break; if (x < b.minX || x > b.maxX || z < b.minZ || z > b.maxZ) continue; if (y <= T.heightAt(x, z)) return true; } }
+        return false;
+      };
       for (const sy of [0.3, 0.55, 0.8]) for (const sx of [-0.8, -0.4, 0, 0.4, 0.8]) {
         rc.setFromCamera(new THREE.Vector2(sx, -sy), cam); const d = rc.ray.direction; if (d.y > -0.01) continue;
         const tHit = -rc.ray.origin.y / d.y; if (tHit > 30000) continue; tested++; rc.far = 38000;
-        const hit = rc.intersectObjects(ground, false); if (!hit.length) { miss++; details.push({ sx, sy, at: [Math.round(rc.ray.origin.x + d.x * tHit), Math.round(rc.ray.origin.z + d.z * tHit)] }); }
+        if (hitTerrain(rc.ray.origin, d) || rc.intersectObjects(ground, false).length) continue;
+        const hx = rc.ray.origin.x + d.x * tHit, hz = rc.ray.origin.z + d.z * tHit;
+        if (sea?.visible && Math.hypot(hx - sea.position.x, hz - sea.position.z) < 90000) { seaOnly++; continue; } // only the open-sea plane under it: water, not a void
+        miss++; details.push({ sx, sy, at: [Math.round(hx), Math.round(hz)] });
       }
-      return { tested, miss, details };
+      return { tested, miss, seaOnly, details };
     },
     state() { const P = window.__player, c = window.__robot.ctl; return { pos: P.pos.toArray().map((v) => +v.toFixed(0)), speed: +P.speed.toFixed(1), alt: +P.altitude.toFixed(0), mode: c.mode, area: P.area, burst: +c.burst.toFixed(2) }; },
   };
