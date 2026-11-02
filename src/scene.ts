@@ -7,7 +7,9 @@ import { registry, AREA_IDS, PRIORITY, OVERLAP_OWNERS, type AreaView, type AreaI
 import { LINKS, buildLink, type Link } from './world/links';
 import { buildFlightPath } from './world/flightpath';
 import { player } from './world/player';
-import { buildTerrain, buildRoads, buildPoolsPiers } from './area/ground';
+import { buildTerrain, buildPoolsPiers } from './area/ground';
+import { buildTileGeo } from './area/geoClient';
+import { freeCpuAfterFirstDraw } from './area/geom';
 import { buildBuildings, buildBuildingsFar } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
 import { loadMaterialTextures, styleFor, GROUND_GAIN, GROUND_SCALE } from './area/textures';
@@ -122,8 +124,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     await nextTask();
-    const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);
-    const farBlds = buildBuildingsFar(buildings, terrain, farMat); farBlds.visible = false;
+    const style = styleFor(id); const tg = await buildTileGeo(terrain, buildings, area.roads, style, roadMat, lambert, farMat); // roads + building meshes: built in a short-lived worker
+    const blds = tg.blds, farBlds = tg.far; farBlds.visible = false;
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
     await nextTask();
     const trees = await buildTrees(cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
@@ -131,7 +133,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const grass = buildGrass(terrain, grassMask);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     await nextTask();
-    const roads = buildRoads(area, terrain, roadMat, landmarks.pads);
+    const roads = tg.roads;
     group.add(buildTerrain(terrain, groundMat, style, skip), roads, buildPoolsPiers(area, terrain, roadMat), blds.group, farBlds, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
     group.add(landmarks.group);
@@ -139,6 +141,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const interiors = createInteriors(buildings, terrain); group.add(interiors.group);
     const collision = createCollision(buildings, terrain, landmarks.colliders);
     const ring = buildFarGround(terrain, inland); group.add(ring); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
+    group.traverse((o: any) => { if (o.isMesh && !o.isInstancedMesh && /^(roads|terrain|pools\+piers|buildings-far|bld )/.test(o.name)) freeCpuAfterFirstDraw(o); });
     const treeMeshes = trees.group.children.map((o) => ({ o: o as THREE.InstancedMesh, lo: (o as any).userData.lo as number, hi: (o as any).userData.hi as number }));
     let far = false, ready = false;
     /** Simple detail (far tile, or high/fast flight): merged flat-top buildings, no lamps/grass/interiors/ferry, trees only as their far impostor. */

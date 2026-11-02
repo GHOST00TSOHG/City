@@ -55,9 +55,16 @@ export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaSt
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  g.setAttribute('gmat', new THREE.BufferAttribute(gw, 4));
   g.setIndex(new THREE.BufferAttribute(k === idx.length ? idx : idx.slice(0, k), 1));
   g.computeVertexNormals(); g.computeBoundingSphere();
+  // compact the per-vertex data: normals Int8 (snorm), texture weights Uint8 (unorm); the colour tint stays Float32 (it can exceed 1)
+  const nrm = g.attributes.normal.array as Float32Array, n4 = new Int8Array(nx * nz * 4), w4 = new Uint8Array(nx * nz * 4);
+  for (let i = 0; i < nx * nz; i++) {
+    for (let q = 0; q < 3; q++) n4[i * 4 + q] = Math.round(nrm[i * 3 + q] * 127);
+    for (let q = 0; q < 4; q++) w4[i * 4 + q] = Math.round(Math.min(1, Math.max(0, gw[i * 4 + q])) * 255);
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(n4, 4, true));
+  g.setAttribute('gmat', new THREE.BufferAttribute(w4, 4, true));
   const m = new THREE.Mesh(g, material); m.name = 'terrain';
   return m;
 }
@@ -86,14 +93,18 @@ export function redrapeRoadGeometry(mesh: THREE.Mesh, surface: RoadSurface) {
  *  the ribbon follows the ground instead of cutting through bumps between OSM nodes. Sidewalks sit below every road lift so
  *  any crossing road covers them; markings sit just above their own road. Returns the mesh plus a matching height query. */
 export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, landmarkPads: LandmarkPad[] = []): THREE.Mesh & { surface: RoadSurface } {
-  const s = new Soup();
+  void landmarkPads;
+  const { s, segs } = roadsSoup(a, t);
+  const m = new THREE.Mesh(s.geometry(), material) as THREE.Mesh & { surface: RoadSurface }; m.name = 'roads';
+  m.surface = roadSurfaceFrom(segs, t);
+  return m;
+}
+
+/** Road triangles as a Soup plus the segment list (x0 z0 x1 z1 halfWidth lift per segment) for the height query. Pure: runs in the geometry worker. */
+export function roadsSoup(a: AreaData, t: Terrain) {
+  const s = new Soup(), segs: number[] = [];
   const order = [...a.roads].sort((p, q) => q.c - p.c); // paths first, majors last (on top)
-  const B = 32, hash = new Map<number, number[]>(), segs: number[] = []; // seg: x0 z0 x1 z1 halfWidth lift
-  const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number) => {
-    const id = segs.length / 6; segs.push(x0, z0, x1, z1, hw, lift);
-    const ax = Math.floor((Math.min(x0, x1) - hw) / B), bx = Math.floor((Math.max(x0, x1) + hw) / B), az = Math.floor((Math.min(z0, z1) - hw) / B), bz = Math.floor((Math.max(z0, z1) + hw) / B);
-    for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) { const k = i * 100003 + j; let l = hash.get(k); if (!l) hash.set(k, (l = [])); l.push(id); }
-  };
+  const addSeg = (x0: number, z0: number, x1: number, z1: number, hw: number, lift: number) => { segs.push(x0, z0, x1, z1, hw, lift); };
   for (const r of order) {
     const w = r.w / 2, col = ROAD[r.c] ?? ROAD[1], lift = LIFT[r.c] ?? 0.05;
     const pts = ringPts(r.p); if (pts.length < 2) continue;
@@ -108,8 +119,18 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, la
     for (let i = 0; i < pts.length - 1; i++) addSeg(pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1], w, lift);
     if (r.c <= 1 && r.w >= 6) dashes(pts, layer(MARK[r.c], lift + 0.006), r.c === 0 ? 0 : 1);
   }
-  const m = new THREE.Mesh(s.geometry(), material) as THREE.Mesh & { surface: RoadSurface }; m.name = 'roads';
-  m.surface = {
+  return { s, segs };
+}
+
+/** Height query over road segments (spatial hash), built from the `roadsSoup` segment list. */
+export function roadSurfaceFrom(segs: ArrayLike<number>, t: { heightAt(x: number, z: number): number }): RoadSurface {
+  const B = 32, hash = new Map<number, number[]>();
+  for (let id = 0; id < segs.length / 6; id++) {
+    const o = id * 6, x0 = segs[o], z0 = segs[o + 1], x1 = segs[o + 2], z1 = segs[o + 3], hw = segs[o + 4];
+    const ax = Math.floor((Math.min(x0, x1) - hw) / B), bx = Math.floor((Math.max(x0, x1) + hw) / B), az = Math.floor((Math.min(z0, z1) - hw) / B), bz = Math.floor((Math.max(z0, z1) + hw) / B);
+    for (let i = ax; i <= bx; i++) for (let j = az; j <= bz; j++) { const k = i * 100003 + j; let l = hash.get(k); if (!l) hash.set(k, (l = [])); l.push(id); }
+  }
+  return {
     surfaceAt(x, z) {
       const l = hash.get(Math.floor(x / B) * 100003 + Math.floor(z / B)); let best = -1;
       if (l) for (const id of l) {
@@ -122,7 +143,6 @@ export function buildRoads(a: AreaData, t: Terrain, material: THREE.Material, la
       return best < 0 ? h : Math.max(h, 0.05) + best;
     },
   };
-  return m;
 }
 
 type XZ = [number, number];

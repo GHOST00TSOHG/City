@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { Building, Terrain } from './data';
-import { Soup, Grow, ringPts, signedArea, flatPoly } from './geom';
+import { Soup, ringPts, signedArea, flatPoly } from './geom';
 import { foundation } from './foundation';
 import { type AreaStyle, styleFor, pick, WALL, ROOF, SHINGLE } from './textures';
 
@@ -9,6 +9,18 @@ const UP: [number, number, number] = [0, 1, 0];
 
 /** Solid, clean building shells from baked footprints: walls + roof (flat / gabled / hipped / pyramidal / skillion). */
 export function buildBuildings(list: Building[], terrain: Terrain, material: THREE.Material, style: AreaStyle = styleFor('')) {
+  const { chunks, count } = buildingSoups(list, terrain, style);
+  const group = new THREE.Group(); group.name = 'buildings';
+  for (const [key, s] of chunks) {
+    if (s.empty) continue;
+    const m = new THREE.Mesh(s.geometry(), material); m.name = `bld ${key}`;
+    m.castShadow = m.receiveShadow = false; group.add(m);
+  }
+  return { group, count };
+}
+
+/** The merged building soups per 600 m chunk (no THREE meshes: runs in the geometry worker too). */
+export function buildingSoups(list: Building[], terrain: Terrain, style: AreaStyle) {
   const chunks = new Map<string, Soup>();
   const wall = new THREE.Color(), roof = new THREE.Color(), trim = new THREE.Color();
   let count = 0;
@@ -17,7 +29,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     if (!rings.length) continue;
     const outer = rings[0], [cx, cz] = [b.o[0] / 10, b.o[1] / 10];
     const key = `${Math.floor(cx / CHUNK)},${Math.floor(cz / CHUNK)}`;
-    let s = chunks.get(key); if (!s) { chunks.set(key, (s = new Soup())); s.f = new Grow(); }
+    let s = chunks.get(key); if (!s) { chunks.set(key, (s = new Soup())); s.enableFacade(); }
     // Painting: pick a wall material per building from the area style (bake colour hints brick), then a paint colour.
     const seed0 = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0, h1 = (seed0 % 1009) / 1009, h2 = ((seed0 >>> 10) % 997) / 997, h3 = ((seed0 >>> 20) % 991) / 991;
     wall.setHex(b.wc); const hsl = { h: 0, s: 0, l: 0 }; wall.getHSL(hsl);
@@ -67,13 +79,7 @@ export function buildBuildings(list: Building[], terrain: Terrain, material: THR
     }
     count++;
   }
-  const group = new THREE.Group(); group.name = 'buildings';
-  for (const [key, s] of chunks) {
-    if (s.empty) continue;
-    const m = new THREE.Mesh(s.geometry(), material); m.name = `bld ${key}`;
-    m.castShadow = m.receiveShadow = false; group.add(m);
-  }
-  return { group, count };
+  return { chunks, count };
 }
 
 /** Parapet lip as one closed box per edge (0.25 m thick, 0.45 m high, ends overlap at corners), so every piece is watertight. */
@@ -151,6 +157,11 @@ function roofShape(s: Soup, b: Building, e: number, roof: THREE.Color, wall: THR
 /** Simple detail for the world's far tiles / high-fast flight: one merged mesh of plain extruded footprints (flat tops, wall colour, no facade data, no
  *  parapets, no pitched roofs). Same buildings, ~10x fewer triangles and ONE draw call instead of one per 600 m chunk. */
 export function buildBuildingsFar(list: Building[], terrain: Terrain, material: THREE.Material) {
+  const s = farSoup(list, terrain);
+  const m = new THREE.Mesh(s.empty ? new THREE.BufferGeometry() : s.geometry(), material); m.name = 'buildings-far';
+  return m;
+}
+export function farSoup(list: Building[], terrain: Terrain) {
   const s = new Soup(), wall = new THREE.Color(), roof = new THREE.Color();
   for (const b of list) {
     if (b.m > 2) continue; // parts hanging above another building
@@ -165,6 +176,5 @@ export function buildBuildingsFar(list: Building[], terrain: Terrain, material: 
     }
     flatPoly(s, ring, [], top, roof);
   }
-  const m = new THREE.Mesh(s.empty ? new THREE.BufferGeometry() : s.geometry(), material); m.name = 'buildings-far';
-  return m;
+  return s;
 }

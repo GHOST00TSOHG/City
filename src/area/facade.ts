@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import type { MaterialTextures } from './textures';
+import { FACADE_Y0, FACADE_YS, FACADE_KS } from './geom';
 import { WALL_GAIN, WALL_PAINTED, WALL_MEAN, WALL_SCALE, ROOF_GAIN } from './textures';
 import { texture, mod, luminance, attribute, normalize, step, dot, positionWorld, normalWorld, vec2, vec3, float, fract, floor, fwidth, smoothstep, select, mix, hash, abs, max, min, clamp, vertexColor, uniform, cameraPosition, distance } from 'three/tsl';
 
@@ -10,8 +11,9 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const mat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   const fa = attribute('facade', 'vec4');
   // fa.z packs kind (0 none, 1 house, 2 commercial) + 4 * wall material + 32 * roof material (see buildings.ts)
-  const base = fa.x, top = fa.y, kind = mod(fa.z, 4), seed = fa.w;
-  const wallMat = mod(floor(fa.z.div(4)), 8), roofMat = floor(fa.z.div(32));
+  // the attribute is snorm16 (geom.ts compactSoup): heights as (y - Y0) / YS, pack as k / KS
+  const base = fa.x.mul(FACADE_YS).add(FACADE_Y0), top = fa.y.mul(FACADE_YS).add(FACADE_Y0), packed = floor(fa.z.mul(FACADE_KS).add(0.5)), kind = mod(packed, 4), seed = fa.w;
+  const wallMat = mod(floor(packed.div(4)), 8), roofMat = floor(packed.div(32));
   const isHouse = kind.lessThan(1.5);
   const n = normalWorld;
   const along = positionWorld.x.mul(n.z.negate()).add(positionWorld.z.mul(n.x)); // horizontal coord along the wall

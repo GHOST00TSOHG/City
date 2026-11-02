@@ -36,12 +36,18 @@ export interface Link {
 
 function mergeGeometries(gs: THREE.BufferGeometry[]) {
   const out = new THREE.BufferGeometry();
-  for (const name of ['position', 'normal', 'color']) {
-    const parts = gs.map((g) => g.getAttribute(name) as THREE.BufferAttribute).filter(Boolean);
-    const total = parts.reduce((n, a) => n + a.array.length, 0), arr = new Float32Array(total); let o = 0;
-    for (const a of parts) { arr.set(a.array as Float32Array, o); o += a.array.length; }
-    out.setAttribute(name, new THREE.BufferAttribute(arr, 3));
-  }
+  const total = (get: (g: THREE.BufferGeometry) => ArrayLike<number>) => gs.reduce((n, g) => n + get(g).length, 0);
+  const cat = <T extends Float32Array | Int8Array | Uint8Array>(name: string, make: (n: number) => T) => {
+    const arr = make(total((g) => g.getAttribute(name).array as unknown as ArrayLike<number>)); let o = 0;
+    for (const g of gs) { const a = g.getAttribute(name).array as unknown as T; arr.set(a as any, o); o += a.length; }
+    return arr;
+  };
+  out.setAttribute('position', new THREE.BufferAttribute(cat('position', (n) => new Float32Array(n)), 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(cat('normal', (n) => new Int8Array(n)), 4, true));
+  out.setAttribute('color', new THREE.BufferAttribute(cat('color', (n) => new Uint8Array(n)), 4, true));
+  const idx = new Uint32Array(total((g) => g.index!.array)); let o = 0, v = 0;
+  for (const g of gs) { const a = g.index!.array; for (let i = 0; i < a.length; i++) idx[o + i] = a[i] + v; o += a.length; v += g.getAttribute('position').count; }
+  out.setIndex(new THREE.BufferAttribute(idx, 1));
   out.computeBoundingSphere(); out.computeBoundingBox();
   return out;
 }
@@ -79,7 +85,7 @@ export function buildLink(def: LinkDef, A: AreaBundle, B: AreaBundle, groundMat:
   geos.forEach((g) => g.dispose());
   group.add(ground, roads);
   const rect: Bounds = { minX: x0, maxX: x0 + M * cell, minZ: zA, maxZ: zB };
-  return { def, group, rect, path, triangles: (nx - 1) * (nz - 1) * 2 + (roads.geometry.getAttribute('position').count / 3),
+  return { def, group, rect, path, triangles: (nx - 1) * (nz - 1) * 2 + ((roads.geometry.index?.count ?? 0) / 3),
     floorAt(x, z) { return x < rect.minX || x > rect.maxX || z < rect.minZ || z > rect.maxZ ? null : Math.max(gapRoad.surface.surfaceAt(x, z), 0); },
     dispose() { group.traverse((o: any) => o.geometry?.dispose?.()); } };
 }
