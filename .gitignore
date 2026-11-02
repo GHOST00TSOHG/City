@@ -18,3 +18,4 @@ tools/map-audit.out/.build/
 *.fbx
 *.bvh
 *.blend
+tools/map-audit.out/shots-*/*.png
