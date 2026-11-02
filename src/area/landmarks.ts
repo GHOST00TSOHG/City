@@ -46,7 +46,10 @@ function releaseTextureSources(root: THREE.Object3D) {
   });
 }
 
-export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer, off: { x: number; z: number } = { x: 0, z: 0 }) {
+/** `opts.padsOnly` (run F): another tile owns the ground where this area's landmarks stand (Passaic owns Newark's south-east corner), so that tile only needs their pads,
+ *  footprints and colliders: only landmarks within `opts.within` (+250 m) are loaded, nothing is added to a group, and the model is disposed again. */
+export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer, off: { x: number; z: number } = { x: 0, z: 0 },
+  opts: { padsOnly?: boolean; within?: { minX: number; maxX: number; minZ: number; maxZ: number } } = {}) {
   const group = new THREE.Group(); group.name = 'landmarks';
   const colliders: LandmarkCollider[] = [], footprints: LandmarkFootprint[] = [], pads: LandmarkPad[] = [];
   if (!origin) return { group, colliders, footprints, pads };
@@ -59,6 +62,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
     try {
       const dir = `${BASE}landmarks/${areaId}/${slug}/`;
       const m: LandmarkManifest = await (await fetch(dir + 'manifest.json')).json();
+      if (opts.within) { const [wx, wz] = projectLatLon(origin, m.lat, m.lon), w = opts.within, X = wx + off.x, Z = wz + off.z; if (X < w.minX - 250 || X > w.maxX + 250 || Z < w.minZ - 250 || Z > w.maxZ + 250) continue; }
       const gltf = await loader.loadAsync(dir + m.file);
       const levels = [0, 1, 2].map((i) => gltf.scene.children.find((n) => new RegExp(`_LOD${i}$`).test(n.name))).filter(Boolean) as THREE.Object3D[];
       if (!levels.length) throw new Error('no _LOD nodes');
@@ -81,10 +85,12 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       for (let sx = box.min.x; sx <= box.max.x + 0.01; sx += 4) for (let sz = box.min.z; sz <= box.max.z + 0.01; sz += 4) groundY = Math.min(groundY, terrain.heightAt(sx, sz));
       const baseY = m.elevationM ?? Math.max(groundY, 0);
       lod.position.y = baseY; lod.updateMatrixWorld(true);
-      tuneLandmarkMaterials(lod, m.id);
-      releaseTextureSources(lod);
-      if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
-      group.add(lod);
+      if (!opts.padsOnly) {
+        tuneLandmarkMaterials(lod, m.id);
+        releaseTextureSources(lod);
+        if (m.id === 'newark-schools-stadium') attachStadiumFloodLights(lod);
+        group.add(lod);
+      }
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
       const pts: [number, number][] = m.footprint?.length! >= 3
           ? m.footprint!.map(([la, lo]) => { const q = projectLatLon(origin, la, lo); return [q[0] + off.x, q[1] + off.z] as [number, number]; })
@@ -96,6 +102,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       const f = makeFootprint(m.id, pts, 0), fb = makeFootprint(m.id, boxPts, 0);
       pads.push({ id: m.id, pts: boxPts, y: baseY, minX: Math.min(f.minX, fb.minX), maxX: Math.max(f.maxX, fb.maxX), minZ: Math.min(f.minZ, fb.minZ), maxZ: Math.max(f.maxZ, fb.maxZ) });
       if (m.cullMarginM !== false) footprints.push(makeFootprint(m.id, pts, Math.max(0, m.cullMarginM ?? 4)));
+      if (opts.padsOnly) lod.traverse((n) => { const mm = n as THREE.Mesh; if (!mm.isMesh) return; mm.geometry.dispose(); for (const mt of [mm.material].flat()) { for (const v of Object.values(mt) as unknown[]) (v as THREE.Texture)?.isTexture && (v as THREE.Texture).dispose(); mt.dispose(); } });
     } catch (e) { console.warn('[City] landmark failed', areaId, slug, e); }
   }
   return { group, colliders, footprints, pads };

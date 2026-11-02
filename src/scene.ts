@@ -114,14 +114,27 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const skip = owners.map((o) => registry.get(o).bounds);
     const { area: area0, terrain, mask } = await registry.loadData(id); mark('data');
     // where a higher-priority tile overlaps this one it owns the ground: drop our buildings, trees and lamps there (their terrain cells are skipped below)
+    // ...and drop any building the owner already has at the same spot (its bake covers a little more than its terrain rect, so along the cut the same OSM building was drawn twice: 15 found in run F)
+    const ownerHas = (() => { const g = new Map<string, number[]>(); for (const o of owners) for (const b of registry.get(o).bundle?.area.buildings ?? []) { const k = Math.round(b.o[0] / 30) + ',' + Math.round(b.o[1] / 30); (g.get(k) ?? g.set(k, []).get(k)!).push(b.o[0], b.o[1]); }
+      return (x: number, z: number) => { for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const a = g.get((Math.round(x / 30) + i) + ',' + (Math.round(z / 30) + j)); if (a) for (let q = 0; q < a.length; q += 2) if (Math.abs(a[q] - x) < 30 && Math.abs(a[q + 1] - z) < 30) return true; } return false; }; })();
     const area = skip.length ? { ...area0,
-      buildings: area0.buildings.filter((b) => !inAny(skip, b.o[0] / 10, b.o[1] / 10)),
+      buildings: area0.buildings.filter((b) => !inAny(skip, b.o[0] / 10, b.o[1] / 10) && (qs.get('ovl') === '0' || !ownerHas(b.o[0], b.o[1]))),
       trees: (() => { const o: number[] = []; for (let i = 0; i < area0.trees.length; i += 5) if (!inAny(skip, area0.trees[i] / 10, area0.trees[i + 1] / 10)) o.push(area0.trees[i], area0.trees[i + 1], area0.trees[i + 2], area0.trees[i + 3], area0.trees[i + 4]); return o; })(),
       lamps: area0.lamps.filter((l) => !inAny(skip, l[0] / 10, l[1] / 10)) } : area0;
+    if (skip.length) console.info('[City] overlap', id, 'buildings dropped (owner rect / same footprint at owner):', area0.buildings.length - area.buildings.length, 'of', area0.buildings.length);
     const group = new THREE.Group(); group.name = 'area:' + id;
     // Landmarks first: their footprints decide which generated buildings are never built (once per area load).
     const origin = entry.origin;
     const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [], pads: [] } : await buildLandmarks(id, origin, terrain, renderer, off);
+    // Landmarks of a tile whose overlap THIS tile owns (Newark's Penn Station, Military Park and Wars of America stand on Passaic's ground): their pads, footprints and
+    // colliders apply here too, so the ground is levelled under them, our buildings under them are culled and the robot collides with them (run F, overlap seam).
+    for (const [other, os] of Object.entries(OVERLAP_OWNERS)) {
+      if (!os?.includes(id as AreaId) || qs.get('landmarks') === '0' || qs.get('ovl') === '0') continue; // ?ovl=0: run F overlap fixes off (before/after shots)
+      const od = await registry.loadData(other), oe = registry.get(other);
+      const lm = await buildLandmarks(other, oe.origin, od.terrain, renderer, oe.worldOffset, { padsOnly: true, within: entry.bounds });
+      landmarks.pads.push(...lm.pads); landmarks.footprints.push(...lm.footprints); landmarks.colliders.push(...lm.colliders);
+      if (lm.pads.length) console.info('[City] landmarks of', other, 'seated on', id, lm.pads.map((p) => p.id));
+    }
     // Seat each landmark: level the ground under its pad to its base height (before the terrain mesh, roads, trees and grass sample it),
     // and keep trees and grass out of the pad.
     const grassMask = mask ? parseGroundMask(mask) : null; mark('mask');

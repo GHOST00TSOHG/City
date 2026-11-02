@@ -4,7 +4,7 @@ import os from 'node:os';
 import fs from 'node:fs';
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= `${os.homedir()}/builds/.pw-browsers`;
 const { webkit } = await import('@playwright/test');
-const [outDir, port = '5190', only = ''] = process.argv.slice(2);
+const [outDir, port = "5190", only = "", extra = ""] = process.argv.slice(2);
 fs.mkdirSync(outDir, { recursive: true });
 const errors = [];
 async function open(query) {
@@ -12,7 +12,7 @@ async function open(query) {
   const p = await b.newPage({ viewport: { width: 1920, height: 1080 } });
   p.on('pageerror', (e) => errors.push(e.message));
   p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await p.goto(`http://localhost:${port}/?join=0&${query}`, { waitUntil: 'load', timeout: 300000 });
+  await p.goto(`http://localhost:${port}/?join=0&${query}&${extra}`, { waitUntil: 'load', timeout: 300000 });
   await p.waitForFunction(() => window.__city?.ready, null, { timeout: 300000 });
   await p.waitForTimeout(3000);
   return { b, p };
@@ -37,6 +37,10 @@ const VIEWS = [
   ['seam-overlap-oblique', -700, 120, -17600, 500, 0, -17500],
   ['seam-overlap-ground', -150, 3, -17000, 400, 12, -17800],
   ['seam-overlap-roof', 700, 90, -18400, 100, 0, -17400],
+  // Newark landmarks that stand inside Passaic's ground (Penn Station, Military Park pavilion, Wars of America)
+  ['seam-overlap-penn-aerial', 560, 170, -17200, 586, 0, -16912],
+  ['seam-overlap-penn-ground', 480, 7, -17060, 586, 14, -16912],
+  ['seam-overlap-penn-side', 900, 40, -16990, 560, 10, -16912],
 ];
 if (VIEWS.some((v) => want(v[0]))) {
   const { b, p } = await open('area=newark');
