@@ -125,6 +125,17 @@ function placeLandmarks(id, origin, terrain0) {
   return out;
 }
 
+// Runtime meshes are welded + indexed since 1066803 (Soup welds as it builds) and the facade attribute is snorm16 (heights as (y - FACADE_Y0) / FACADE_YS).
+// Every check below reads a flat Float32 triangle soup, so expand indexed geometry first; read facade heights through the attribute (denormalised) and decode.
+function soupOf(geo) {
+  const P = geo.attributes.position.array, I = geo.index ? geo.index.array : null; if (!I) return P;
+  const out = new Float32Array(I.length * 3); for (let i = 0; i < I.length; i++) { const v = I[i] * 3; out[i * 3] = P[v]; out[i * 3 + 1] = P[v + 1]; out[i * 3 + 2] = P[v + 2]; } return out;
+}
+function facadeHeights(geo) {
+  const A = geo.attributes.facade, q = A.normalized && S.FACADE_YS !== undefined; // pre-1066803 builds stored metres as Float32
+  const dec = (v) => (q ? v * S.FACADE_YS + S.FACADE_Y0 : v); return { floor: dec(A.getX(0)), eave: dec(A.getY(0)), F: A.array };
+}
+
 // ---------------------------------------------------------------- mesh solidity (open edges that are not embedded in another surface)
 function openEdgeReport(P, index) { // P: Float32Array xyz triples (triangle soup) or indexed
   const key = (x, y, z) => `${Math.round(x / T.weld)},${Math.round(y / T.weld)},${Math.round(z / T.weld)}`;
@@ -227,9 +238,8 @@ for (const id of ids) {
   bl.forEach((b, bi) => {
     const rs = b.r.map(ring).filter((r) => r.length >= 3); if (!rs.length) return;
     const g = S.buildBuildings([b], terrain, dummy, style); let mesh = null; g.group.traverse((o) => { if (o.isMesh) mesh = o; }); if (!mesh) return;
-    const P = mesh.geometry.attributes.position.array, F = mesh.geometry.attributes.facade.array;
+    const P = soupOf(mesh.geometry), { floor, eave, F } = facadeHeights(mesh.geometry);
     let yMin = 1e9, yMax = -1e9; for (let i = 1; i < P.length; i += 3) { yMin = Math.min(yMin, P[i]); yMax = Math.max(yMax, P[i]); }
-    const floor = F[0], eave = F[1];
     const { boundary, interior } = sampleRings(rs, 1.0), all = boundary.concat(interior);
     let minT = 1e9, maxB = -1e9, minB = 1e9, wet = 0; for (const [x, z] of boundary) { const h = terrain.heightAt(x, z); maxB = Math.max(maxB, h); minB = Math.min(minB, h); }
     for (const [x, z] of all) { const h = terrain.heightAt(x, z); minT = Math.min(minT, h); if (h < 0) wet++; }
@@ -272,7 +282,7 @@ for (const id of ids) {
   cls.e_overlap_buildings += lmOver; C.landmarkOverlaps = lmOver;
 
   // ---- c: roads (real mesh): sample triangle centroid + edge midpoints against the terrain
-  const roads = S.buildRoads(area, terrain, dummy, lm.pads), RP = roads.geometry.attributes.position.array;
+  const roads = S.buildRoads(area, terrain, dummy, lm.pads), RP = soupOf(roads.geometry);
   let rf = 0, rs = 0, rw = 0; const nTri = RP.length / 9;
   for (let t = 0; t < nTri; t++) {
     const v = [0, 1, 2].map((k) => [RP[t * 9 + k * 3], RP[t * 9 + k * 3 + 1], RP[t * 9 + k * 3 + 2]]);
@@ -298,7 +308,7 @@ for (const id of ids) {
       const p = area.piers[pi], pts = ring(p.poly ?? p.line), dense = []; const n = pts.length;
       for (let i = 0; i < (p.poly ? n : n - 1); i++) { const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % n], L = Math.hypot(x1 - x0, z1 - z0), k = Math.max(1, Math.ceil(L / 2)); for (let s = 0; s < k; s++) dense.push([x0 + ((x1 - x0) * s) / k, z0 + ((z1 - z0) * s) / k]); }
       if (!dense.length) continue;
-      const m = S.buildPoolsPiers({ ...area, pools: [], piers: [p] }, terrain, dummy), P = m.geometry.attributes.position.array, nT = P.length / 9;
+      const m = S.buildPoolsPiers({ ...area, pools: [], piers: [p] }, terrain, dummy), P = soupOf(m.geometry), nT = P.length / 9;
       if (nT === 0) { thin++; continue; }
       const up = []; // up-facing triangles (deck tops), for the deck height under a sample
       for (let t = 0; t < nT; t++) { const o = t * 9, e1 = [P[o + 3] - P[o], P[o + 4] - P[o + 1], P[o + 5] - P[o + 2]], e2 = [P[o + 6] - P[o], P[o + 7] - P[o + 1], P[o + 8] - P[o + 2]]; const ny = e1[2] * e2[0] - e1[0] * e2[2], nl = Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], ny, e1[0] * e2[1] - e1[1] * e2[0]); if (nl > 1e-9 && ny / nl > 0.9) up.push(t); }

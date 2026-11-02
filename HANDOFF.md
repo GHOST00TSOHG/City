@@ -382,3 +382,8 @@ Real Mac WebKit (headless:false), 1920x1080 for the world check, WebContent RSS 
 
 Floating: `node tools/map-audit.mjs e` (`tools/map-audit.out/e.json`, uncommitted): floating buildings 0, in water 0, overlaps 0, shore steps 0, piers floating/sunk/unconnected 0, ground-void rays 0. BUT sunk buildings 28,777, road floating/sunk 67k/67k, non-solid buildings 28,855 and pier open shells 373 are back (PR #46 had 0). Run E did not touch what the audit bundles (buildings, geom, terrainCore); it most likely predates the welded/quantised `Soup` (1066803) and misreads it. Not isolated at the base commit.
 Not run: `npm run test:smoke`, gitleaks (not installed). Landmark GLB open edges unchanged. Run D issues unchanged: LOD cross-fade, Key West sea, jagged far-ring triangles on the Passaic south cut, `?backend=webgl2` with Int8 attributes.
+
+### Wrap-up of PR #47 (2026-11-02, after run E)
+- **Map audit fixed, not the map.** The run E "sunk 28,777 / road 67k / non-solid 28,855 / pier shells 373" were audit misreads of the welded + quantised `Soup` geometry (1066803): it read indexed meshes as a triangle soup and the snorm16 `facade` attribute as metres. `tools/map-audit.mjs` now expands indexed geometry (`soupOf`) and decodes facade heights with `FACADE_Y0/YS` (`facadeHeights`). Base 910fa1c (tree = 3ff3744) and head both: every class 0 in all 5 areas; Newark road tris 2,242,883 at both (same geometry measured).
+- `npm run test:smoke` (SwiftShader, WebGL2 path): 2 passed (laptop + phone), 58.7 s. gitleaks cfbfcc0..HEAD: no leaks.
+- Memory: Luis accepted ~1.9 GB WebContent with all areas loaded (2026-11-02 12:08 PM ET); the 300 MB goal is dropped.
