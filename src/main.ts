@@ -61,6 +61,16 @@ createScene(canvas, areaId).then(async (app) => {
   // Preload the other areas' data one at a time once the first frame is up, so switching never waits on the network.
   const idle = (window as any).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
   idle(async () => { for (const { id } of registry.areas) if (id !== areaId) await app.preload(id); });
+  // Key West fly-over cue: distance + a heading arrow to the beacon, shown while the player is out over the water between NJ and Key West
+  const cue = document.createElement('div'); cue.id = 'kwcue'; cue.innerHTML = '<span class="arrow">&#9650;</span> <b>Key West</b> <span class="km"></span>'; document.body.appendChild(cue);
+  const cueArrow = cue.querySelector('.arrow') as HTMLElement, cueKm = cue.querySelector('.km') as HTMLElement, camDir = new THREE.Vector3();
+  const updateCue = () => {
+    const to = app.flight.to(player.pos.x, player.pos.z), inKW = player.area === 'keywest' && to.dist < 3500;
+    cue.classList.toggle('on', !inKW && to.dist > 800);
+    if (!cue.classList.contains('on')) return;
+    app.camera.getWorldDirection(camDir); const yaw = Math.atan2(camDir.x, -camDir.z);
+    cueArrow.style.transform = `rotate(${((to.bearing - yaw) * 180) / Math.PI}deg)`; cueKm.textContent = (to.dist / 1000).toFixed(1) + ' km';
+  };
   const hint = document.createElement('div'); hint.id = 'hint';
   hint.textContent = 'Free cam: WASD move · drag look · E/Q up/down · Shift fast · G walk · V robot';
   document.body.appendChild(hint); hint.classList.add('gone');
@@ -202,7 +212,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__weather = () => ({ ...app.weatherMix });
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
-  w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
+  w.__world = () => app.worldState(); w.__app = app; w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
@@ -252,7 +262,7 @@ createScene(canvas, areaId).then(async (app) => {
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
     ts = sec('fx', ts);
-    app.update(dt, t); const wm = app.weatherMix;
+    app.update(dt, t); if ((frames & 7) === 0) updateCue(); const wm = app.weatherMix;
     rain.mesh.visible = wm.rain > 0.01; rain.setIntensity(wm.rain); snow.mesh.visible = wm.snow > 0.01; snow.setIntensity(wm.snow);
     rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     ts = sec('world update (trees/grass/interiors)', ts);

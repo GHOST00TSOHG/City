@@ -59,11 +59,28 @@ export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
   return { positions: pos, colors: col, indices: Uint32Array.from(idx), triangles: idx.length / 3 };
 }
 
-/** The ring as one lit mesh (fogged like everything else). */
+export interface Rect { minX: number; maxX: number; minZ: number; maxZ: number }
+const rectDist = (b: Rect, x: number, z: number) => Math.hypot(Math.max(b.minX - x, 0, x - b.maxX), Math.max(b.minZ - z, 0, z - b.maxZ));
+
+/** Keeps the ring triangles whose centre is nearer to `self` than to any rectangle in `others` (the other loaded tiles and link strips; inside one = 0 m),
+ *  so where two rings would overlap only the nearer tile's ring is drawn (no double ring, no z-fighting) and no ring pokes through another tile. Pure. */
+export function ownedRingIndices(pos: Float32Array, idx: Uint32Array, self: Rect, others: Rect[]): Uint32Array {
+  if (!others.length) return idx;
+  const out = new Uint32Array(idx.length); let n = 0;
+  for (let i = 0; i < idx.length; i += 3) {
+    const a = idx[i] * 3, b = idx[i + 1] * 3, c = idx[i + 2] * 3, x = (pos[a] + pos[b] + pos[c]) / 3, z = (pos[a + 2] + pos[b + 2] + pos[c + 2]) / 3, ds = rectDist(self, x, z);
+    let keep = true; for (const o of others) if (rectDist(o, x, z) < ds - 1e-6) { keep = false; break; }
+    if (keep) { out[n++] = idx[i]; out[n++] = idx[i + 1]; out[n++] = idx[i + 2]; }
+  }
+  return out.slice(0, n);
+}
+
+/** The ring as one lit mesh (fogged like everything else). `cull(self, others)` re-owns its triangles when the set of loaded tiles changes. */
 export function buildFarGround(t: TerrainGrid, inland: boolean) {
   const d = farGroundData(t, inland), g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(d.positions, 3)); g.setAttribute('color', new THREE.BufferAttribute(d.colors, 3));
   g.setIndex(new THREE.BufferAttribute(d.indices, 1)); g.computeVertexNormals(); g.computeBoundingSphere();
-  const m = new THREE.Mesh(g, new THREE.MeshLambertNodeMaterial({ vertexColors: true })); m.name = 'far-ground'; m.frustumCulled = false; m.renderOrder = -1;
+  const m = new THREE.Mesh(g, new THREE.MeshLambertNodeMaterial({ vertexColors: true })) as unknown as THREE.Mesh & { cull(self: Rect, others: Rect[]): number }; m.name = 'far-ground'; m.frustumCulled = false; m.renderOrder = -1;
+  m.cull = (self, others) => { const idx = ownedRingIndices(d.positions, d.indices, self, others); g.setIndex(new THREE.BufferAttribute(idx, 1)); return idx.length / 3; };
   return m;
 }

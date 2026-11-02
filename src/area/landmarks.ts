@@ -29,7 +29,7 @@ let ktx2: KTX2Loader | null = null;
 let index: Promise<Record<string, string[]>> | null = null;
 
 /** Area origins come from the baked area manifest (same point the bake projected from). */
-export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer) {
+export async function buildLandmarks(areaId: string, origin: { lat: number; lon: number } | undefined, terrain: Terrain, renderer: THREE.WebGPURenderer, off: { x: number; z: number } = { x: 0, z: 0 }) {
   const group = new THREE.Group(); group.name = 'landmarks';
   const colliders: LandmarkCollider[] = [], footprints: LandmarkFootprint[] = [], pads: LandmarkPad[] = [];
   if (!origin) return { group, colliders, footprints, pads };
@@ -57,7 +57,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       // glTF front is -Z (north at heading 0); headingDeg is clockwise from north, three's +Y rotation is counter-clockwise.
       lod.rotation.y = -THREE.MathUtils.degToRad(m.headingDeg ?? 0);
       lod.scale.setScalar(m.scale ?? 1);
-      const [x, z] = projectLatLon(origin, m.lat, m.lon);
+      const [lx, lz] = projectLatLon(origin, m.lat, m.lon), x = lx + off.x, z = lz + off.z; // world frame
       lod.position.set(x, 0, z); lod.updateMatrixWorld(true);
       const box = new THREE.Box3().setFromObject(levels[0]);
       let groundY = Infinity;
@@ -69,7 +69,7 @@ export async function buildLandmarks(areaId: string, origin: { lat: number; lon:
       group.add(lod);
       if (col) colliders.push(toCollider(col, lod.matrixWorld));
       const pts: [number, number][] = m.footprint?.length! >= 3
-          ? m.footprint!.map(([la, lo]) => projectLatLon(origin, la, lo))
+          ? m.footprint!.map(([la, lo]) => { const q = projectLatLon(origin, la, lo); return [q[0] + off.x, q[1] + off.z] as [number, number]; })
           : ([[local.min.x, local.min.z], [local.max.x, local.min.z], [local.max.x, local.max.z], [local.min.x, local.max.z]] as const)
               .map(([px, pz]) => { const v = new THREE.Vector3(px, 0, pz).applyMatrix4(lod.matrixWorld); return [v.x, v.z] as [number, number]; });
       // the pad is the union of the outline and the model's own plan box (a tower or steps can overhang an OSM outline)

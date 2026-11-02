@@ -14,7 +14,7 @@ const COVER = [0x8a8470, 0x5d7444, 0xd8cba4, 0x7c7a74, 0x46603a, 0x5a6646, 0x5a8
 const SEABED = new THREE.Color(0xb9b08a), DEEP = new THREE.Color(0x2c6a70);
 
 /** Terrain grid as one indexed mesh with per-vertex landcover colour; under-water cells tint toward a sandy-teal seabed. */
-export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaStyle = styleFor('')) {
+export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaStyle = styleFor(''), skip: { minX: number; maxX: number; minZ: number; maxZ: number }[] = []) {
   const { nx, nz, cell, x0, z0, h, cover } = t;
   const pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), gw = new Float32Array(nx * nz * 4);
   const c = new THREE.Color(), tint = new THREE.Color(style.groundTint);
@@ -45,7 +45,10 @@ export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaSt
     col.set([c.r, c.g, c.b], i * 3);
   }
   const idx = new Uint32Array((nx - 1) * (nz - 1) * 6); let k = 0;
+  // cells whose centre lies inside a higher-priority tile (skip rects, shrunk 12 m so the two terrains overlap a little instead of cracking) are not drawn
+  const skipped = (x: number, z: number) => skip.some((r) => x > r.minX + 12 && x < r.maxX - 12 && z > r.minZ + 12 && z < r.maxZ - 12);
   for (let iz = 0; iz < nz - 1; iz++) for (let ix = 0; ix < nx - 1; ix++) {
+    if (skip.length && skipped(x0 + (ix + 0.5) * cell, z0 + (iz + 0.5) * cell)) continue;
     const a = iz * nx + ix, b = a + 1, cc = a + nx + 1, d = a + nx;
     idx.set([a, cc, b, a, d, cc], k); k += 6; // CCW from above (y up, z south)
   }
@@ -53,7 +56,7 @@ export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaSt
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   g.setAttribute('gmat', new THREE.BufferAttribute(gw, 4));
-  g.setIndex(new THREE.BufferAttribute(idx, 1));
+  g.setIndex(new THREE.BufferAttribute(k === idx.length ? idx : idx.slice(0, k), 1));
   g.computeVertexNormals(); g.computeBoundingSphere();
   const m = new THREE.Mesh(g, material); m.name = 'terrain';
   return m;

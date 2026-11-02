@@ -147,3 +147,24 @@ function roofShape(s: Soup, b: Building, e: number, roof: THREE.Color, wall: THR
   face([c[1], c[2], bb], roof); face([c[3], c[0], a], roof);
   soffit(c);
 }
+
+/** Simple detail for the world's far tiles / high-fast flight: one merged mesh of plain extruded footprints (flat tops, wall colour, no facade data, no
+ *  parapets, no pitched roofs). Same buildings, ~10x fewer triangles and ONE draw call instead of one per 600 m chunk. */
+export function buildBuildingsFar(list: Building[], terrain: Terrain, material: THREE.Material) {
+  const s = new Soup(), wall = new THREE.Color(), roof = new THREE.Color();
+  for (const b of list) {
+    if (b.m > 2) continue; // parts hanging above another building
+    const ring = ringPts(b.r[0] ?? []); if (ring.length < 3) continue;
+    let lo = Infinity, hi = -Infinity; for (const [x, z] of ring) { const g = terrain.heightAt(x, z); lo = Math.min(lo, g); hi = Math.max(hi, g); }
+    lo = Math.max(lo, 0) - 0.3; const top = Math.max(hi, 0.2) + b.h;
+    wall.setHex(b.wc).multiplyScalar(0.8); roof.setHex(b.rc ?? b.wc).multiplyScalar(0.55);
+    const sign = signedArea(ring) > 0 ? 1 : -1;
+    for (let i = 0; i < ring.length; i++) {
+      const [x0, z0] = ring[i], [x1, z1] = ring[(i + 1) % ring.length], dx = x1 - x0, dz = z1 - z0, L = Math.hypot(dx, dz); if (L < 0.3) continue;
+      s.quad([x0, lo, z0], [x1, lo, z1], [x1, top, z1], [x0, top, z0], wall, [(dz / L) * sign, 0, (-dx / L) * sign]);
+    }
+    flatPoly(s, ring, [], top, roof);
+  }
+  const m = new THREE.Mesh(s.empty ? new THREE.BufferGeometry() : s.geometry(), material); m.name = 'buildings-far';
+  return m;
+}

@@ -33,7 +33,7 @@ export interface AreaEntry {
   /** switcher button text */ readonly label: string;
   /** HUD title */ readonly title: string;
   readonly origin: LatLon;
-  /** tile extent, area-local ENU m */ bounds: Bounds;
+  /** tile extent, shared world frame m */ bounds: Bounds;
   /** true once `bounds` comes from the decoded terrain instead of the bake bbox */ boundsExact: boolean;
   /** area-local origin in the shared world frame, m */ readonly worldOffset: { readonly x: number; readonly z: number };
   readonly views: AreaView[];
@@ -71,13 +71,38 @@ export const WORLD_ORIGIN_ID: AreaId = 'newark';
 const DEFS = areaDefs as unknown as Record<string, { origin: LatLon; bbox: { west: number; south: number; east: number; north: number } }>;
 const worldOrigin = DEFS[WORLD_ORIGIN_ID].origin;
 
+/** Centre of the playable world sits at (0, 0): every offset below is moved by this so float32 coordinates stay within ~23 km. */
+export const FRAME_SHIFT = { x: -1000, z: -21000 };
+/** Slide applied to the shore pair (Sandy Hook + Highlands, together, so their internal geometry stays true): the real gap from Newark/Passaic
+ *  is 29-38 km. After the slide the Sandy Hook road end sits straight south of Passaic's south-edge road (x), 1.2 km below its edge (z), and the
+ *  NJ link road (src/world/links.ts) joins them. */
+export const SHORE_SLIDE = { x: -14093, z: -25966 };
+/** Key West is placed 25 km south of the Highlands tile (the real 1,880 km is not playable): a fly-over, no tile between. */
+export const KEYWEST_OFFSET = { x: 2300, z: 43254 };
+const LAYOUT_NOTE = 'newark/passaic keep their true relative offsets; bayshore + sandyhook = true + SHORE_SLIDE; keywest = KEYWEST_OFFSET';
+
+function layoutOffset(id: AreaId): { x: number; z: number } {
+  const d = DEFS[id], [ox, oz] = projectLatLon(worldOrigin, d.origin.lat, d.origin.lon);
+  let x = Math.round(ox), z = Math.round(oz);
+  if (id === 'bayshore' || id === 'sandyhook') { x += SHORE_SLIDE.x; z += SHORE_SLIDE.z; }
+  if (id === 'keywest') { x = KEYWEST_OFFSET.x; z = KEYWEST_OFFSET.z; }
+  return { x: x + FRAME_SHIFT.x, z: z + FRAME_SHIFT.z };
+}
+void LAYOUT_NOTE;
+
 function makeEntry(id: AreaId): AreaEntry {
-  const d = DEFS[id], m = META[id], [ox, oz] = projectLatLon(worldOrigin, d.origin.lat, d.origin.lon);
+  const d = DEFS[id], m = META[id], o = layoutOffset(id);
   const [x0, zN] = projectLatLon(d.origin, d.bbox.north, d.bbox.west), [x1, zS] = projectLatLon(d.origin, d.bbox.south, d.bbox.east);
-  return { id, label: m.label, title: m.title, origin: d.origin, bounds: { minX: x0, maxX: x1, minZ: zN, maxZ: zS }, boundsExact: false,
-    worldOffset: { x: ox, z: oz }, views: m.views, load: 'idle', data: null, bundle: null, tile: null };
+  return { id, label: m.label, title: m.title, origin: d.origin, bounds: { minX: x0 + o.x, maxX: x1 + o.x, minZ: zN + o.z, maxZ: zS + o.z }, boundsExact: false,
+    worldOffset: o, views: m.views, load: 'idle', data: null, bundle: null, tile: null };
 }
 const entries = new Map<string, AreaEntry>(AREA_IDS.map((id) => [id, makeEntry(id)]));
+
+/** Where tiles overlap (Passaic sits inside Newark's tile) the first id wins: it owns the overlap, the others cull their terrain, buildings, trees and lamps there. */
+export const PRIORITY: readonly AreaId[] = ['passaic', 'newark', 'sandyhook', 'bayshore', 'keywest'];
+/** Areas whose content is culled where the listed (higher priority) tiles are. */
+export const OVERLAP_OWNERS: Partial<Record<AreaId, AreaId[]>> = { newark: ['passaic'] };
+const boundsDist = (b: Bounds, x: number, z: number) => Math.hypot(Math.max(b.minX - x, 0, x - b.maxX), Math.max(b.minZ - z, 0, z - b.maxZ));
 
 export const registry = {
   /** all areas in switcher order */
@@ -93,7 +118,7 @@ export const registry = {
     const e = registry.get(id);
     if (!e.data) {
       if (e.load === 'idle' || e.load === 'error') e.load = 'loading';
-      e.data = fetchArea(id).then((b) => {
+      e.data = fetchArea(id, e.worldOffset).then((b) => { // arrives already shifted into the world frame
         e.bundle = b; if (e.load === 'loading') e.load = 'data';
         const t = b.terrain; e.bounds = { minX: t.x0, maxX: t.x0 + (t.nx - 1) * t.cell, minZ: t.z0, maxZ: t.z0 + (t.nz - 1) * t.cell }; e.boundsExact = true;
         return b;
@@ -106,14 +131,17 @@ export const registry = {
   /** area-local -> shared world frame (writes into `out`, returns it) */
   toWorld(id: string, x: number, z: number, out: { x: number; z: number } = { x: 0, z: 0 }) { const o = registry.get(id).worldOffset; out.x = x + o.x; out.z = z + o.z; return out; },
   toLocal(id: string, wx: number, wz: number, out: { x: number; z: number } = { x: 0, z: 0 }) { const o = registry.get(id).worldOffset; out.x = wx - o.x; out.z = wz - o.z; return out; },
-  /** The area whose tile contains the world point, else the nearest tile (distance to its bounds rectangle). */
+  /** The area whose tile contains the world point (OVERLAP_PRIORITY first), else the nearest tile (distance to its bounds rectangle). */
   areaAt(wx: number, wz: number): AreaEntry {
     let best = entries.get(AREA_IDS[0])!, bd = Infinity;
-    for (const e of entries.values()) {
-      const x = wx - e.worldOffset.x, z = wz - e.worldOffset.z, b = e.bounds;
-      const d = Math.hypot(Math.max(b.minX - x, 0, x - b.maxX), Math.max(b.minZ - z, 0, z - b.maxZ));
+    for (const id of PRIORITY) {
+      const e = entries.get(id)!, d = boundsDist(e.bounds, wx, wz);
       if (d < bd) { bd = d; best = e; }
     }
     return best;
   },
+  /** distance (m) from a world point to an area's tile rectangle (0 inside) */
+  distTo(id: string, wx: number, wz: number) { return boundsDist(registry.get(id).bounds, wx, wz); },
+  /** area views in world coordinates */
+  worldViews(id: string): AreaView[] { const o = registry.get(id).worldOffset; return registry.get(id).views.map((v) => ({ ...v, pos: [v.pos[0] + o.x, v.pos[1], v.pos[2] + o.z], look: [v.look[0] + o.x, v.look[1], v.look[2] + o.z] })); },
 };
