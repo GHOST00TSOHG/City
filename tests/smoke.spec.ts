@@ -12,7 +12,7 @@ for (const vp of [{ name: 'laptop', width: 1280, height: 800 }, { name: 'phone',
     await page.setViewportSize(vp);
     await page.goto('/?perf=1&gl=1'); // headless CI has no WebGPU adapter; gl=1 exercises the WebGL2 fallback
     await expect(page.locator('#city')).toBeVisible();
-    await page.waitForFunction(() => (window as any).__city?.ready, null, { timeout: 60_000 });
+    await page.waitForFunction(() => (window as any).__city?.ready, null, { timeout: Number(process.env.READY_MS ?? 60_000) });
     await page.waitForTimeout(Number(process.env.SETTLE_MS ?? 4000));
     for (const cam of cameras) await page.screenshot({ path: `${shots}/${tag}-${vp.name}-${cam.id}.png` });
     const info = await page.evaluate(() => (window as any).__city);

@@ -1,7 +1,7 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: 'tests',
-  timeout: 90_000,
+  timeout: Number(process.env.TEST_TIMEOUT_MS ?? 90_000), // slow software GL (headless SwiftShader) needs READY_MS / TEST_TIMEOUT_MS raised
   use: {
     baseURL: process.env.CITY_URL ?? 'http://localhost:4173',
     browserName: 'chromium',
