@@ -1,0 +1,169 @@
+{
+ "label": "dbg",
+ "rssAfterFirstTile": {
+  "other": 148,
+  "Network": 51,
+  "GPU": 270,
+  "WebContent": 854,
+  "total": 1324
+ },
+ "loadMs": 7031,
+ "rssAllTiles": {
+  "other": 148,
+  "Network": 51,
+  "GPU": 270,
+  "WebContent": 854,
+  "total": 1324
+ },
+ "geo": {
+  "totalMB": 81.5,
+  "kinds": {
+   "terrain": {
+    "MB": 10.3,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "color": 0,
+     "normal": 0,
+     "gmat": 0,
+     "index": 0,
+     "released": 10.3
+    }
+   },
+   "roads": {
+    "MB": 30.3,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 30.3
+    }
+   },
+   "pools+piers": {
+    "MB": 5.2,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 5.2
+    }
+   },
+   "bld chunk": {
+    "MB": 20.5,
+    "n": 34,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "facade": 0,
+     "index": 0,
+     "released": 20.5
+    }
+   },
+   "buildings-far": {
+    "MB": 6.1,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0,
+     "released": 6.1
+    }
+   },
+   "sea": {
+    "MB": 0,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0
+    }
+   },
+   "lamps": {
+    "MB": 0.2,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "glow": 0,
+     "index": 0,
+     "inst": 0.1
+    }
+   },
+   "lamp pools": {
+    "MB": 0.1,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "uv": 0,
+     "index": 0,
+     "inst": 0.1
+    }
+   },
+   "trees": {
+    "MB": 4.9,
+    "n": 13,
+    "attr": {
+     "position": 0.7,
+     "normal": 0.7,
+     "uv": 0.5,
+     "tpos": 0.3,
+     "inst": 2.5,
+     "index": 0.2
+    }
+   },
+   "grass": {
+    "MB": 2.1,
+    "n": 1,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "blade": 2.1,
+     "index": 0
+    }
+   },
+   "interior": {
+    "MB": 0.1,
+    "n": 2,
+    "attr": {
+     "position": 0,
+     "normal": 0,
+     "color": 0,
+     "index": 0
+    }
+   },
+   "far-ground": {
+    "MB": 1.7,
+    "n": 1,
+    "attr": {
+     "position": 0.3,
+     "color": 0.3,
+     "normal": 0.3,
+     "index": 0.7
+    }
+   }
+  },
+  "tiles": 1,
+  "calls": 49,
+  "tris": 3479166
+ },
+ "timeline": "2:788:195 3:805:273 5:856:274 6:858:274 8:854:270 9:854:270 11:854:270",
+ "peakWebContent": 858,
+ "rssFinal": {
+  "other": 148,
+  "Network": 51,
+  "GPU": 270,
+  "WebContent": 854,
+  "total": 1324
+ },
+ "errors": 0,
+ "errorSample": []
+}

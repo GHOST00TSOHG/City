@@ -97,6 +97,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
   const farMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   shared.add(farMat);
+  const SEA_SIDES: Record<string, string[]> = { passaic: ['s'] }; // inland tiles whose far ring faces open water on that side (see farGround.ts)
   const TILELOG = qs.get('tilelog') === '1';
   const nextTask = () => new Promise<void>((r) => setTimeout(r, 0)); // let a frame render between the heavy stages of a tile build
   const inRect = (b: Bounds, x: number, z: number) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
@@ -143,16 +144,17 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     await nextTask(); lap = performance.now();
     const interiors = await createInteriors(buildings, terrain); group.add(interiors.group);
     const collision = await createCollision(buildings, terrain, landmarks.colliders); mark('interiors+collision');
-    const ring = buildFarGround(terrain, inland); group.add(ring); mark('far ring'); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
+    const ring = buildFarGround(terrain, inland, SEA_SIDES[id] ?? []); group.add(ring); mark('far ring'); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
     group.traverse((o: any) => { if (o.isMesh && !o.isInstancedMesh && /^(roads|terrain|pools\+piers|buildings-far|bld )/.test(o.name)) freeCpuAfterFirstDraw(o); });
     const treeMeshes = trees.group.children.map((o) => ({ o: o as THREE.InstancedMesh, lo: (o as any).userData.lo as number, hi: (o as any).userData.hi as number }));
     let far = false, ready = false;
     /** Simple detail (far tile, or high/fast flight): merged flat-top buildings, no lamps/grass/interiors/ferry, trees only as their far impostor. */
-    const setFar = (f: boolean) => {
-      if (f === far || !ready) return; far = f;
+    let tiny = false; // trees are sub-pixel (very high, or the tile is > 5 km away): no tree meshes at all
+    const setFar = (f: boolean, vh = false) => {
+      if (!ready || (f === far && vh === tiny)) return; far = f; tiny = vh;
       blds.group.visible = !f; farBlds.visible = f; lamps.posts.visible = !f; lamps.pools.visible = !f; grass.mesh.visible = !f; interiors.group.visible = !f; if (ferry) ferry.group.visible = !f;
       const maxHi = Math.max(...treeMeshes.map((t) => t.hi));
-      for (const t of treeMeshes) { t.o.visible = !f || t.hi >= maxHi; (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
+      for (const t of treeMeshes) { t.o.visible = !tiny && (!f || t.hi >= maxHi); (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
     };
     return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
@@ -194,6 +196,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     applyWeather(); lapW('weather');
   }
   const WANT_DEPS = (id: string): string[] => (OVERLAP_OWNERS[id as AreaId] ?? []).flatMap((o) => [...WANT_DEPS(o), o]);
+  let veryHigh = false; // above ~1.2 km: no trees
   let fastHigh = false; // world-wide simple-detail switch: high or fast flight
   const farWanted = (t: Content) => fastHigh || registry.distTo(t.id, camera.position.x, camera.position.z) > (t.far ? 2200 : 2500);
   /** Builds a tile (owners first), compiles it off-scene, then adds it in one go. Concurrent calls for one id share the work. */
@@ -206,7 +209,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const tc = performance.now(); const tmp = new THREE.Scene(); next.group.visible = true; tmp.add(next.group);
       if (A6) await prewarm(renderer, tmp, camera, scene); else try { await renderer.compileAsync(tmp, camera); } catch { /* warm-up only */ }
       tmp.remove(next.group);
-      const tr = performance.now(); next.setReady(true); next.setFar(farWanted(next)); next.setReady(false);
+      const tr = performance.now(); next.setReady(true); next.setFar(farWanted(next), veryHigh); next.setReady(false);
       // Staged reveal: the group goes in with every child hidden, then one child per frame is shown, so the first draw of a tile uploads its
       // buffers a mesh at a time instead of ~100-250 MB in one frame (that was a 0.5-1.9 s hitch).
       const kids = next.group.children.slice(), want = kids.map((k) => k.visible);
@@ -316,8 +319,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   function streamTick(dt: number) {
     const p = player.pos, v = player.vel, speed = v.length(), alt = player.altitude;
     // simple detail when high or fast (hysteresis)
-    fastHigh = fastHigh ? !(alt < 200 && speed < 55) : (alt > 250 || speed > 70);
-    for (const t of tiles.values()) t.setFar(farWanted(t));
+    fastHigh = fastHigh ? !(alt < 320 && speed < 72) : (alt > 400 || speed > 88); // thresholds raised (was 250 m / 70 m/s) so the full -> flat-top building switch happens where it is harder to see; real-GPU headroom allows it
+    veryHigh = veryHigh ? alt > 900 : alt > 1200;
+    for (const t of tiles.values()) t.setFar(farWanted(t), veryHigh || registry.distTo(t.id, camera.position.x, camera.position.z) > 5000);
     const T = Math.min(6, Math.max(1, 0.5 + alt / 200));
     const R = stream.base + speed * T + 1.5 * alt; // design note: 1.5 km + speed*T + 1.5*alt; base raised to 8 km because tiles are small and the night fog (density 0.00016) still shows ~30% at 8 km; far tiles use simple detail, so they are cheap
     stream.radius = R; stream.lead = speed * T;

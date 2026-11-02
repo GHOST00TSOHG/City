@@ -16,7 +16,7 @@ const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t 
 export interface FarGroundData { positions: Float32Array; colors: Float32Array; indices: Uint32Array; triangles: number }
 
 /** Pure geometry (also run by the map audit): perimeter of the tile -> FAR_LAYERS square rings. */
-export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
+export function farGroundData(t: TerrainGrid, inland: boolean, seaSides: string[] = []): FarGroundData {
   const { nx, nz, cell, x0, z0, h } = t;
   // perimeter, clockwise seen from above (x east, z south): top edge W->E, right edge N->S, bottom edge E->W, left edge S->N
   const px: number[] = [], pz: number[] = [], ph: number[] = [], ox: number[] = [], oz: number[] = [];
@@ -26,6 +26,13 @@ export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
   for (let ix = nx - 1; ix > 0; ix--) add(ix, nz - 1);
   for (let iz = nz - 1; iz > 0; iz--) add(0, iz);
   const N = px.length, K = FAR_LAYERS.length + 1;
+  // Sides of an inland tile that face open water (Passaic's south side is Newark Bay): the ring there falls from the edge level to a seabed instead of
+  // climbing to a land plain, with a wavy cut so the new shoreline is not a straight line parallel to the tile edge.
+  const sea = new Uint8Array(N), wob = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    sea[i] = inland && ((seaSides.includes('s') && oz[i] > 0) || (seaSides.includes('n') && oz[i] < 0) || (seaSides.includes('e') && ox[i] > 0) || (seaSides.includes('w') && ox[i] < 0)) ? 1 : 0;
+    wob[i] = 0.5 + 0.28 * Math.sin(i * cell / 410) + 0.22 * Math.sin(i * cell / 133 + 1.7);
+  }
   const H: Float32Array[] = [Float32Array.from(ph)];
   for (let k = 1; k < K; k++) {
     const d = FAR_LAYERS[k - 1], prev = H[k - 1], rad = Math.min(N >> 1, Math.round(d / cell / 2)); // tangential blur grows with distance: edge bumps smear out, the plain follows the local edge level
@@ -34,17 +41,17 @@ export function farGroundData(t: TerrainGrid, inland: boolean): FarGroundData {
     const f = smooth(d / 70);
     for (let i = 0; i < N; i++) {
       const lo = i - rad + N, hi = i + rad + N, avg = rad ? (pre[hi + 1] - pre[lo]) / (2 * rad + 1) : prev[i];
-      out[i] = inland ? avg + (Math.max(avg, 0.3) - avg) * f : avg; // inland has no sea: a river bed at the edge climbs to the plain; coastal keeps its seabed under the sea plane
+      out[i] = sea[i] ? avg + (-2.6 - avg) * smooth(d / (160 + 240 * wob[i])) : inland ? avg + (Math.max(avg, 0.3) - avg) * f : avg; // inland has no sea: a river bed at the edge climbs to the plain; coastal keeps its seabed under the sea plane
     }
     H.push(out);
   }
-  const pos = new Float32Array(N * K * 3), col = new Float32Array(N * K * 3), land3 = rgb(LAND).map(lin), sea = rgb(SEABED).map(lin), deep = rgb(DEEP).map(lin);
+  const pos = new Float32Array(N * K * 3), col = new Float32Array(N * K * 3), land3 = rgb(LAND).map(lin), seabed = rgb(SEABED).map(lin), deep = rgb(DEEP).map(lin);
   for (let k = 0; k < K; k++) {
     const d = k ? FAR_LAYERS[k - 1] : 0;
     for (let i = 0; i < N; i++) {
       const v = k * N + i, y = H[k][i];
       pos[v * 3] = px[i] + ox[i] * d; pos[v * 3 + 1] = y; pos[v * 3 + 2] = pz[i] + oz[i] * d;
-      if (y < 0 && !inland) { const m = Math.min(1, -y / 2.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = sea[q] + (deep[q] - sea[q]) * m; }
+      if (y < 0 && (!inland || sea[i])) { const m = Math.min(1, -y / 2.5); for (let q = 0; q < 3; q++) col[v * 3 + q] = seabed[q] + (deep[q] - seabed[q]) * m; }
       else for (let q = 0; q < 3; q++) col[v * 3 + q] = land3[q];
     }
   }
@@ -76,8 +83,8 @@ export function ownedRingIndices(pos: Float32Array, idx: Uint32Array, self: Rect
 }
 
 /** The ring as one lit mesh (fogged like everything else). `cull(self, others)` re-owns its triangles when the set of loaded tiles changes. */
-export function buildFarGround(t: TerrainGrid, inland: boolean) {
-  const d = farGroundData(t, inland), g = new THREE.BufferGeometry();
+export function buildFarGround(t: TerrainGrid, inland: boolean, seaSides: string[] = []) {
+  const d = farGroundData(t, inland, seaSides), g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(d.positions, 3)); g.setAttribute('color', new THREE.BufferAttribute(d.colors, 3));
   g.setIndex(new THREE.BufferAttribute(d.indices, 1)); g.computeVertexNormals(); g.computeBoundingSphere();
   const m = new THREE.Mesh(g, new THREE.MeshLambertNodeMaterial({ vertexColors: true })) as unknown as THREE.Mesh & { cull(self: Rect, others: Rect[]): number }; m.name = 'far-ground'; m.frustumCulled = false; m.renderOrder = -1;

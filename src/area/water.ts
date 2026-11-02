@@ -41,7 +41,10 @@ export function buildOcean(terrain: Terrain | null, inland = false) {
   const wn = waveNormals(), dist = length(cameraPosition.sub(p));
   const s1 = texture(wn, p.xz.div(23).add(vec2(t.mul(0.021), t.mul(0.013)))).xyz.mul(2).sub(1);
   const s2 = texture(wn, p.xz.div(7.5).add(vec2(t.mul(-0.017), t.mul(0.031)))).xyz.mul(2).sub(1);
-  const detail = s1.xy.add(s2.xy.mul(0.6)).mul(float(0.5).add(uRough.mul(0.6))).mul(smoothstep(900, 60, dist));
+  // far field: two larger-scale normal samples (swell trains 100-300 m long) that fade out only past ~9 km, so open water keeps texture instead of a flat colour
+  const s3 = texture(wn, p.xz.div(310).add(vec2(t.mul(0.004), t.mul(-0.003)))).xy.mul(2).sub(1), s4 = texture(wn, p.xz.div(95).add(vec2(t.mul(-0.007), t.mul(0.005)))).xy.mul(2).sub(1);
+  const far = s3.mul(0.55).add(s4.mul(0.35)).mul(float(0.5).add(uRough.mul(0.6))).mul(smoothstep(9000, 700, dist)).mul(smoothstep(60, 600, dist));
+  const detail = s1.xy.add(s2.xy.mul(0.6)).mul(float(0.5).add(uRough.mul(0.6))).mul(smoothstep(900, 60, dist)).add(far);
   const n = normalize(vec3(dx.negate().add(detail.x), 1, dz.negate().add(detail.y)));
   const V = normalize(cameraPosition.sub(p));
   const fres = pow(float(1).sub(max(dot(n, V), 0)), 5).mul(0.9).add(0.03);
@@ -51,7 +54,8 @@ export function buildOcean(terrain: Terrain | null, inland = false) {
   const glint = pow(max(dot(R, vec3(MOON.x, MOON.y, MOON.z)), 0), 180).mul(2.2).mul(float(1).sub(uRough.mul(0.6)));
   const shallow = vec3(0.05, 0.17, 0.18), mid = vec3(0.025, 0.1, 0.14), deep = vec3(0.012, 0.045, 0.085); // night-dimmed
   const kd = smoothstep(0, 9, depth);
-  const water = mix(mix(shallow, mid, smoothstep(0, 0.35, kd)), deep, smoothstep(0.3, 1, kd));
+  const patch = mx_noise_float(vec3(p.x.mul(0.0035), p.z.mul(0.0035), t.mul(0.02))).mul(0.5).add(0.5).mul(0.4).add(0.8).mul(open ? 1 : 0).add(open ? 0 : 1); // broad light/dark patches on open water
+  const water = mix(mix(shallow, mid, smoothstep(0, 0.35, kd)), deep, smoothstep(0.3, 1, kd)).mul(patch);
   // shoreline foam: bands rolling toward the beach, broken by noise; also faint whitecaps in storms
   const nz2 = mx_noise_float(vec3(p.x.mul(0.35), p.z.mul(0.35), t.mul(0.25))).mul(0.5).add(0.5).add(s2.x.mul(0.25));
   const band = sin(depth.mul(5).sub(t.mul(1.6))).mul(0.5).add(0.5);

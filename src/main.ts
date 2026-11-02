@@ -71,6 +71,12 @@ createScene(canvas, areaId).then(async (app) => {
     app.camera.getWorldDirection(camDir); const yaw = Math.atan2(camDir.x, -camDir.z);
     cueArrow.style.transform = `rotate(${((to.bearing - yaw) * 180) / Math.PI}deg)`; cueKm.textContent = (to.dist / 1000).toFixed(1) + ' km';
   };
+  // the title and the highlighted area button follow the player (flying from Newark to Passaic to the shore changes the area under you)
+  let shownArea = areaId;
+  const syncHud = () => {
+    if (busy || player.area === shownArea) return; shownArea = player.area; setTitle(shownArea);
+    bar.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.a === shownArea)));
+  };
   const hint = document.createElement('div'); hint.id = 'hint';
   hint.textContent = 'Free cam: WASD move · drag look · E/Q up/down · Shift fast · G walk · V robot';
   document.body.appendChild(hint); hint.classList.add('gone');
@@ -262,7 +268,7 @@ createScene(canvas, areaId).then(async (app) => {
     parts.uniforms.energy.value = cust.open ? 1.2 : energy;
     const u = parts.uniforms; u.squint.value += ((cust.open ? 0 : ctl.burstOn) - u.squint.value) * Math.min(1, rdt * 8); u.xeyes.value = damage > 0.7 ? 1 : 0;
     ts = sec('fx', ts);
-    app.update(dt, t); if ((frames & 7) === 0) updateCue(); const wm = app.weatherMix;
+    app.update(dt, t); if ((frames & 7) === 0) { updateCue(); syncHud(); } const wm = app.weatherMix;
     rain.mesh.visible = wm.rain > 0.01; rain.setIntensity(wm.rain); snow.mesh.visible = wm.snow > 0.01; snow.setIntensity(wm.snow);
     rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     ts = sec('world update (trees/grass/interiors)', ts);
