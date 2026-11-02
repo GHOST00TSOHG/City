@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { AreaData, Terrain } from './data';
 import { Soup, ringPts, flatPoly } from './geom';
+import { buildPiers } from './piers';
 import type { LandmarkPad } from './landmarks';
 import { type AreaStyle, styleFor } from './textures';
 
@@ -229,10 +230,10 @@ function disc(tri: Tri, x: number, z: number, r: number) {
   }
 }
 
-/** Pools (lit-turquoise water with a concrete coping) and piers/boardwalks. */
+/** Pools (lit-turquoise water with a concrete coping) and boat docks / piers on pilings (piers.ts). */
 export function buildPoolsPiers(a: AreaData, t: Terrain, material: THREE.Material) {
   const s = new Soup();
-  const water = new THREE.Color(0x2fa8b8), coping = new THREE.Color(0xc9c4b8), deck = new THREE.Color(0x8a7458), deckSide = new THREE.Color(0x5e4e3c);
+  const water = new THREE.Color(0x2fa8b8), coping = new THREE.Color(0xc9c4b8);
   for (const p of a.pools) {
     const pts = ringPts(p); if (pts.length < 3) continue;
     let y = Infinity; for (const [x, z] of pts) y = Math.min(y, t.heightAt(x, z)); y = Math.max(y, 0.2) + 0.12;
@@ -240,22 +241,7 @@ export function buildPoolsPiers(a: AreaData, t: Terrain, material: THREE.Materia
     const cx = pts.reduce((q, v) => q + v[0], 0) / pts.length, cz = pts.reduce((q, v) => q + v[1], 0) / pts.length;
     flatPoly(s, pts.map(([x, z]) => { const dx = x - cx, dz = z - cz, l = Math.hypot(dx, dz) || 1, k = Math.max(0, l - 0.35) / l; return [cx + dx * k, cz + dz * k] as [number, number]; }), [], y + 0.04, water);
   }
-  const DY = 1.3;
-  for (const p of a.piers) {
-    if (p.poly) {
-      const pts = ringPts(p.poly); if (pts.length < 3) continue;
-      flatPoly(s, pts, [], DY, deck);
-      for (let i = 0; i < pts.length; i++) { const [x0, z0] = pts[i], [x1, z1] = pts[(i + 1) % pts.length]; sideQuad(s, x0, z0, x1, z1, DY, deckSide); }
-    } else if (p.line) {
-      const pts = ringPts(p.line); if (pts.length < 2) continue;
-      const w = Math.max((p.w ?? 2) / 2, 0.8);
-      ribbon(pts, w, (a, b, c) => s.tri([a[0], DY, a[1]], [b[0], DY, b[1]], [c[0], DY, c[1]], deck, [0, 1, 0]));
-    }
-  }
+  buildPiers(s, a.piers, t);
   const m = new THREE.Mesh(s.geometry(), material); m.name = 'pools+piers';
   return m;
-}
-function sideQuad(s: Soup, x0: number, z0: number, x1: number, z1: number, top: number, col: THREE.Color) {
-  const a = [x0, top, z0], b = [x1, top, z1], c = [x1, -0.6, z1], d = [x0, -0.6, z0];
-  s.quad(a, b, c, d, col); s.quad(a, d, c, b, col); // both sides, cheap
 }
