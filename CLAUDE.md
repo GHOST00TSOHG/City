@@ -13,6 +13,7 @@ Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Jonn's b
 - `index.html` canvas, HUD, attribution bar
 - `src/main.ts` boot, render loop, attribution + stats overlay
 - `src/scene.ts` renderer (ACES), night lights, fog, camera + OrbitControls, fallback ground/sky, `START` origin
+- `src/world/registry.ts` the one world registry (areas, origins, bounds, world offsets, load state, tiles); `src/world/player.ts` the one player-state object (pos/vel/speed/altitude/mode/area)
 - `tools/bake/` offline area bake (fetch.mjs, bake.mjs, infer.mjs, areas.json) -> `public/areas/<id>/`
 - `tests/` Playwright smoke + `cameras.json`
 - `knowledge/` build guide, rules, plan, data sources
