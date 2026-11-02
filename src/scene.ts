@@ -24,6 +24,9 @@ import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } 
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import { createWeatherState, type WeatherKind } from './weather';
 
+/** Night haze: the fog colour. Lifted from 0x15171d (which tone-mapped to near black) so the far ground reads as a hazy blue-grey and meets the horizon glow. */
+const FOG_NIGHT = 0x1e2638;
+
 export interface View { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
 /** Start views per area (public places only). Key West origin = Southernmost Point Buoy. */
 export const VIEWS: Record<string, View[]> = {
@@ -64,7 +67,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const scene = new THREE.Scene();
   const eye = new THREE.Vector3(); // reused per frame (A6: no per-frame allocations)
   scene.background = new THREE.Color(0x070c1a);
-  scene.fog = new THREE.FogExp2(0x15171d, 0.00016);
+  scene.fog = new THREE.FogExp2(FOG_NIGHT, 0.00016);
   const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.5, 40000);
 
   // Night lighting that keeps material colours honest: neutral moonlight key + soft sky/ground fill.
@@ -183,7 +186,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const applyWeather = () => {
     const { ocean, trees, grass, lamps } = cur; const { rain, snow, fog, wet, snowCover } = wx.mix;
     const f = scene.fog as THREE.FogExp2;
-    f.color.set(0x15171d).lerp(cTmp.set(0x34373e), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3e4148), Math.min(1, fog));
+    f.color.set(FOG_NIGHT).lerp(cTmp.set(0x34373e), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3e4148), Math.min(1, fog));
     sky.setFog(f.color);
     f.density = 0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016;
     const cover = Math.min(1, rain + snow + fog * 0.9); sky.setOvercast(cover);

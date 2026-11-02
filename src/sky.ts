@@ -6,7 +6,7 @@ import { time, sin, mx_noise_float, mx_fractal_noise_float, clamp, abs, position
 export function createSky(moonDir: THREE.Vector3) {
   const group = new THREE.Group(); group.name = 'sky';
   const R = 30000;
-  const uMoon = uniform(moonDir.clone().normalize()), uHaze = uniform(0), uVis = uniform(1), uCloud = uniform(0.22), uHazeCol = uniform(new THREE.Color(0x26334a)), uFogCol = uniform(new THREE.Color(0x15171d));
+  const uMoon = uniform(moonDir.clone().normalize()), uHaze = uniform(0), uVis = uniform(1), uCloud = uniform(0.22), uHazeCol = uniform(new THREE.Color(0x26334a)), uFogCol = uniform(new THREE.Color(0x1e2638));
   const zenith = color(0x040817), mid = color(0x0c142a);
   const warm = color(0x3a3440), cool = color(0x26334a);
   const domeMat = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide, depthWrite: false, fog: false });
