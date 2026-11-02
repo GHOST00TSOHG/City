@@ -14,7 +14,7 @@ import { execFileSync } from 'node:child_process';
 process.env.PLAYWRIGHT_BROWSERS_PATH ??= `${os.homedir()}/builds/.pw-browsers`;
 const { webkit } = await import('@playwright/test');
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
-const PORT = arg('port', '5199'), ONLY = arg('only', 'all'), OUT = arg('out', 'tools/perf/out'), SHOTS = `${OUT}/connect-shots`, W = 1920, H = 1080, POP_DIST = 8000;
+const LEGS = Number(arg('legs', '99')), PORT = arg('port', '5199'), ONLY = arg('only', 'all'), OUT = arg('out', 'tools/perf/out'), SHOTS = `${OUT}/connect-shots`, W = 1920, H = 1080, POP_DIST = 8000;
 fs.mkdirSync(SHOTS, { recursive: true });
 const results = { when: new Date().toISOString(), viewport: [W, H], budget: { fps: 50, calls: 150 } };
 const errorsAll = [];
@@ -126,7 +126,7 @@ async function flightPhase(kind) {
   await p.evaluate(HELPERS);
   await p.evaluate(() => window.__h.memory()); // one full pass for the texture estimate
   const shots = [];
-  await p.evaluate(({ inspect, POP_DIST }) => {
+  await p.evaluate(({ inspect, POP_DIST, LEGS }) => {
     const reg = window.__registry, R = window.__robot, ctl = R.ctl, app = window.__app;
     const off = (id) => reg.get(id).worldOffset, bnd = (id) => reg.get(id).bounds;
     const P = (id, x, z) => [off(id).x + x, z];
@@ -138,7 +138,7 @@ async function flightPhase(kind) {
       { to: [app.flight.start.x, app.flight.start.z + 600], speed: 140, alt: 150, name: 'flight path start' },
       { to: [app.flight.end.x, app.flight.end.z], speed: 140, alt: 150, name: 'Key West fly-over' },
     ];
-    void P;
+    void P; route.length = Math.min(route.length, LEGS);
     const F = window.__flight = { samples: [], pop: [], voids: [], events: [], done: false, startT: performance.now(), leg: 0, route: route.map((r) => r.name) };
     const keys = new Set(), set = (k, on) => { if (on === keys.has(k)) return; keys.has(k) ? keys.delete(k) : keys.add(k); ctl.press(k, on); };
     const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + 90, s.z, Math.atan2(route[0].to[0] - s.x, route[0].to[1] - s.z));
@@ -176,7 +176,7 @@ async function flightPhase(kind) {
     // per-frame max of draw calls (the 1 s sampler only sees one frame)
     const calls = () => { F.winCalls = Math.max(F.winCalls ?? 0, r.drawCalls ?? r.calls); requestAnimationFrame(calls); }; requestAnimationFrame(calls);
     F.stop = () => { clearInterval(iv); clearInterval(sampler); };
-  }, { inspect, POP_DIST });
+  }, { inspect, POP_DIST, LEGS });
   await p.evaluate(() => { const c = window.__robot.ctl; c.press('Space', true); setTimeout(() => c.press('Space', false), 100); });
   let shotN = 0, nextShot = 15; const t0 = Date.now();
   while (Date.now() - t0 < 600000) {

@@ -124,6 +124,23 @@ export class Soup {
 }
 export const compactSoup = (s: Soup) => s.finish();
 
+/** A BufferGeometry as plain transferable data (worker -> main) and back. */
+export interface PackedGeo { attrs: { name: string; array: ArrayBufferView; itemSize: number; normalized: boolean }[]; index: Uint16Array | Uint32Array | null; sphere: [number, number, number, number]; box: number[] }
+export function packGeometry(g: THREE.BufferGeometry): PackedGeo {
+  g.computeBoundingSphere(); g.computeBoundingBox();
+  const s = g.boundingSphere!, b = g.boundingBox!;
+  return { attrs: Object.entries(g.attributes).map(([name, a]) => ({ name, array: a.array, itemSize: a.itemSize, normalized: a.normalized })), index: g.index ? (g.index.array as Uint16Array | Uint32Array) : null, sphere: [s.center.x, s.center.y, s.center.z, s.radius], box: [b.min.x, b.min.y, b.min.z, b.max.x, b.max.y, b.max.z] };
+}
+export const packedBuffers = (p: PackedGeo) => [...p.attrs.map((a) => a.array.buffer as ArrayBuffer), ...(p.index ? [p.index.buffer as ArrayBuffer] : [])];
+export function unpackGeometry(p: PackedGeo) {
+  const g = new THREE.BufferGeometry();
+  for (const a of p.attrs) g.setAttribute(a.name, new THREE.BufferAttribute(a.array as any, a.itemSize, a.normalized));
+  if (p.index) g.setIndex(new THREE.BufferAttribute(p.index, 1));
+  g.boundingSphere = new THREE.Sphere(new THREE.Vector3(p.sphere[0], p.sphere[1], p.sphere[2]), p.sphere[3]);
+  g.boundingBox = new THREE.Box3(new THREE.Vector3(p.box[0], p.box[1], p.box[2]), new THREE.Vector3(p.box[3], p.box[4], p.box[5]));
+  return g;
+}
+
 /** Release the CPU copy of a static mesh's vertex data after its first draw (the GPU buffer holds it; WebKit unified memory counts both). The attributes keep
  *  their type and count with an empty array; the byte total goes to `geometry.userData.gpuBytes` for the memory tools. Do not edit the mesh afterwards. */
 const KEEP_CPU = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('keepcpu') : null; // regex of mesh names to keep (1 = all)

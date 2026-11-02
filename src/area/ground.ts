@@ -14,7 +14,13 @@ const COVER = [0x8a8470, 0x5d7444, 0xd8cba4, 0x7c7a74, 0x46603a, 0x5a6646, 0x5a8
 const SEABED = new THREE.Color(0xb9b08a), DEEP = new THREE.Color(0x2c6a70);
 
 /** Terrain grid as one indexed mesh with per-vertex landcover colour; under-water cells tint toward a sandy-teal seabed. */
-export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaStyle = styleFor(''), skip: { minX: number; maxX: number; minZ: number; maxZ: number }[] = []) {
+export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaStyle = styleFor(''), skip: Rect[] = []) {
+  const m = new THREE.Mesh(terrainGeometry(t, style, skip), material); m.name = 'terrain';
+  return m;
+}
+export type Rect = { minX: number; maxX: number; minZ: number; maxZ: number };
+/** The terrain mesh geometry (pure THREE geometry, no materials: runs in the geometry worker). */
+export function terrainGeometry(t: Terrain, style: AreaStyle, skip: Rect[]) {
   const { nx, nz, cell, x0, z0, h, cover } = t;
   const pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), gw = new Float32Array(nx * nz * 4);
   const c = new THREE.Color(), tint = new THREE.Color(style.groundTint);
@@ -65,8 +71,7 @@ export function buildTerrain(t: Terrain, material: THREE.Material, style: AreaSt
   }
   g.setAttribute('normal', new THREE.BufferAttribute(n4, 4, true));
   g.setAttribute('gmat', new THREE.BufferAttribute(w4, 4, true));
-  const m = new THREE.Mesh(g, material); m.name = 'terrain';
-  return m;
+  return g;
 }
 
 const ROAD = [0x4c4c4e, 0x575758, 0x626262, 0x9a9184].map((h) => new THREE.Color(h));

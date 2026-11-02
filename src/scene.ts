@@ -97,16 +97,18 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
   const farMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   shared.add(farMat);
+  const TILELOG = qs.get('tilelog') === '1';
   const nextTask = () => new Promise<void>((r) => setTimeout(r, 0)); // let a frame render between the heavy stages of a tile build
   const inRect = (b: Bounds, x: number, z: number) => x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
   const inAny = (rs: Bounds[], x: number, z: number) => rs.some((r) => inRect(r, x, z));
   /** Builds one tile's meshes into a group (not yet in the scene). Data (already in the shared world frame) comes from the registry cache. */
   async function buildContent(id: string) {
     const entry = registry.get(id), off = entry.worldOffset;
+    let lap = performance.now(); const mark = (n: string) => { const t = performance.now(); if (TILELOG && t - lap > 10) console.info(`[City] stage ${id} ${n} ${(t - lap).toFixed(0)} ms`); lap = performance.now(); };
     const owners = (OVERLAP_OWNERS[id as AreaId] ?? []);
     for (const o of owners) await registry.loadData(o); // exact bounds of the tiles that own the overlap
     const skip = owners.map((o) => registry.get(o).bounds);
-    const { area: area0, terrain, mask } = await registry.loadData(id);
+    const { area: area0, terrain, mask } = await registry.loadData(id); mark('data');
     // where a higher-priority tile overlaps this one it owns the ground: drop our buildings, trees and lamps there (their terrain cells are skipped below)
     const area = skip.length ? { ...area0,
       buildings: area0.buildings.filter((b) => !inAny(skip, b.o[0] / 10, b.o[1] / 10)),
@@ -118,29 +120,30 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const landmarks = qs.get('landmarks') === '0' ? { group: new THREE.Group(), colliders: [], footprints: [], pads: [] } : await buildLandmarks(id, origin, terrain, renderer, off);
     // Seat each landmark: level the ground under its pad to its base height (before the terrain mesh, roads, trees and grass sample it),
     // and keep trees and grass out of the pad.
-    const grassMask = mask ? parseGroundMask(mask) : null;
+    const grassMask = mask ? parseGroundMask(mask) : null; mark('mask');
     const lmTrees = treesOutsideLandmarks(area.trees as number[], landmarks.pads);
     if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
-    const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints);
+    mark('landmarks+flatten');
+    const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints); mark('cull');
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     await nextTask();
-    const style = styleFor(id); const tg = await buildTileGeo(terrain, buildings, area.roads, style, roadMat, lambert, farMat); // roads + building meshes: built in a short-lived worker
-    const blds = tg.blds, farBlds = tg.far; farBlds.visible = false;
-    const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
+    const style = styleFor(id); const tg = await buildTileGeo(terrain, buildings, area.roads, style, roadMat, lambert, farMat, groundMat, skip); // roads + building meshes: built in a short-lived worker
+    const blds = tg.blds, farBlds = tg.far; farBlds.visible = false; mark('geo-worker');
+    const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain); mark('ocean+lamps');
     await nextTask();
     const trees = await buildTrees(cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
     trees.materials.forEach((m) => shared.add(m)); // species materials + textures are built once and reused by every area
-    const grass = buildGrass(terrain, grassMask);
+    const grass = buildGrass(terrain, grassMask); mark('trees+grass');
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     await nextTask();
     const roads = tg.roads;
-    group.add(buildTerrain(terrain, groundMat, style, skip), roads, buildPoolsPiers(area, terrain, roadMat), blds.group, farBlds, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
+    group.add(tg.ground, roads, buildPoolsPiers(area, terrain, roadMat), blds.group, farBlds, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
-    group.add(landmarks.group);
-    await nextTask();
-    const interiors = createInteriors(buildings, terrain); group.add(interiors.group);
-    const collision = createCollision(buildings, terrain, landmarks.colliders);
-    const ring = buildFarGround(terrain, inland); group.add(ring); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
+    group.add(landmarks.group); mark('terrain+roads+pools');
+    await nextTask(); lap = performance.now();
+    const interiors = await createInteriors(buildings, terrain); group.add(interiors.group);
+    const collision = await createCollision(buildings, terrain, landmarks.colliders); mark('interiors+collision');
+    const ring = buildFarGround(terrain, inland); group.add(ring); mark('far ring'); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
     group.traverse((o: any) => { if (o.isMesh && !o.isInstancedMesh && /^(roads|terrain|pools\+piers|buildings-far|bld )/.test(o.name)) freeCpuAfterFirstDraw(o); });
     const treeMeshes = trees.group.children.map((o) => ({ o: o as THREE.InstancedMesh, lo: (o as any).userData.lo as number, hi: (o as any).userData.hi as number }));
     let far = false, ready = false;
@@ -171,6 +174,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const tileRects = () => [...tiles.values()].map((t) => t.bounds);
   /** Re-own rings, cut sea planes and (de)build links after tiles were added or removed. */
   function refreshWorld() {
+    const t0 = performance.now(); const lapW = (n: string) => { const t = performance.now(); if (TILELOG && t - t0 > 8) console.info(`[City] refreshWorld ${n} at ${(t - t0).toFixed(0)} ms`); };
     for (const def of LINKS) {
       const have = links.get(def.id), A = tiles.get(def.a), B = tiles.get(def.b);
       if (have && !(A && B)) { scene.remove(have.group); have.dispose(); links.delete(def.id); }
@@ -179,14 +183,15 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
         catch (e) { console.warn('[City] link failed', def.id, e); }
       }
     }
+    lapW('links');
     const lr = [...links.values()].map((l) => l.rect);
     for (const t of tiles.values()) {
       const others = [...[...tiles.values()].filter((o) => o !== t).map((o) => o.bounds), ...lr];
       t.ring.cull(t.bounds, others);
       t.ocean.setHoles((OVERLAP_OWNERS[t.id as AreaId] ?? []).filter((o) => tiles.has(o)).map((o) => tiles.get(o)!.bounds));
     }
-    openSea.setHoles(tileRects());
-    applyWeather();
+    lapW('rings'); openSea.setHoles(tileRects()); lapW('sea');
+    applyWeather(); lapW('weather');
   }
   const WANT_DEPS = (id: string): string[] => (OVERLAP_OWNERS[id as AreaId] ?? []).flatMap((o) => [...WANT_DEPS(o), o]);
   let fastHigh = false; // world-wide simple-detail switch: high or fast flight
@@ -305,7 +310,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   };
 
   // ---- streaming: rings around the player, flight-aware ----
-  const TICK = 0.25;
+  const TICK = 0.25, MAX_TILES = Number(qs.get('maxtiles') ?? 3);
   const stream = { radius: 0, lead: 0, want: [] as string[], aim: {} as Record<string, number>, builds: 0, unloads: 0, lastTick: 0, ring0: 1500, base: Number(qs.get('ring') ?? 8000), enabled: qs.get('stream') !== '0' };
   const dirV = new THREE.Vector3();
   function streamTick(dt: number) {
@@ -340,7 +345,13 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     if (stream.enabled) for (const t of [...tiles.values()]) {
       if (t === act || wanted.has(t.id) || performance.now() - t.builtAt < 8000) continue;
       if ([...tiles.values()].some((o) => o !== t && WANT_DEPS(o.id).includes(t.id))) continue;
-      if (registry.distTo(t.id, p.x, p.z) > R * 1.5 + 2500) { stream.unloads++; dropTile(t.id); }
+      if (registry.distTo(t.id, p.x, p.z) > R + 1500) { stream.unloads++; dropTile(t.id); }
+    }
+    // hard cap on built tiles (memory): beyond MAX_TILES the farthest tile that is not the active one, not wanted for the current ring and not an owner in use goes
+    if (stream.enabled && tiles.size > MAX_TILES) {
+      const cand = [...tiles.values()].filter((t) => t !== act && !wanted.has(t.id) && performance.now() - t.builtAt > 8000 && ![...tiles.values()].some((o) => o !== t && WANT_DEPS(o.id).includes(t.id)))
+        .sort((a, b) => registry.distTo(b.id, p.x, p.z) - registry.distTo(a.id, p.x, p.z));
+      if (cand.length) { stream.unloads++; dropTile(cand[0].id); }
     }
   }
 
