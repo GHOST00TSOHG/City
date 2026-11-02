@@ -19,6 +19,7 @@ import { A6 } from './perf/frame';
 import { prewarm } from './perf/prewarm';
 import { buildOcean } from './area/water';
 import { buildFarGround } from './area/farGround';
+import { createLodFade, nearMask, farMask } from './area/lodFade';
 import { buildGrass, parseGroundMask } from './area/grass';
 import { buildFerryDock } from './area/ferry';
 import { createInteriors } from './area/interiors';
@@ -97,6 +98,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
   const farMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   shared.add(farMat);
+  (lambert as any).maskNode = nearMask(); (farMat as any).maskNode = farMask(); // near <-> far building detail cross-fade (lodFade.ts)
   const SEA_SIDES: Record<string, string[]> = { passaic: ['s'] }; // inland tiles whose far ring faces open water on that side (see farGround.ts)
   const SK = new Set((qs.get('skipstage') ?? '').split(',')); // debug: ?skipstage=int,col,trees,grass builds that stage empty (RSS attribution)
   const TILELOG =qs.get('tilelog') === '1';
@@ -151,14 +153,18 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     let far = false, ready = false;
     /** Simple detail (far tile, or high/fast flight): merged flat-top buildings, no lamps/grass/interiors/ferry, trees only as their far impostor. */
     let tiny = false; // trees are sub-pixel (very high, or the tile is > 5 km away): no tree meshes at all
-    const setFar = (f: boolean, vh = false) => {
+    const lod = createLodFade();
+    /** Cross-fade of near buildings <-> far mesh: both draw while `lod.near` is between 0 and 1 (one extra draw call for ~0.4 s). */
+    const applyFade = () => { const a = lod.near; blds.group.userData.fade = a; farBlds.userData.fade = 1 - a; blds.group.visible = a > 0; farBlds.visible = a < 1; };
+    const fadeStep = (dt: number) => { if (lod.step(dt)) applyFade(); };
+    const setFar = (f: boolean, vh = false, instant = false) => {
       if (!ready || (f === far && vh === tiny)) return; far = f; tiny = vh;
-      blds.group.visible = !f; farBlds.visible = f; lamps.posts.visible = !f; lamps.pools.visible = !f; grass.mesh.visible = !f; interiors.group.visible = !f; if (ferry) ferry.group.visible = !f;
+      lod.set(f, instant); applyFade(); lamps.posts.visible = !f; lamps.pools.visible = !f; grass.mesh.visible = !f; interiors.group.visible = !f; if (ferry) ferry.group.visible = !f;
       const maxHi = Math.max(...treeMeshes.map((t) => t.hi));
       for (const t of treeMeshes) { t.o.visible = !tiny && (!f || t.hi >= maxHi); (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
     };
     const roadChunks = roads.children as THREE.Mesh[];
-    return { id, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
+    return { id, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
@@ -211,7 +217,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const tc = performance.now(); const tmp = new THREE.Scene(); next.group.visible = true; tmp.add(next.group);
       if (A6) await prewarm(renderer, tmp, camera, scene); else try { await renderer.compileAsync(tmp, camera); } catch { /* warm-up only */ }
       tmp.remove(next.group);
-      const tr = performance.now(); next.setReady(true); next.setFar(farWanted(next), veryHigh); next.setReady(false);
+      const tr = performance.now(); next.setReady(true); next.setFar(farWanted(next), veryHigh, true); next.setReady(false);
       // Staged reveal: the group goes in with every child hidden, then one child per frame is shown, so the first draw of a tile uploads its
       // buffers a mesh at a time instead of ~100-250 MB in one frame (that was a 0.5-1.9 s hitch).
       const kids = next.group.children.slice(), want = kids.map((k) => k.visible);
@@ -374,7 +380,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     get areaId() { return registry.activeId!; }, get area() { return act.area; }, get views() { return viewsOf(act.id); },
     get stats() { const a = act.area; return { buildings: act.blds.count, trees: a.trees.length / 5, palms: act.trees.palms, lamps: a.lamps.length, chunks: act.blds.group.children.length, landmarkCull: act.landmarkCull, interiorCands: act.interiors.count, interior: act.interiors.current, roads: a.roads.length }; },
     /** world state for tests / HUD: built tiles, links, detail mode, streaming ring */
-    worldState() { return { tiles: [...tiles.values()].map((t) => ({ id: t.id, far: t.far, bounds: t.bounds })), building: [...building.keys()], links: [...links.values()].map((l) => ({ id: l.def.id, rect: l.rect, path: l.path, tris: l.triangles })), fastHigh, active: act.id,
+    worldState() { return { tiles: [...tiles.values()].map((t) => ({ id: t.id, far: t.far, fade: t.farBlds.userData.fade ?? 0, bounds: t.bounds })), building: [...building.keys()], links: [...links.values()].map((l) => ({ id: l.def.id, rect: l.rect, path: l.path, tris: l.triangles })), fastHigh, active: act.id,
       stream: { radius: stream.radius, lead: stream.lead, want: stream.want, builds: stream.builds, unloads: stream.unloads }, flight: { gates: flight.gates, length: flight.length, end: flight.end } }; },
     interiorEntry(x: number, z: number) { return act.interiors.entry(x, z); },
     /** Warm the data cache for an area (cheap, run when idle). */
@@ -383,7 +389,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     async switchArea(id: string, viewName?: string) {
       if (id === act.id) return;
       const t = await ensureTile(id); if (!t) throw new Error('area build failed: ' + id);
-      setActive(t); t.setFar(false);
+      setActive(t); t.setFar(false, false, true);
       const vs = viewsOf(id); setView(vs.find((v) => v.name === viewName) ?? vs[0]);
       applyWeather();
     },
@@ -395,6 +401,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       stream.lastTick += dt; if (stream.lastTick >= TICK) { streamTick(stream.lastTick); stream.lastTick = 0; }
       sky.follow(camera);
       for (const tl of tiles.values()) {
+        tl.fadeStep(dt);
         if (tl.far) continue;
         const d = registry.distTo(tl.id, camera.position.x, camera.position.z);
         if (d < 600) tl.trees.update(camera.position);
