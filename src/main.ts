@@ -270,7 +270,7 @@ createScene(canvas, areaId).then(async (app) => {
       const r = app.renderer.info.render;
       if (showStats) statsEl.textContent = `${fps.toFixed(0)} fps · ${r.drawCalls ?? r.calls} calls · ${(r.triangles / 1e3).toFixed(0)}k tris · ${app.backend}`;
       w.__city = { fps, quality: qualityLabel(), pacing: pacing.label(), heap0, calls: r.drawCalls ?? r.calls, triangles: r.triangles, backend: app.backend, area: app.areaId, ...app.stats, walk: app.controls.walk, hangar: cust.open, damage: +damage.toFixed(2), slowmo: slowT > 0, robot: robotMode && !cust.open ? { mode: ctl.mode, anim: ctl.anim, pos: ctl.pos.toArray().map((v: number) => +v.toFixed(1)), mph: +(ctl.vel.length() * 2.237).toFixed(0), burst: +ctl.burst.toFixed(2), charge: +fx.charge.toFixed(2) } : null, ready: true };
-      w.__scene = app.scene;
+      w.__scene = app.scene; w.__renderer = app.renderer; // profiling tools read renderer.info
     }
   });
 }).catch((e) => {

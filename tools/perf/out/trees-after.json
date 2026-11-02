@@ -1,0 +1,437 @@
+{
+ "when": "2026-11-02T02:16:27.262Z",
+ "note": "WebKit headless:false, real GPU; fpsCapped = rAF over 2.5 s, fpsUncapped = median of 5 x (40 back-to-back renders + GPU wait)",
+ "areas": {
+  "keywest": {
+   "treesInBake": 25500,
+   "palms": 13070,
+   "treeMeshes": 13,
+   "treeMeshesDrawing": 3,
+   "instanceSlots": 38298,
+   "instancesDrawn": 25500,
+   "geoKB": 2240,
+   "instanceKB": 2799,
+   "textureKB": 5489,
+   "gpuTreeMB": 10.28,
+   "trisPerLod": {
+    "trees palm lod0": 348,
+    "trees palm lod1": 96,
+    "trees palm lod2": 26,
+    "trees ez-oak lod0": 13806,
+    "trees ez-oak lod1": 2748,
+    "trees ez-oak lod2": 16,
+    "trees ez-ash lod0": 20000,
+    "trees ez-ash lod1": 3368,
+    "trees ez-ash lod2": 16
+   },
+   "hostArraysMB": 2.16,
+   "rendererMemory": {
+    "attributes": 337,
+    "attributesSize": 191780924,
+    "geometries": 88,
+    "indexAttributes": 44,
+    "indexAttributesSize": 5747472,
+    "indirectStorageAttributes": 0,
+    "indirectStorageAttributesSize": 0,
+    "programs": 78,
+    "programsSize": 420874,
+    "readbackBuffers": 0,
+    "readbackBuffersSize": 0,
+    "renderTargets": 1,
+    "storageAttributes": 0,
+    "storageAttributesSize": 0,
+    "textures": 12,
+    "texturesSize": 16087869,
+    "uniformBuffers": 117,
+    "uniformBuffersSize": 113408,
+    "total": 214150547
+   },
+   "heapPerformanceMemory": null,
+   "views": {
+    "ground": {
+     "on": {
+      "calls": 21,
+      "tris": 2327040,
+      "fpsCapped": 60,
+      "msUncapped": 3.35,
+      "fpsUncapped": 298.5
+     },
+     "off": {
+      "calls": 18,
+      "tris": 1788340,
+      "fpsCapped": 60,
+      "msUncapped": 2.6,
+      "fpsUncapped": 384.6
+     },
+     "treeCalls": 3,
+     "treeTris": 538700,
+     "treeMsUncapped": 0.75
+    },
+    "aerial": {
+     "on": {
+      "calls": 26,
+      "tris": 2411678,
+      "fpsCapped": 60,
+      "msUncapped": 3.83,
+      "fpsUncapped": 261.4
+     },
+     "off": {
+      "calls": 23,
+      "tris": 1872978,
+      "fpsCapped": 60,
+      "msUncapped": 3,
+      "fpsUncapped": 333.3
+     },
+     "treeCalls": 3,
+     "treeTris": 538700,
+     "treeMsUncapped": 0.83
+    }
+   }
+  },
+  "bayshore": {
+   "treesInBake": 28833,
+   "palms": 0,
+   "treeMeshes": 13,
+   "treeMeshesDrawing": 2,
+   "instanceSlots": 60508,
+   "instancesDrawn": 28833,
+   "geoKB": 2240,
+   "instanceKB": 3665,
+   "textureKB": 5489,
+   "gpuTreeMB": 11.13,
+   "trisPerLod": {
+    "trees palm lod0": 348,
+    "trees palm lod1": 96,
+    "trees palm lod2": 26,
+    "trees ez-oak lod0": 13806,
+    "trees ez-oak lod1": 2748,
+    "trees ez-oak lod2": 16,
+    "trees ez-ash lod0": 20000,
+    "trees ez-ash lod1": 3368,
+    "trees ez-ash lod2": 16
+   },
+   "hostArraysMB": 2.45,
+   "rendererMemory": {
+    "attributes": 265,
+    "attributesSize": 61020000,
+    "geometries": 70,
+    "indexAttributes": 44,
+    "indexAttributesSize": 3465024,
+    "indirectStorageAttributes": 0,
+    "indirectStorageAttributesSize": 0,
+    "programs": 78,
+    "programsSize": 420874,
+    "readbackBuffers": 0,
+    "readbackBuffersSize": 0,
+    "renderTargets": 1,
+    "storageAttributes": 0,
+    "storageAttributesSize": 0,
+    "textures": 12,
+    "texturesSize": 16000362,
+    "uniformBuffers": 99,
+    "uniformBuffersSize": 111104,
+    "total": 81017364
+   },
+   "heapPerformanceMemory": null,
+   "views": {
+    "ground": {
+     "on": {
+      "calls": 19,
+      "tris": 1204016,
+      "fpsCapped": 60,
+      "msUncapped": 2.4,
+      "fpsUncapped": 416.7
+     },
+     "off": {
+      "calls": 17,
+      "tris": 742688,
+      "fpsCapped": 60,
+      "msUncapped": 1.52,
+      "fpsUncapped": 655.7
+     },
+     "treeCalls": 2,
+     "treeTris": 461328,
+     "treeMsUncapped": 0.88
+    },
+    "aerial": {
+     "on": {
+      "calls": 25,
+      "tris": 1214724,
+      "fpsCapped": 60,
+      "msUncapped": 2.6,
+      "fpsUncapped": 384.6
+     },
+     "off": {
+      "calls": 23,
+      "tris": 753396,
+      "fpsCapped": 60,
+      "msUncapped": 2.13,
+      "fpsUncapped": 470.6
+     },
+     "treeCalls": 2,
+     "treeTris": 461328,
+     "treeMsUncapped": 0.47
+    }
+   }
+  },
+  "sandyhook": {
+   "treesInBake": 33893,
+   "palms": 0,
+   "treeMeshes": 13,
+   "treeMeshesDrawing": 2,
+   "instanceSlots": 53136,
+   "instancesDrawn": 33893,
+   "geoKB": 2240,
+   "instanceKB": 3570,
+   "textureKB": 5489,
+   "gpuTreeMB": 11.03,
+   "trisPerLod": {
+    "trees palm lod0": 348,
+    "trees palm lod1": 96,
+    "trees palm lod2": 26,
+    "trees ez-oak lod0": 13806,
+    "trees ez-oak lod1": 2748,
+    "trees ez-oak lod2": 16,
+    "trees ez-ash lod0": 20000,
+    "trees ez-ash lod1": 3368,
+    "trees ez-ash lod2": 16
+   },
+   "hostArraysMB": 2.88,
+   "rendererMemory": {
+    "attributes": 269,
+    "attributesSize": 58085772,
+    "geometries": 71,
+    "indexAttributes": 44,
+    "indexAttributesSize": 9166968,
+    "indirectStorageAttributes": 0,
+    "indirectStorageAttributesSize": 0,
+    "programs": 78,
+    "programsSize": 420874,
+    "readbackBuffers": 0,
+    "readbackBuffersSize": 0,
+    "renderTargets": 1,
+    "storageAttributes": 0,
+    "storageAttributesSize": 0,
+    "textures": 12,
+    "texturesSize": 16221885,
+    "uniformBuffers": 100,
+    "uniformBuffersSize": 111232,
+    "total": 84006731
+   },
+   "heapPerformanceMemory": null,
+   "views": {
+    "ground": {
+     "on": {
+      "calls": 22,
+      "tris": 1608148,
+      "fpsCapped": 60,
+      "msUncapped": 2.45,
+      "fpsUncapped": 408.2
+     },
+     "off": {
+      "calls": 20,
+      "tris": 1065860,
+      "fpsCapped": 60,
+      "msUncapped": 1.7,
+      "fpsUncapped": 588.2
+     },
+     "treeCalls": 2,
+     "treeTris": 542288,
+     "treeMsUncapped": 0.75
+    },
+    "aerial": {
+     "on": {
+      "calls": 23,
+      "tris": 1608348,
+      "fpsCapped": 60,
+      "msUncapped": 3.63,
+      "fpsUncapped": 275.9
+     },
+     "off": {
+      "calls": 21,
+      "tris": 1066060,
+      "fpsCapped": 60,
+      "msUncapped": 2.42,
+      "fpsUncapped": 412.4
+     },
+     "treeCalls": 2,
+     "treeTris": 542288,
+     "treeMsUncapped": 1.21
+    }
+   }
+  },
+  "newark": {
+   "treesInBake": 31932,
+   "palms": 0,
+   "treeMeshes": 13,
+   "treeMeshesDrawing": 2,
+   "instanceSlots": 44940,
+   "instancesDrawn": 31777,
+   "geoKB": 2240,
+   "instanceKB": 3147,
+   "textureKB": 5489,
+   "gpuTreeMB": 10.62,
+   "trisPerLod": {
+    "trees palm lod0": 348,
+    "trees palm lod1": 96,
+    "trees palm lod2": 26,
+    "trees ez-oak lod0": 13806,
+    "trees ez-oak lod1": 2748,
+    "trees ez-oak lod2": 16,
+    "trees ez-ash lod0": 20000,
+    "trees ez-ash lod1": 3368,
+    "trees ez-ash lod2": 16
+   },
+   "hostArraysMB": 2.71,
+   "rendererMemory": {
+    "attributes": 468,
+    "attributesSize": 408810868,
+    "geometries": 127,
+    "indexAttributes": 63,
+    "indexAttributesSize": 6951372,
+    "indirectStorageAttributes": 0,
+    "indirectStorageAttributesSize": 0,
+    "programs": 93,
+    "programsSize": 680036,
+    "readbackBuffers": 0,
+    "readbackBuffersSize": 0,
+    "renderTargets": 1,
+    "storageAttributes": 0,
+    "storageAttributesSize": 0,
+    "textures": 41,
+    "texturesSize": 88815049,
+    "uniformBuffers": 157,
+    "uniformBuffersSize": 123168,
+    "total": 505380493
+   },
+   "heapPerformanceMemory": null,
+   "views": {
+    "ground": {
+     "on": {
+      "calls": 30,
+      "tris": 4076408,
+      "fpsCapped": 60,
+      "msUncapped": 7.53,
+      "fpsUncapped": 132.9
+     },
+     "off": {
+      "calls": 28,
+      "tris": 3567976,
+      "fpsCapped": 60,
+      "msUncapped": 6.45,
+      "fpsUncapped": 155
+     },
+     "treeCalls": 2,
+     "treeTris": 508432,
+     "treeMsUncapped": 1.08
+    },
+    "aerial": {
+     "on": {
+      "calls": 36,
+      "tris": 4180512,
+      "fpsCapped": 60,
+      "msUncapped": 7.15,
+      "fpsUncapped": 139.9
+     },
+     "off": {
+      "calls": 34,
+      "tris": 3672080,
+      "fpsCapped": 60,
+      "msUncapped": 6.17,
+      "fpsUncapped": 161.9
+     },
+     "treeCalls": 2,
+     "treeTris": 508432,
+     "treeMsUncapped": 0.98
+    }
+   }
+  },
+  "passaic": {
+   "treesInBake": 7588,
+   "palms": 0,
+   "treeMeshes": 13,
+   "treeMeshesDrawing": 2,
+   "instanceSlots": 14635,
+   "instancesDrawn": 7588,
+   "geoKB": 2240,
+   "instanceKB": 912,
+   "textureKB": 5489,
+   "gpuTreeMB": 8.44,
+   "trisPerLod": {
+    "trees palm lod0": 348,
+    "trees palm lod1": 96,
+    "trees palm lod2": 26,
+    "trees ez-oak lod0": 13806,
+    "trees ez-oak lod1": 2748,
+    "trees ez-oak lod2": 16,
+    "trees ez-ash lod0": 20000,
+    "trees ez-ash lod1": 3368,
+    "trees ez-ash lod2": 16
+   },
+   "hostArraysMB": 0.64,
+   "rendererMemory": {
+    "attributes": 293,
+    "attributesSize": 145706272,
+    "geometries": 77,
+    "indexAttributes": 46,
+    "indexAttributesSize": 2864112,
+    "indirectStorageAttributes": 0,
+    "indirectStorageAttributesSize": 0,
+    "programs": 82,
+    "programsSize": 434790,
+    "readbackBuffers": 0,
+    "readbackBuffersSize": 0,
+    "renderTargets": 1,
+    "storageAttributes": 0,
+    "storageAttributesSize": 0,
+    "textures": 12,
+    "texturesSize": 15977337,
+    "uniformBuffers": 106,
+    "uniformBuffersSize": 112016,
+    "total": 165094527
+   },
+   "heapPerformanceMemory": null,
+   "views": {
+    "ground": {
+     "on": {
+      "calls": 21,
+      "tris": 1394844,
+      "fpsCapped": 59.9,
+      "msUncapped": 2.45,
+      "fpsUncapped": 408.2
+     },
+     "off": {
+      "calls": 19,
+      "tris": 1273436,
+      "fpsCapped": 60,
+      "msUncapped": 2.3,
+      "fpsUncapped": 434.8
+     },
+     "treeCalls": 2,
+     "treeTris": 121408,
+     "treeMsUncapped": 0.15
+    },
+    "aerial": {
+     "on": {
+      "calls": 24,
+      "tris": 1469240,
+      "fpsCapped": 60,
+      "msUncapped": 3.33,
+      "fpsUncapped": 300.8
+     },
+     "off": {
+      "calls": 22,
+      "tris": 1347832,
+      "fpsCapped": 60,
+      "msUncapped": 2.98,
+      "fpsUncapped": 336.1
+     },
+     "treeCalls": 2,
+     "treeTris": 121408,
+     "treeMsUncapped": 0.35
+    }
+   }
+  }
+ },
+ "consoleErrors": []
+}

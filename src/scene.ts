@@ -133,6 +133,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const style = styleFor(id); const blds = buildBuildings(buildings, terrain, lambert, style);
     const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain);
     const trees = await buildTrees(cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
+    trees.materials.forEach((m) => shared.add(m)); // species materials + textures are built once and reused by every area
     const grass = buildGrass(terrain, grassMask);
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
     const roads = buildRoads(area, terrain, roadMat, landmarks.pads);
@@ -143,7 +144,8 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const collision = createCollision(buildings, terrain, landmarks.colliders);
     group.add(buildFarGround(terrain, inland)); // low-detail ring past the tile edge (matches the edge exactly, fades into the fog)
     return { id, area, terrain, roads: roads.surface, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision,
-      dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
+      dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
+        for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
   }
   let cur = await buildContent(areaId);
   scene.add(cur.group);
