@@ -14,6 +14,7 @@ import * as THREE from 'three';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'tools/map-audit.out');
 const label = process.argv[2] ?? 'run';
+const FOG_OPAQUE = 14000; // night fog (exp2, density 0.00016) leaves < 1 % of the surface colour at 14 km; run F: the far seabed now slopes down past 1 km, so rays landing beyond this are fog/dome, not a hole
 const ALL = process.argv.includes('--all'), DBG = (process.argv.find((a) => a.startsWith('--dbg=')) ?? '').slice(6), only = process.argv.slice(3).filter((a) => !a.startsWith('--'));
 const T = { // thresholds (metres)
   floatBase: 0.15,      // wall bottom above terrain at a footprint sample
@@ -381,7 +382,9 @@ function voidScan(id, area, grid, terrain) {
       if (kind === 'skirt') { bad++; by.skirt++; }                                     // lands on the dark unlit-looking skirt (the black void)
       else if (kind === null && far) {                                              // ring + tile cover the plane out to FAR_RADIUS: a downward ray that misses both
         const run = (Math.max(py - 60, 1) / -dy) * Math.hypot(dx, dz);                // runs off the ring's end before it could reach the ground: it lands on the dome
-        if (run < S.FAR_RADIUS * 0.9) { bad++; by.hole++; (holes.length < 12) && holes.push([Math.round(px), Math.round(py), Math.round(pz), +dx.toFixed(2), +dy.toFixed(3), +dz.toFixed(2), +gy.toFixed(1)]); } else by.horizonFog++;     // below the horizon the dome is the fog colour (sky.ts), so that is not black
+        // run F: the far seabed slopes down past 1 km, so a near-horizontal ray can leave the ring's outer edge before it meets it; that is only a hole if the exit is inside the fog's reach
+        const R = S.FAR_RADIUS, tx = dx > 0 ? (x1 + R - px) / dx : dx < 0 ? (x0 - R - px) / dx : Infinity, tz = dz > 0 ? (z1 + R - pz) / dz : dz < 0 ? (z0 - R - pz) / dz : Infinity, exitDist = Math.min(tx, tz) * Math.hypot(dx, dz);
+        if (run < S.FAR_RADIUS * 0.9 && exitDist < FOG_OPAQUE) { bad++; by.hole++; (holes.length < 12) && holes.push([Math.round(px), Math.round(py), Math.round(pz), +dx.toFixed(2), +dy.toFixed(3), +dz.toFixed(2), +gy.toFixed(1)]); } else by.horizonFog++;     // below the horizon the dome is the fog colour (sky.ts), so that is not black
       }
       else if (kind === null) { bad++; if (heightEntersBelow(px, py, pz, dx, dy, dz)) by.underTile++; else by.escape++; } // sees nothing front-facing before the far plane
     }
