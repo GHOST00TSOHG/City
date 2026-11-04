@@ -6,17 +6,19 @@ This file wins over JONN-LANDMARKS.md and BUILD-GUIDE.md §4 for your work. If s
 ## Start here (checklist)
 - [ ] Read this whole file once.
 - [ ] Clone the repo and work from `main`: `git switch main && git pull`.
+- [ ] Before each new piece, read the **Approvals log** section of the START HERE Google Doc (https://docs.google.com/document/d/1JP0vPZpsbCHxYEw4TT1qmhunDDv0e0dbux1635H_1hE/edit). Luis's approvals are recorded there, not by email.
 - [ ] Pick the **next unclaimed item** in §2 (cathedral first).
 - [ ] Make a branch: `git switch -c jonn/<area>-<slug>`, e.g. `jonn/newark-cathedral-basilica`.
 - [ ] Claim it in `HANDOFF.md` (task, branch, owner = your bot + Jonn, date) in your first commit.
 - [ ] Model in Blender to the spec in §1, export the `.glb`, write `manifest.json` and `README.md`.
+- [ ] Render the preview images (§1 **Preview images**), commit them to `previews/<area>/<slug>/`, push.
 - [ ] Open a PR to `main` using the template in §5. Ping in the PR. **Stop.** Don't merge.
 - [ ] One piece = one branch = one PR. Start the next piece only after opening the PR for this one.
 
 ## Who does what
 - **You (Jonn's bot):** Blender models only. Landmarks first, then kits and props (§3).
 - **Websmith (Luis's bot):** all code, loaders, build, CI. Reviews your PR and merges it.
-- **Luis:** approves. **Nothing enters the game until Luis approves.**
+- **Luis:** approves. **Nothing enters the game until Luis approves.** His approvals are written in the **Approvals log** in the START HERE Google Doc; check it before starting each new piece.
 - **Not yours:** robots (we make them in-house; see `tools/blender/robot_parts.py`), zombies (on hold; wait for Luis in writing), vegetation (SpeedTree pipeline), all code.
 
 ## How the game uses your files (facts from `main`)
@@ -64,7 +66,24 @@ art/landmarks/<area>/<slug>/refs.md            reference list (links only; don't
 public/landmarks/<area>/<slug>/<slug>.glb      game file
 public/landmarks/<area>/<slug>/manifest.json   placement + credits
 public/landmarks/<area>/<slug>/README.md       tris per LOD, textures, sizes, sources, date
+previews/<area>/<slug>/front.webp             preview: front view            (see Preview images)
+previews/<area>/<slug>/three-quarter.webp     preview: 3/4 view
+previews/<area>/<slug>/back.webp              preview: back view
+previews/<area>/<slug>/night.webp             preview: night, emissive windows/lights glowing
+previews/<area>/<slug>/wireframe.webp         preview: LOD0 wireframe (LOD1/LOD2 beside it)
 ```
+(Props/kits: `previews/props/<slug>/`, `previews/kits/<kit>/`.)
+
+**Preview images (required in every PR)**
+- Commit five images into the PR branch at `previews/<area>/<slug>/`: `front`, `three-quarter`, `back`, `night` (dark scene, `emissive-*` materials on, windows/lamps glowing) and `wireframe` (LOD0, with LOD1/LOD2 beside it).
+- Format: **WebP** (preferred) or **PNG**. Each file **≤ ~500 KB** (about 1600 px wide is plenty). No EXIF/GPS.
+- Embed them in the PR body with absolute GitHub links to the committed files, pinned to the commit SHA that added them (the repo is public, so these render for everyone, and they keep working after the branch is deleted):
+  `![front](https://github.com/GHOST00TSOHG/City/blob/<commit-sha>/previews/<area>/<slug>/front.webp?raw=true)`
+  `https://raw.githubusercontent.com/GHOST00TSOHG/City/<commit-sha>/previews/...` also works. Don't use relative paths (`previews/...`, `../blob/...`): they don't resolve reliably in a PR body.
+- **Never** use Cursor artifact links, private uploads, Drive/Dropbox links, or any link only your own account can open. If Luis can't see it logged out, it doesn't count.
+- After opening the PR, check the PR page: every image must show. Fix the links if not.
+- Previews stay in the repo after merge (they're small and document the piece). Luis may ask to delete `previews/` before merge; then Websmith removes it, not you.
+
 `<area>` is the area id above. `<slug>` is kebab-case, e.g. `cathedral-basilica-sacred-heart`.
 
 **manifest.json**
@@ -149,6 +168,7 @@ Same rules as §1 (metres, +Y up export, origin at base centre, meshopt + KTX2, 
 - Every piece in its own branch `jonn/<area>-<slug>` (props/kits: `jonn/props-<slug>`, `jonn/kit-<kit>`), with a PR to `main`.
 - **Never** merge. **Never** push to `main`. **Never** force-push. **Never** approve your own PR.
 - Licence: your own work or CC0 only. No ripped, purchased-store or game-extracted models. No Google data of any kind (Maps, Earth, Street View, 3D Tiles), not even as reference. No copyrighted logos or brand marks. Reference photos only from public domain / clearly licensed sources (Wikimedia Commons, HABS/HAER at loc.gov, NPS), credited in the manifest.
+- Every PR includes the five committed preview images (§1), embedded with public GitHub links. Never Cursor artifact or private links.
 - Privacy: no homes, home addresses, residential streets, or anyone's personal photos. Strip EXIF/GPS from anything you add.
 
 ## 5. Hand-back: PR template
@@ -157,10 +177,14 @@ Title: `Landmark: <Name> (<area>)` (or `Prop:` / `Kit:`). Body:
 ## What
 <Name>, area `<area>`, branch `jonn/<area>-<slug>`.
 
-## Screenshots
-- Front, 3/4 view (two sides), back or top
-- Wireframe (LOD0) and LOD1/LOD2 side by side
-- Night lighting shot with emissive on
+## Previews
+Committed in `previews/<area>/<slug>/` (WebP/PNG, each ≤ ~500 KB). Links pinned to the commit SHA; no Cursor artifact or private links.
+
+![front](https://github.com/GHOST00TSOHG/City/blob/<commit-sha>/previews/<area>/<slug>/front.webp?raw=true)
+![three-quarter](https://github.com/GHOST00TSOHG/City/blob/<commit-sha>/previews/<area>/<slug>/three-quarter.webp?raw=true)
+![back](https://github.com/GHOST00TSOHG/City/blob/<commit-sha>/previews/<area>/<slug>/back.webp?raw=true)
+![night](https://github.com/GHOST00TSOHG/City/blob/<commit-sha>/previews/<area>/<slug>/night.webp?raw=true)
+![wireframe](https://github.com/GHOST00TSOHG/City/blob/<commit-sha>/previews/<area>/<slug>/wireframe.webp?raw=true)
 
 ## Numbers
 | LOD | Triangles | Materials |
@@ -193,4 +217,4 @@ Then: **Websmith reviews → Luis approves → Websmith merges.** Fix review not
 - `.env*`, keys, tokens, secrets.
 - Home-area masking or private config (`config.private.json`, `ground-mask.bin`, any mask coordinates).
 - Robots (ours) and zombies (on hold).
-You may edit only: `art/**`, `public/landmarks/**`, `public/kits/**`, `public/props/**`, and your own rows in `HANDOFF.md`. Need something else changed? Ask in your PR.
+You may edit only: `art/**`, `previews/**` (your piece's folder), `public/landmarks/**`, `public/kits/**`, `public/props/**`, and your own rows in `HANDOFF.md`. Need something else changed? Ask in your PR.
