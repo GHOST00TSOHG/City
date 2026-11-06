@@ -9,6 +9,7 @@ import { TYPES, TYPE_KEYS, type RobotType } from './robot/types';
 import { createCustomizer } from './robot/customizer';
 import { createRobotFx } from './robot/fx';
 import { loadSave, writeSave, lookOf, storeLook } from './save';
+import { createMultiplayer } from './net/multiplayer';
 import { createRobotController } from './robot/controller';
 import { createThrust } from './robot/thrust';
 import { loadClips } from './robot/clips';
@@ -156,6 +157,8 @@ createScene(canvas, areaId).then(async (app) => {
     if (!on) { app.camera.fov = 55; app.camera.updateProjectionMatrix(); app.controls.syncAngles(); hint.classList.remove('gone'); setTimeout(() => hint.classList.add('gone'), 5000); }
   };
   // Hangar (join screen): robot stands on the street start on a turntable; pick a look, then Drop in.
+  const mp = createMultiplayer({ scene: app.scene, camera: app.camera, teleport: (x, y, z) => ctl.spawn(x, y, z, player.heading),
+    state: () => { const r = robot.root; return { p: r.position.toArray(), v: player.vel.toArray(), q: r.quaternion.toArray(), a: app.areaId, rType: robot.type, look: lookOf(save), dmg: damage, hangar: cust.open, pose: ctl.pose(), thr: ctl.thrust, bst: ctl.burstOn, chg: ctl.charging }; } });
   const hangar = { x: 0, y: 0, z: 0, h: 0, yaw: 0, spin: 0.35, t: 0, shot: null as null | { d: number; y: number; ty: number; fov: number; pan?: number } }; // shot = test camera override (audit close-ups)
   const placeHangar = () => { const s = app.spawnPoint(); hangar.x = s.x; hangar.z = s.z; hangar.h = s.heading; hangar.y = app.world.floorAt(s.x, s.z, s.ground + 1.5).y; hangar.yaw = s.heading + Math.PI * 0.85; player.pos.set(s.x, hangar.y, s.z); };
   const cust = createCustomizer(save.robot.type, look, () => damage, (l) => { robot.setLook(l); fx.setColor(l.visor); storeLook(save, l); writeSave(save); },
@@ -272,6 +275,7 @@ createScene(canvas, areaId).then(async (app) => {
     rain.update(t, app.camera.position); snow.update(t, app.camera.position);
     ts = sec('world update (trees/grass/interiors)', ts);
     budget.run(); ts = sec('queued jobs', ts);
+    mp.update(rdt);
     app.renderer.render(app.scene, app.camera); sec('render submit', ts);
     cpuMs = performance.now() - t0;
     frames++;

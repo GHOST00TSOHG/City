@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { A6 } from '../perf/frame';
-import type { RobotModel, RobotAnim, LandKind } from './model';
+import type { RobotModel, RobotAnim, LandKind, PoseInput } from './model';
 import { player } from '../world/player';
 
 export type RobotMode = 'GROUND' | 'ROCKETS' | 'SKYDIVING' | 'ROLL' | 'LAND';
@@ -86,8 +86,10 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
   }
 
   const STEP = 1 / 120, pPos = new THREE.Vector3(), ipos = new THREE.Vector3();
+  let lastPose: PoseInput | null = null;
   let acc = 0, pHead = 0, pLean = 0, pBank = 0;
   const api = {
+    pose: () => lastPose,
     /** Per-type movement multipliers (1 = the original tuning). */
     setTuning(m: Partial<typeof BASE>) { WALK = BASE.walk * (m.walk ?? 1); RUN = BASE.run * (m.run ?? 1); CRUISE = BASE.cruise * (m.cruise ?? 1); BURST = BASE.burst * (m.burst ?? 1); JUMP = BASE.jump * (m.jump ?? 1); TURN = m.turn ?? 1; ACCEL = m.accel ?? 1; },
     get tuning() { return { walk: WALK, run: RUN, cruise: CRUISE, burst: BURST, jump: JUMP, turn: TURN, accel: ACCEL }; },
@@ -266,7 +268,7 @@ export function createRobotController(model: RobotModel, camera: THREE.Perspecti
         qBall.setFromAxisAngle(X, ballAng); r.quaternion.copy(qYaw).multiply(qBall); const bs = Math.max(0, Math.min(1, (ballT - 0.3) / 0.7)), rc = 0.62 * bs * bs * (3 - 2 * bs); tmpV.set(0, rc, 0).applyQuaternion(r.quaternion); r.position.set(ipos.x, ipos.y + rc, ipos.z).sub(tmpV);
       }
       const crouch = mode === 'LAND' ? (landT < 0 ? 1 : Math.sin(Math.min(1, Math.max(0.5, landT / 0.38)) * Math.PI)) : charging && mode === 'GROUND' ? 0.55 : 0;
-      model.animate({ anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn,
+      model.animate(lastPose = { anim, phase, speed: Math.min(1, vel.length() / CRUISE), lean, bank, crouch, t, special: specialT > 0 ? specialT : 0, fist: burstOn,
         launch: launchT >= 0 ? Math.min(1, launchT / Math.max(0.01, launchDur)) : 0, flyT, thrust: power,
         gs: Math.hypot(vel.x, vel.z), form: ballT, cloud: cloudW, slide: slideW, vox,
         landKind: mode === 'LAND' && landActive !== 'none' ? landActive : undefined, landT: Math.max(0, landT), landS, landDur }, dt);
