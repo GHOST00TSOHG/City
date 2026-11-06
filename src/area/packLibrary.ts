@@ -7,7 +7,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { attribute, vertexColor, vec3, float, hash, floor, positionWorld, smoothstep, mix, time, sin, uniform } from 'three/tsl';
+import { attribute, vertexColor, vec3, float, hash, floor, positionWorld, smoothstep, mix, time, sin, uniform, normalWorld, cameraPosition, normalize, dot, abs, pow, reflect, clamp } from 'three/tsl';
 
 const BASE = import.meta.env.BASE_URL;
 export const TJA_URL = BASE + 'tja/';
@@ -90,12 +90,16 @@ export const uPackNight = uniform(1);
 export function createPackMaterial() {
   const mat = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pmv = attribute('packMat', 'vec4'), emv = attribute('packEmissive', 'vec4');
-  mat.roughnessNode = pmv.x; mat.metalnessNode = pmv.y; mat.envMapIntensity = 2.0; // mirror-glass towers pick up the night-sky / city-glow environment
+  mat.envMapIntensity = 2.0; // mirror-glass towers pick up the night-sky / city-glow environment
   const glass = smoothstep(0.4, 0.6, pmv.w).mul(float(1).sub(smoothstep(0.7, 0.9, pmv.w)));
+  mat.roughnessNode = mix(pmv.x, float(0.05), glass); mat.metalnessNode = mix(pmv.y, float(0.75), glass); // curtain-wall glazing is near-mirror
+  // glass gleam: Fresnel-weighted sky gradient (sapphire overhead, warm city glow toward the horizon) reflected off every glazed face, independent of the PMREM environment
+  const view = normalize(cameraPosition.sub(positionWorld)), fres = pow(float(1).sub(abs(dot(normalWorld, view))), 2.5), rv = reflect(view.negate(), normalWorld);
+  const skyRefl = mix(vec3(0.95, 0.5, 0.28).mul(0.55), vec3(0.08, 0.26, 0.62).mul(1.5), clamp(rv.y.mul(1.6).add(0.2), 0, 1));
   const cell = floor(positionWorld.mul(vec3(0.7, 0.9, 0.7))), h = hash(cell.x.add(cell.y.mul(7.3)).add(cell.z.mul(13.1)));
   const lit = h.lessThan(0.36).select(float(1), float(0)), warm = hash(h.mul(91)).lessThan(0.7).select(vec3(1.0, 0.66, 0.34), vec3(0.62, 0.88, 1.0));
   const neon = smoothstep(0.85, 0.95, pmv.w), flicker = sin(time.mul(7).add(h.mul(40))).mul(0.06).add(1);
-  mat.emissiveNode = emv.rgb.mul(4).mul(neon.mul(1.0).add(float(1).sub(neon)).mul(flicker)).add(warm.mul(lit).mul(glass).mul(1.3).mul(uPackNight));
+  mat.emissiveNode = emv.rgb.mul(4).mul(neon.mul(1.0).add(float(1).sub(neon)).mul(flicker)).add(warm.mul(lit).mul(glass).mul(1.3).mul(uPackNight)).add(skyRefl.mul(fres.mul(0.9).add(0.06)).mul(glass).mul(uPackNight));
   void vertexColor; void mix; void vec3;
   return mat;
 }

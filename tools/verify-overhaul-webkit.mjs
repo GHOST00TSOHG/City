@@ -51,10 +51,10 @@ const placeRoadside = (townId) => {
   // camera 42 m along the road from the closest point, 14 m off its far side, eye ~14 m; looks at the town centre, so the asphalt + lane lines run through the frame with the town beside it
   const hx = Math.cos(best.h), hz = Math.sin(best.h), tx = s.cx - best.px, tz = s.cz - best.pz, tl = Math.hypot(tx, tz) || 1;
   const sgn = (hx * tx + hz * tz) > 0 ? -1 : 1; // back along the road away from the town's side
-  const cx = best.px + hx * 42 * sgn - (tx / tl) * 14, cz = best.pz + hz * 42 * sgn - (tz / tl) * 14, y = window.__ground(cx, cz).floor.y + 14, cam = window.__cityCam;
-  const lx = s.cx - tx * 0.12, lz = s.cz - tz * 0.12;
-  cam.position.set(cx, y, cz); cam.lookAt(lx, y - 11, lz); window.__cityControls.syncAngles();
-  return { gapToTownCentre: +best.d.toFixed(1), eye: 14 };
+  const cx = best.px + hx * 38 * sgn - (tx / tl) * 5, cz = best.pz + hz * 38 * sgn - (tz / tl) * 5, y = window.__ground(cx, cz).floor.y + 13, cam = window.__cityCam; // eye ~10 m, 5 m off the road's far side
+  const lx = s.cx - 8, lz = s.cz + s.hz - 22; // aim at the front torii so the asphalt + lane lines run along one side of the frame and the gate / lanterns / pagoda sit beside the sidewalk
+  cam.position.set(cx, y, cz); cam.lookAt(lx, y - 8, lz); window.__cityControls.syncAngles();
+  return { gapToTownCentre: +best.d.toFixed(1), eye: 10.5, apron: s.apron };
 };
 const shots = ONLY.length ? shots0.filter((q) => ONLY.includes(q.id)) : shots0;
 const browser = await webkit.launch({ headless: process.env.HEADLESS === '1' });

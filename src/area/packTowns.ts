@@ -16,7 +16,7 @@ export const TOWN_META: TownMeta[] = townDefs.map(({ id, name, area }) => ({ id,
 
 export interface TownSite {
   id: string; name: string; area: string; cx: number; cz: number; y: number; hx: number; hz: number;
-  pad: LandmarkPad; footprint: LandmarkFootprint; def: TownDef;
+  pad: LandmarkPad; footprint: LandmarkFootprint; def: TownDef; /** metres of stone entry walk from the front (+v) plaza edge to the road sidewalk (0 = none) */ apron: number;
   /** where the player stands in front of the centrepiece, and what they look at (world metres) */
   stand: [number, number, number]; look: [number, number, number];
 }
@@ -34,8 +34,10 @@ function findSite(def: TownDef, area: AreaData, t: Terrain, avoid: { x: number; 
   const roadN = new Uint16Array(W * Hh), bldN = new Uint16Array(W * Hh);
   for (const r of area.roads) { if (r.c > 2) continue; for (let i = 0; i + 3 < r.p.length; i += 2) { const ax = r.p[i] / 10, az = r.p[i + 1] / 10, bx = r.p[i + 2] / 10, bz = r.p[i + 3] / 10, n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 5)); for (let k = 0; k <= n; k++) { const c = cellOf(ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n); if (c >= 0 && c < roadN.length) roadN[c]++; } } }
   for (const b of area.buildings) { if (b.m > 0) continue; const c = cellOf(b.o[0] / 10, b.o[1] / 10); if (c >= 0 && c < bldN.length) bldN[c] += 1; }
+  const marked: { x: number; z: number; hw: number }[] = []; // lane-marked streets (class 0/1, >= 6 m wide), sampled every ~4 m
+  if (def.frontRoad) for (const r of area.roads) { if (r.c !== 1 || r.w < 6) continue; for (let i = 0; i + 3 < r.p.length; i += 2) { const ax = r.p[i] / 10, az = r.p[i + 1] / 10, bx = r.p[i + 2] / 10, bz = r.p[i + 3] / 10, n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 4)); for (let k = 0; k < n; k++) marked.push({ x: ax + ((bx - ax) * k) / n, z: az + ((bz - az) * k) / n, hw: r.w / 2 }); } }
   const maxX = x0 + (t.nx - 1) * t.cell, maxZ = z0 + (t.nz - 1) * t.cell, margin = Math.max(hx, hz) + 60;
-  let best: { x: number; z: number; s: number } | null = null, strict: { x: number; z: number; s: number } | null = null;
+  let best: { x: number; z: number; s: number; apron: number } | null = null, strict: { x: number; z: number; s: number; apron: number } | null = null;
   const step = 20;
   for (let z = z0 + margin; z < maxZ - margin; z += step) for (let x = x0 + margin; x < maxX - margin; x += step) {
     if (avoidRect(avoid, x, z, hx, hz)) continue;
@@ -51,11 +53,15 @@ function findSite(def: TownDef, area: AreaData, t: Terrain, avoid: { x: number; 
     if (!def.water) { let w = 0; for (let a = 0; a < 16; a++) for (const rr of [Math.max(hx, hz) + 14, Math.max(hx, hz) + 34]) if (t.heightAt(x + Math.cos((a / 16) * 6.283) * rr, z + Math.sin((a / 16) * 6.283) * rr) < 0.4) w++; s += w * 9; }
     if (def.water) { let w = 0; for (let a = 0; a < 16; a++) for (const rr of [Math.max(hx, hz) + 25, Math.max(hx, hz) + 60]) if (t.heightAt(x + Math.cos((a / 16) * 6.283) * rr, z + Math.sin((a / 16) * 6.283) * rr) < 0.2) w++; s += (w ? 0 : 60) - w * 0.8; }
     if (anchor) s += Math.hypot(x - anchor[0], z - anchor[1]) / 25;
-    if (!roads && !blds) { const sc = s - Math.min(ring, 10) * 0.9; if (!strict || sc < strict.s) strict = { x, z, s: sc }; }
-    if (!best || s < best.s) best = { x, z, s };
+    // front road: a lane-marked street 9.5-15 m beyond the +v (gate) edge, running along it; the gap is bridged by a stone walk that stops just short of the sidewalk
+    let apron = 0;
+    if (def.frontRoad) { let n = 0, dmin = 1e9, hwm = 3.25; for (const m of marked) { const dx = m.x - x, dz = m.z - (z + hz); if (Math.abs(dx) < hx * 0.9 && dz > 0 && dz < 22 && dz - m.hw - 2.1 < 12) { n++; if (dz < dmin) { dmin = dz; hwm = m.hw; } } }
+      apron = dmin - (hwm + 2.1); if (n < 8 || apron < 3.5 || apron > 5.2 || roads) { s += 400; apron = 0; } else s -= 30; }
+    if (!roads && !blds) { const sc = s - Math.min(ring, 10) * 0.9; if (!strict || sc < strict.s) strict = { x, z, s: sc, apron }; }
+    if (!best || s < best.s) best = { x, z, s, apron };
   }
   best = strict ?? best;
-  return best ? { x: best.x, z: best.z, y: (() => { let sum = 0, n = 0; for (let dz = -hz; dz <= hz; dz += 5) for (let dx = -hx; dx <= hx; dx += 5) { sum += t.heightAt(best!.x + dx, best!.z + dz); n++; } return Math.round((sum / n) * 100) / 100; })() } : null;
+  return best ? { x: best.x, z: best.z, apron: best.apron, y: (() => { let sum = 0, n = 0; for (let dz = -hz; dz <= hz; dz += 5) for (let dx = -hx; dx <= hx; dx += 5) { sum += t.heightAt(best!.x + dx, best!.z + dz); n++; } return Math.round((sum / n) * 100) / 100; })() } : null;
 }
 
 /** Plans every town of an area: chooses sites, builds their pads and footprints. Call before the terrain is levelled / built. */
@@ -65,11 +71,12 @@ export function planTowns(areaId: string, area: AreaData, t: Terrain, avoid: { x
     const f = findSite(def, area, t, taken, anchors[def.id] ?? null); if (!f) { console.warn('[City] no site for town', def.id); continue; }
     const { hx, hz } = { hx: def.half[0], hz: def.half[1] }, x = f.x, z = f.z;
     taken.push({ x, z, r: Math.max(hx, hz) + 12 });
-    const pts: [number, number][] = [[x - hx, z - hz], [x + hx, z - hz], [x + hx, z + hz], [x - hx, z + hz]];
-    const pad: LandmarkPad = { id: 'town-' + def.id, pts, y: f.y, minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz };
-    const footprint: LandmarkFootprint = { id: 'town-' + def.id, pts, margin: 4, minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz };
+    const ap = f.apron, zb = z + hz + (ap > 0 ? ap + 1.2 : 0); // the pad also levels and clears the front yard up to the walk's end, so no forest tree stands between the road and the gate
+    const pts: [number, number][] = [[x - hx, z - hz], [x + hx, z - hz], [x + hx, zb], [x - hx, zb]];
+    const pad: LandmarkPad = { id: 'town-' + def.id, pts, y: f.y, minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: zb };
+    const footprint: LandmarkFootprint = { id: 'town-' + def.id, pts, margin: 4, minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: zb };
     const [sv, lk] = [def.view?.stand ?? [0, hz * 0.62], def.view?.look ?? [0, -hz * 0.5, 4]];
-    out.push({ id: def.id, name: def.name, area: areaId, cx: x, cz: z, y: f.y, hx, hz, pad, footprint, def, stand: [x + sv[0], f.y, z + sv[1]], look: [x + lk[0], f.y + lk[2], z + lk[1]] });
+    out.push({ id: def.id, name: def.name, area: areaId, cx: x, cz: z, y: f.y, hx, hz, pad, footprint, def, apron: ap, stand: [x + sv[0], f.y, z + sv[1]], look: [x + lk[0], f.y + lk[2], z + lk[1]] });
   }
   setTownExclusion(areaId, out.map((q) => ({ x0: q.cx - q.hx, z0: q.cz - q.hz, x1: q.cx + q.hx, z1: q.cz + q.hz })));
   return out;
@@ -121,7 +128,7 @@ export async function buildTowns(sites: TownSite[], t: Terrain): Promise<TownBui
   const res: TownBuild = { objects: [], group, colliders: [], tris: 0, placed: 0, packs: new Set(), paths: new Set(), real: [] };
   const mat = packMaterial(), fountains: FountainSpec[] = [], glows: GlowSpec[] = [];
   for (const site of sites) {
-    const items: Item[] = site.def.items(), batch = new PackBatch(TRI_CAP / Math.max(1, sites.length));
+    const items: Item[] = site.def.items(site.apron), batch = new PackBatch(TRI_CAP / Math.max(1, sites.length));
     const protos = new Map<string, Proto | null>();
     await Promise.all([...new Set(items.filter((i) => i.p).map((i) => i.p))].map(async (p) => protos.set(p, await loadProto(p))));
     const gy = (x: number, z: number) => Math.max(t.heightAt(x, z), site.y);

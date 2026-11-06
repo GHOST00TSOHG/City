@@ -12,7 +12,8 @@ export interface TownDef {
   id: string; name: string; area: string; half: [number, number]; minH: number; water?: boolean;
   view?: { stand: [number, number]; look: [number, number, number] };
   slab?: { u: number; v: number; w: number; d: number };
-  items(): Item[]; fountains(y: number): FountainDef[];
+  /** prefer a site whose +v (gate) edge faces a lane-marked street; items() then receives the stone-walk length to the sidewalk */ frontRoad?: boolean;
+  items(apron?: number): Item[]; fountains(y: number): FountainDef[];
   /** photoreal textured `realistic-city` models (their own PBR textures, instanced; a few draw calls) */ real?: { p: string; u: number; v: number; rot?: number; s?: number }[];
 }
 
@@ -98,11 +99,11 @@ const BENCH_RC = rc('realistic_bench_01');
 const benchesAround = (cu: number, cv: number, pts: [number, number][], s = 1.6): NonNullable<TownDef['real']> => pts.map(([u, v]) => ({ p: BENCH_RC, u: cu + u, v: cv + v, s, rot: face(cu + u, cv + v, cu, cv) }));
 
 const edoTown: TownDef = {
-  id: 'edo', name: 'Edo', area: 'bayshore', half: [46, 46], minH: 1.0,
+  id: 'edo', name: 'Edo', area: 'bayshore', half: [46, 46], minH: 1.0, frontRoad: true,
   view: { stand: [0, 32], look: [0, -22, 4] }, slab: { u: 0, v: 0, w: 24, d: 88 },
   fountains: () => [{ x: 0, z: 0, y: 0, radius: 2.0, height: 3.2, waterY: 0.7, tone: 'gold', jets: 12 }, { x: -24, z: 8, y: 0, radius: 2.6, height: 1.2, waterY: 0.32, tone: 'sky', jets: 8 }],
   real: [{ p: rc('realistic_rock_boulder_01'), u: -40, v: -20, s: 2 }, { p: rc('realistic_rock_boulder_01'), u: 40, v: 24, s: 1.6 }],
-  items() {
+  items(apron = 0) {
     const S = 2.2, I: Item[] = [];
     { // raked-sand courtyard, dark-granite flagstone sando from the gate to the shrine, raised stone borders, timber-dark plinths, moss garden beds
       const SAND: RGB = [0.62, 0.54, 0.4], FLAG: RGB = [0.17, 0.17, 0.19], SLAB: RGB = [0.27, 0.27, 0.29], CURB: RGB = [0.34, 0.33, 0.32], PLINTH: RGB = [0.22, 0.17, 0.13], MOSS: RGB = [0.15, 0.23, 0.11];
@@ -112,6 +113,7 @@ const edoTown: TownDef = {
       for (const [u, v, w, d] of [[0, -37, 13, 10], [-20, -34, 12, 9], [-32, -28, 9, 9], [32, -30, 9, 9]]) I.push(B(u, v, w, d, 0.16, PLINTH, { y0: -0.1, rough: 0.8 }), B(u, v, w + 0.6, d + 0.6, 0.1, CURB, { y0: -0.1 }));
       for (const [u, v] of [[-38, 10], [36, 8], [12, -36]] as const) I.push(...pad(u, v, 7, 7, MOSS, CURB, { rough: 0.95 })); // maple garden beds
     }
+    if (apron > 0) { const FL: RGB = [0.17, 0.17, 0.19], CB: RGB = [0.34, 0.33, 0.32]; I.push(...pad(0, 46 + apron / 2, 4.4, apron, FL, CB), ...flags([-1.9, 46, 1.9, 46 + apron], 1.9, 1.4, PAD_H, [0.27, 0.27, 0.29], 13)); } // stone entry walk from the road sidewalk to the torii
     I.push(...grid(edo('raked_gravel_tile'), -8, -8, 3, 3, 8, { s: 2 }), ...grid(edo('moss_tile'), 16, -8, 1, 3, 8, { s: 2 }));
     I.push({ p: edo('koi_pond_tile'), u: -24, v: 8, s: 2, tile: true }, { p: edo('koi_pond_tile'), u: -24, v: 16, s: 2, tile: true }, ...row(edo('garden_stream_tile'), -24, -8, 0, -8, 3, { s: 2, tile: true }));
     I.push({ p: edo('arched_bridge'), u: -24, v: -12, s: 2.2, rot: 90 }, { p: edo('chozuya_pavilion'), u: 0, v: 0, s: S });

@@ -33,8 +33,9 @@ const STYLE: Record<string, { tall: string[]; mid: string[]; low: string[]; cap:
 const CANYON_TOWERS = ['glass_supertall_01', 'crown_tower_01', 'twisting_supertall_01', 'corporate_hq_01', 'twin_tower_01', 'hotel_tower_01', 'mixeduse_tower_01', 'residential_highrise_01'].map(mt);
 const BLVD_LOCAL: [number, number][] = [[1231, 386], [1220, 421], [1211, 445], [1195, 490], [1188, 510], [1162, 583]], CANYON_MAX = 14;
 /** lateral distance from the avenue centreline and distance along it from the view end */
+const blvdWorld = () => { const o = registry.get('newark').worldOffset; return BLVD_LOCAL.map(([a, b]) => [a + o.x, b + o.z] as [number, number]); };
 function blvd(x: number, z: number) { // x / z in world metres (area data is world-space): shift the Newark-local polyline by Newark's world offset
-  const o = registry.get('newark').worldOffset, BLVD = BLVD_LOCAL.map(([a, b]) => [a + o.x, b + o.z] as [number, number]);
+  const BLVD = blvdWorld();
   let best = 1e9, al = 0, acc = 0;
   for (let i = 0; i + 1 < BLVD.length; i++) {
     const [ax, az] = BLVD[i], [bx, bz] = BLVD[i + 1], dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz), t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (L * L))), d = Math.hypot(x - ax - t * dx, z - az - t * dz);
@@ -125,6 +126,42 @@ export async function buildPackCity(areaId: string, buildings: Building[], area:
     if (!batch.add(p, r.cx, f.floor, r.cz, yaw, sx, sy, sz)) break;
     used(p.path); replacedSet.add(b); out.replaced++; out.placed.push({ kind: 'building', x: r.cx, z: r.cz, r: Math.hypot(r.L, r.S) / 2, yaw: -r.a, L: r.L, S: r.S });
     out.colliders.push(boxCollider(r.cx, r.cz, r.L, r.S, -r.a, f.floor - 0.2, f.floor + p.h * sy));
+  }
+  // 1b) symmetric canyon: synthetic road-cleared tower parcels (22-30 m square, >= 3.5 m behind the sidewalk) on BOTH sides of the avenue, 25-220 m ahead of the view. Any OSM building they cover is dropped. ---
+  if (areaId === 'newark') {
+    const B = blvdWorld(), segs = B.slice(0, -1).map(([ax, az], i) => { const [bx, bz] = B[i + 1]; return { ax, az, ux: (bx - ax) / Math.hypot(bx - ax, bz - az), uz: (bz - az) / Math.hypot(bx - ax, bz - az), L: Math.hypot(bx - ax, bz - az) }; });
+    const at = (al: number) => { let acc = 0; for (const g of segs) { if (al <= acc + g.L) return { x: g.ax + g.ux * (al - acc), z: g.az + g.uz * (al - acc), ux: g.ux, uz: g.uz }; acc += g.L; } return null; };
+    const dbg = { nospot: 0, nofit: 0 }; const SYN_MAX = 12, SIDEWALK_CLEAR = 1.8 + 3.5; let nSyn = 0;
+    for (let al = 25, k = 0; al < 220 && nSyn < SYN_MAX; al += 34, k++) for (const side of [1, -1]) {
+      const c = at(al + (side > 0 ? 0 : 17)); if (!c) continue; // staggered so the two sides do not mirror
+      const seed = (Math.round(al) * 2654435761 + (side > 0 ? 7 : 13)) >>> 0, L = 22 + hash(seed) * 8, S = 22 + hash(seed + 1) * 8, a = Math.atan2(c.uz, c.ux), ca = Math.cos(a), sa = Math.sin(a), nx = -c.uz * side, nz = c.ux * side;
+      const rect = (lat: number) => { const cx = c.x + nx * lat, cz = c.z + nz * lat; return { cx, cz, pts: [-.5, -.25, 0, .25, .5].flatMap((fu) => [-.5, -.25, 0, .25, .5].map((fv) => [cx + fu * L * ca - fv * S * sa, cz + fu * L * sa + fv * S * ca] as const)) }; };
+      let spot: ReturnType<typeof rect> | null = null;
+      for (let lat = 10; lat < 70 && !spot; lat += 1) { // innermost lateral offset at which every corner / edge midpoint clears every street by the sidewalk + 3.5 m
+        const q = rect(lat); let ok = true;
+        for (const [x, z] of q.pts) { const r0 = ck.nearestRoad(x, z); if ((r0 && r0.gap < (r0.hw >= 2.5 ? SIDEWALK_CLEAR : 3)) || ck.junctionGap(x, z) < SIDEWALK_CLEAR || isInTownExclusion(areaId, x, z, 2)) { ok = false; break; } }
+        if (ok && !out.placed.some((o) => o.kind === 'building' && Math.hypot(o.x - q.cx, o.z - q.cz) < ((o.L ?? 2 * o.r) + (o.S ?? 2 * o.r)) / 4 + (L + S) / 4 + 2)) spot = q;
+      }
+      if (!spot) { dbg.nospot++; continue; }
+      let pk: { p: Proto; sx: number; sz: number; sy: number } | null = null;
+      for (let j = 0; j < CANYON_TOWERS.length && !pk; j++) {
+        const p = await get(CANYON_TOWERS[(Math.floor(hash(seed + 50) * CANYON_TOWERS.length) + j) % CANYON_TOWERS.length]); if (!p) continue;
+        const sx = L / p.w, sz = S / p.d, ratio = sx / sz; if (ratio < 0.4 || ratio > 2.6 || sx > 4.2 || sx < 0.3 || sz > 4.2 || sz < 0.3) continue;
+        pk = { p, sx, sz, sy: Math.min(Math.max((65 + hash(seed + 9) * 45) / p.h, 0.6), 3.2) };
+      }
+      if (!pk) { dbg.nofit++; continue; }
+      const ring = [spot.pts[0], spot.pts[20], spot.pts[24], spot.pts[4]].map(([x, z]) => [x, z] as [number, number]), f = foundation([ring], t);
+      for (const b of out.rest) if (!replacedSet.has(b)) { // drop OSM buildings under the parcel (centre or any vertex inside, 3 m inflated)
+        const inside = (x: number, z: number) => { const dx = x - spot!.cx, dz = z - spot!.cz, u = dx * ca + dz * sa, v = -dx * sa + dz * ca; return Math.abs(u) < L / 2 + 3 && Math.abs(v) < S / 2 + 3; };
+        if (inside(b.o[0] / 10, b.o[1] / 10) || b.r.some((rg) => (ringPts(rg) as [number, number][]).some(([x, z]) => inside(x, z)))) replacedSet.add(b);
+      }
+      if (f.floor - f.minT > 0.12) batch.addBox(spot.cx, spot.cz, L + 0.3, S + 0.3, -a, f.bottom, f.floor + 0.02, [0.5, 0.49, 0.46], 0.9);
+      if (!batch.add(pk.p, spot.cx, f.floor, spot.cz, -a, pk.sx, pk.sy, pk.sz)) continue;
+      used(pk.p.path); nSyn++; out.replaced++; out.canyon.towers++; out.canyon.lots++;
+      out.placed.push({ kind: 'building', x: spot.cx, z: spot.cz, r: Math.hypot(L, S) / 2, yaw: -a, L, S });
+      out.colliders.push(boxCollider(spot.cx, spot.cz, L, S, -a, f.floor - 0.2, f.floor + pk.p.h * pk.sy));
+    }
+    console.info('[City] canyon synthetic', { placed: nSyn, ...dbg });
   }
   out.rest = buildings.filter((b) => !replacedSet.has(b));
 

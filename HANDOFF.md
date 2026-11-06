@@ -75,6 +75,13 @@ Follow [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md). Multiplayer (`publi
 - Passaic street shot is 149 / 150 draw calls.
 - gitleaks not run (not installed here).
 
+## Wave 3c (feat/world-overhaul, 2026-11-06): Edo road-side proof + symmetric Newark canyon
+- **Edo front road (`packTowns.ts findSite`, `townDefs.ts`):** `TownDef.frontRoad` makes the site search require a lane-marked street (class 1, white dashes) 9.5-15 m beyond the +v (torii) edge, with >= 8 samples along it; the gap is bridged by a flagstone entry walk (`items(apron)`, 3.5-5.2 m, ends 0.3 m short of `hw + 1.8` sidewalk). The pad / footprint is extended over the walk so terrain is levelled and no forest tree stands between road and gate. The torii faces +v (not -v as the brief said), so no `rot` was added; the site moved instead. Class 0 (yellow double) roads are excluded.
+- **Newark canyon (`packCity.ts` step 1b):** synthetic 22-30 m tower parcels every 34 m along the avenue, both sides (right side staggered 17 m), 65-110 m tall, innermost lateral offset where a 5x5 grid of points clears every street by sidewalk + 3.5 m (3 m for minor paths) and every junction; OSM buildings under a parcel are dropped. Latest run: 7 synthetic towers placed (4 parcels had no clear spot), 18 canyon towers total; right side now has towers.
+- **Glass (`packLibrary.ts`):** glazed faces get roughness 0.05 / metalness 0.75 and an emissive Fresnel sky reflection (`pow(1 - |n.v|, 2.5)`, sapphire overhead -> warm glow at the horizon), independent of the PMREM environment.
+- **Verifier:** `edo-road` camera eye 13 m, 5 m off the far side of the road, aimed at the gate side of the plaza (torii, lanterns, houses, pagoda in frame). `downtown` camera unchanged.
+- Not done: right-side towers sit behind street trees (trees on the sidewalk strip are not thinned); crown strip / mirror gleam still modest at distance; kanji lanterns are small in the shot.
+
 # HANDOFF: bot/websmith-robots-v2 (PR #24), 2026-11-01
 
 - Head 533be82; preview/robots-cleanup = 7c4a482 (merge of 533be82); preview deploy 99c35432 (alias preview-robots-cleanup). Production untouched (5b0d1f48).
