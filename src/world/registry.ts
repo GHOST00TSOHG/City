@@ -61,7 +61,7 @@ const META: Record<string, { label: string; title: string; views: AreaView[] }> 
   newark: { label: 'Newark', title: 'Newark, NJ · Schools Stadium', views: [
     { name: 'aerial', pos: [650, 360, 650], look: [0, 0, 0] },
     { name: 'street', pos: [200, 1.7, 120], look: [700, 3, 120], snap: true },
-    { name: 'downtown', pos: [1238, 2.8, 360], look: [1157, 30, 473], snap: true, eye: 2.8 }] },
+    { name: 'downtown', pos: [1233, 2.8, 387], look: [1195, 17, 490], snap: true, eye: 2.8 }] },
   passaic: { label: 'Passaic', title: 'Newark, NJ · Passaic waterfront', views: [
     { name: 'aerial', pos: [-600, 320, 800], look: [150, 0, -150] },
     { name: 'dock', pos: [76, 70, 171], look: [0, 3, 0] }] }, // run F: was a straight-down 30 m view of one road; now an oblique 70 m view of the waterfront, ferry and towers

@@ -34,11 +34,11 @@ export function buildLamps(lamps: number[][], terrain: Terrain) {
   const pmat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
     polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
   const r = length(uv().sub(0.5)).mul(2);
-  const fall = exp(r.mul(r).mul(-4.5)).mul(float(1).sub(smoothstep(0.75, 1, r)));
+  const fall = exp(r.mul(r).mul(-5.8)).mul(float(1).sub(smoothstep(0.55, 1.0, r)));
   const near = float(1).sub(smoothstep(90, 260, distance(cameraPosition, positionWorld)));
   const uWet = uniform(0), uFog = uniform(0);
   // wet ground reflects the lamp as a stronger, tighter glint; fog widens the glow
-  pmat.colorNode = lampTone().mul(fall.add(exp(r.mul(r).mul(-14)).mul(uWet.mul(1.6))).add(exp(r.mul(r).mul(-60)).mul(uWet.mul(1.2).add(0.15)))).mul(near).mul(float(0.36).add(uFog.mul(0.12))).mul(uLampGain);
+  pmat.colorNode = lampTone().mul(fall.add(exp(r.mul(r).mul(-14)).mul(uWet.mul(1.6))).add(exp(r.mul(r).mul(-60)).mul(uWet.mul(1.2)))).mul(near).mul(float(0.20).add(uFog.mul(0.12))).mul(uLampGain);
   const pools = new THREE.InstancedMesh(pool, pmat, lamps.length); pools.name = 'lamp pools'; pools.renderOrder = 2;
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), s1 = new THREE.Vector3(1, 1, 1);

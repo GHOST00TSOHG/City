@@ -13,7 +13,7 @@ const BASE = import.meta.env.BASE_URL;
 export const TJA_URL = BASE + 'tja/';
 
 const GLASS_RE = /glass|window|windshield|mirror|screen|water|ice/i;
-const NEON_RE = /neon|lantern|lamp|light|glow|sign|holo|arcade|fire|ember|andon|ishidoro|beacon|torch|candle/i;
+const NEON_RE = /neon|lantern|lamp|light|glow|sign|holo|arcade_parlor|arcade_cabinet|arcade_sign|fire|ember|andon|ishidoro|beacon|torch|candle/i;
 const COOL_GLAZING_PACKS = /^(metropolis|city|city-paris|cyberpunk|vice-beach|suburban-neighborhood|cozy-village|accessibility|construction-site|railway)\//;
 
 /** Baked prototype: plain typed arrays, base on y = 0, centred on x / z. */
@@ -45,6 +45,8 @@ async function bake(path: string): Promise<Proto | null> {
   if (!nv) return null;
   const pos = new Float32Array(nv * 3), nrm = new Int8Array(nv * 4), col = new Uint8Array(nv * 4), pm = new Uint8Array(nv * 4), em = new Uint8Array(nv * 4), idx = new Uint32Array(ni);
   const fileName = path.split('/').pop()!, nameNeon = NEON_RE.test(fileName), coolOK = COOL_GLAZING_PACKS.test(path);
+  const mirror = path.startsWith('metropolis/'), crownTower = /glass_supertall|crown_tower|twisting_supertall|corporate_hq|twin_tower|hotel_tower|mixeduse_tower|residential_highrise/.test(fileName);
+  const bb = new THREE.Box3().setFromObject(g.scene), crownY = bb.max.y - 0.04 * (bb.max.y - bb.min.y);
   let vo = 0, io = 0; const c = new THREE.Color();
   let minY = Infinity, minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, maxY = -Infinity;
   for (const m of meshes) {
@@ -67,7 +69,8 @@ async function bake(path: string): Promise<Proto | null> {
       const glass = glassName || cool;
       const hot = neonName && (mx > 0.7 && mx - mn > 0.25 || lum > 0.62); // lit parts of lanterns, signs, neon
       let ro = rough, me = metal, kind = 0, e = 0, er = 0, eg = 0, eb = 0;
-      if (glass) { ro = 0.06; me = 0.45; kind = 0.5; }
+      if (glass) { ro = 0.06; me = mirror ? 0.62 : 0.45; kind = 0.5; }
+      if (crownTower && v3.y > crownY && (glass || mx - mn < 0.2)) { er = Math.max(er, 0.3); eg = Math.max(eg, 0.75); eb = Math.max(eb, 1.0); e = 1; kind = 1; } // thin glowing crown strip on skyline towers
       if (eCol && (eCol.r + eCol.g + eCol.b) > 0.01) { er = eCol.r * eInt; eg = eCol.g * eInt; eb = eCol.b * eInt; e = 1; kind = 1; }
       if (hot) { const k = 1.7; er = Math.max(er, r * k); eg = Math.max(eg, gg * k); eb = Math.max(eb, b * k); e = 1; kind = 1; ro = Math.min(ro, 0.5); }
       pm[vo * 4] = Math.round(ro * 255); pm[vo * 4 + 1] = Math.round(me * 255); pm[vo * 4 + 2] = Math.round(e * 255); pm[vo * 4 + 3] = Math.round(kind * 255);
@@ -87,7 +90,7 @@ export const uPackNight = uniform(1);
 export function createPackMaterial() {
   const mat = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const pmv = attribute('packMat', 'vec4'), emv = attribute('packEmissive', 'vec4');
-  mat.roughnessNode = pmv.x; mat.metalnessNode = pmv.y;
+  mat.roughnessNode = pmv.x; mat.metalnessNode = pmv.y; mat.envMapIntensity = 2.0; // mirror-glass towers pick up the night-sky / city-glow environment
   const glass = smoothstep(0.4, 0.6, pmv.w).mul(float(1).sub(smoothstep(0.7, 0.9, pmv.w)));
   const cell = floor(positionWorld.mul(vec3(0.7, 0.9, 0.7))), h = hash(cell.x.add(cell.y.mul(7.3)).add(cell.z.mul(13.1)));
   const lit = h.lessThan(0.36).select(float(1), float(0)), warm = hash(h.mul(91)).lessThan(0.7).select(vec3(1.0, 0.66, 0.34), vec3(0.62, 0.88, 1.0));

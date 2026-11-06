@@ -13,6 +13,7 @@ import { loadProto, PackBatch, type Proto } from './packLibrary';
 import { packMaterial } from './packTowns';
 import type { Clearance } from './clearance';
 import { isInTownExclusion } from './townDefs';
+import { registry } from '../world/registry';
 import { releaseTextureSources } from './landmarks';
 
 const mk = (pack: string) => (f: string) => `${pack}/${f}.glb`;
@@ -28,6 +29,19 @@ const STYLE: Record<string, { tall: string[]; mid: string[]; low: string[]; cap:
   newark: { tall: TALL, mid: MID, low: LOW_URBAN, cap: 260 }, passaic: { tall: TALL, mid: MID, low: LOW_URBAN, cap: 260 },
   bayshore: { tall: MID, mid: LOW_URBAN, low: HOUSES, cap: 240 }, sandyhook: { tall: HOUSES, mid: HOUSES, low: HOUSES, cap: 80 }, keywest: { tall: COASTAL, mid: COASTAL, low: COASTAL, cap: 280 },
 };
+/** Newark downtown skyscraper canyon: curated metropolis high-rises (scaled 50-95 m) on the footprints flanking the straight curbed avenue the `downtown` view looks down (Newark-local metres; shifted to world space in `blvd`). */
+const CANYON_TOWERS = ['glass_supertall_01', 'crown_tower_01', 'twisting_supertall_01', 'corporate_hq_01', 'twin_tower_01', 'hotel_tower_01', 'mixeduse_tower_01', 'residential_highrise_01'].map(mt);
+const BLVD_LOCAL: [number, number][] = [[1231, 386], [1220, 421], [1211, 445], [1195, 490], [1188, 510], [1162, 583]], CANYON_MAX = 14;
+/** lateral distance from the avenue centreline and distance along it from the view end */
+function blvd(x: number, z: number) { // x / z in world metres (area data is world-space): shift the Newark-local polyline by Newark's world offset
+  const o = registry.get('newark').worldOffset, BLVD = BLVD_LOCAL.map(([a, b]) => [a + o.x, b + o.z] as [number, number]);
+  let best = 1e9, al = 0, acc = 0;
+  for (let i = 0; i + 1 < BLVD.length; i++) {
+    const [ax, az] = BLVD[i], [bx, bz] = BLVD[i + 1], dx = bx - ax, dz = bz - az, L = Math.hypot(dx, dz), t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (L * L))), d = Math.hypot(x - ax - t * dx, z - az - t * dz);
+    if (d < best) { best = d; al = acc + t * L; } acc += L;
+  }
+  return { d: best, al };
+}
 const CHEAP_TRIS = 14000; // models above this are used sparingly
 
 const hash = (n: number) => { n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); n = Math.imul(n ^ (n >>> 16), 0x45d9f3b); return ((n ^ (n >>> 16)) >>> 0) / 4294967296; };
@@ -57,52 +71,56 @@ function boxCollider(cx: number, cz: number, w: number, d: number, rot: number, 
 
 /** placed street objects and replaced buildings (placement audit) */
 export interface CityObj { kind: 'car' | 'bench' | 'planter' | 'stop' | 'umbrella' | 'building'; x: number; z: number; r: number; yaw: number; L?: number; S?: number }
-export interface CityPack { placed: CityObj[]; group: THREE.Group; rest: Building[]; colliders: LandmarkCollider[]; replaced: number; furniture: number; roofProps: number; tris: number; paths: Set<string> }
+export interface CityPack { /** Newark downtown canyon: skyline-tower lots seen / placed, and why the rest failed */ canyon: { lots: number; towers: number; noFit: number; blocked: number }; placed: CityObj[]; group: THREE.Group; rest: Building[]; colliders: LandmarkCollider[]; replaced: number; furniture: number; roofProps: number; tris: number; paths: Set<string> }
 
 export async function buildPackCity(areaId: string, buildings: Building[], area: AreaData, t: Terrain, center: [number, number], ck: Clearance): Promise<CityPack> {
   const group = new THREE.Group(); group.name = 'pack city';
-  const out: CityPack = { placed: [], group, rest: buildings, colliders: [], replaced: 0, furniture: 0, roofProps: 0, tris: 0, paths: new Set() };
+  const out: CityPack = { canyon: { lots: 0, towers: 0, noFit: 0, blocked: 0 }, placed: [], group, rest: buildings, colliders: [], replaced: 0, furniture: 0, roofProps: 0, tris: 0, paths: new Set() };
   const st = STYLE[areaId]; if (!st) return out;
-  const batch = new PackBatch(520_000), protos = new Map<string, Proto | null>();
+  const batch = new PackBatch(areaId === 'newark' ? 760_000 : 520_000), protos = new Map<string, Proto | null>();
   const get = async (p: string) => { if (!protos.has(p)) protos.set(p, await loadProto(p)); return protos.get(p)!; };
   const used = (p: string) => out.paths.add(p);
 
   // 1) building replacement ------------------------------------------------------------------------------------------------------------------
   const partCells = new Set<string>(); for (const b of buildings) if (b.m > 0) partCells.add(Math.round(b.o[0] / 100) + ',' + Math.round(b.o[1] / 100));
-  const cand: { b: Building; ring: [number, number][]; r: NonNullable<ReturnType<typeof fitRect>>; d: number }[] = [];
+  const cand: { b: Building; ring: [number, number][]; r: NonNullable<ReturnType<typeof fitRect>>; d: number; canyon: boolean }[] = [];
   for (const b of buildings) {
     if (b.m > 0 || b.r.length !== 1 || b.h < 4) continue;
-    const ring = ringPts(b.r[0]) as [number, number][]; if (ring.length < 4 || ring.length > 14) continue;
-    const r = fitRect(ring); if (!r || r.fill < 0.86) continue;
-    if (Math.min(r.L, r.S) < 6.5 || Math.max(r.L, r.S) > 64) continue;
+    const cn = areaId === 'newark' ? blvd(b.o[0] / 10, b.o[1] / 10) : null, canyon = !!cn && cn.d > 12 && cn.d < 100 && cn.al < 320;
+    const ring = ringPts(b.r[0]) as [number, number][]; if (ring.length < 4 || ring.length > (canyon ? 24 : 14)) continue;
+    const r = fitRect(ring); if (!r || r.fill < (canyon ? 0.7 : 0.86)) continue;
+    if (Math.min(r.L, r.S) < (canyon ? 8 : 6.5) || Math.max(r.L, r.S) > 64) continue;
     let hasPart = false; for (let i = -1; i <= 1 && !hasPart; i++) for (let j = -1; j <= 1; j++) if (partCells.has(Math.round(b.o[0] / 100) + i + ',' + (Math.round(b.o[1] / 100) + j))) { hasPart = true; break; }
     if (hasPart) continue;
-    cand.push({ b, ring, r, d: Math.hypot(b.o[0] / 10 - center[0], b.o[1] / 10 - center[1]) });
+    cand.push({ b, ring, r, canyon, d: canyon ? cn!.al - 1e6 : Math.hypot(b.o[0] / 10 - center[0], b.o[1] / 10 - center[1]) }); // canyon lots first, nearest the view first
   }
   cand.sort((a, b) => a.d - b.d);
-  const replacedSet = new Set<Building>(); let heavy = 0;
+  const replacedSet = new Set<Building>(); let heavy = 0, nCanyon = 0;
   for (const c of cand) {
-    if (replacedSet.size >= st.cap || batch.tris > 420_000) break;
+    if (replacedSet.size >= st.cap || batch.tris > (areaId === 'newark' ? 660_000 : 420_000)) break;
+    if (c.canyon && nCanyon >= CANYON_MAX) continue;
+    if (c.canyon) out.canyon.lots++;
     const { b, ring, r } = c, seed = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0;
-    const list = b.h >= (areaId === 'newark' ? 30 : 45) ? st.tall : b.h >= 18 ? st.mid : st.low; // Newark downtown: curated glass high-rises from 30 m
+    const list = c.canyon ? CANYON_TOWERS : b.h >= (areaId === 'newark' ? 30 : 45) ? st.tall : b.h >= 18 ? st.mid : st.low, towerH = 50 + hash(seed + 31) * 45; // Newark downtown: curated glass high-rises from 30 m; canyon lots become 50-95 m towers
     let pick: { p: Proto; sx: number; sz: number; sy: number; flip: boolean; dist: number } | null = null;
     for (let k = 0; k < 4; k++) {
       const path = list[Math.floor(hash(seed + k * 977) * list.length)], p = await get(path); if (!p) continue;
-      if (p.tris > CHEAP_TRIS && heavy > 36) continue;
+      if (p.tris > CHEAP_TRIS && heavy > 36 && !c.canyon) continue;
       for (const flip of [false, true]) {
         const L = flip ? r.S : r.L, S = flip ? r.L : r.S, sx = L / p.w, sz = S / p.d, ratio = sx / sz;
-        if (ratio < 0.55 || ratio > 1.8 || sx > 3.4 || sx < 0.45 || sz > 3.4 || sz < 0.45) continue;
-        const sy = Math.min(Math.max(b.h / p.h, 0.7), b.h >= 45 ? 2.2 : 1.7), dist = Math.abs(Math.log(ratio)) + Math.abs(Math.log(b.h / (p.h * sy)));
+        if (c.canyon ? (ratio < 0.4 || ratio > 2.6 || sx > 4.2 || sx < 0.3 || sz > 4.2 || sz < 0.3) : (ratio < 0.55 || ratio > 1.8 || sx > 3.4 || sx < 0.45 || sz > 3.4 || sz < 0.45)) continue;
+        const sy = c.canyon ? Math.min(Math.max(towerH / p.h, 0.6), 3) : Math.min(Math.max(b.h / p.h, 0.7), b.h >= 45 ? 2.2 : 1.7), dist = Math.abs(Math.log(ratio)) + (c.canyon ? 0 : Math.abs(Math.log(b.h / (p.h * sy))));
         if (!pick || dist < pick.dist) pick = { p, sx, sz, sy, flip, dist };
       }
     }
-    if (!pick) continue;
+    if (!pick) { if (c.canyon) out.canyon.noFit++; continue; }
     // the replacement must keep clear of every street (not only its own), every junction disc and any custom town: sample its rectangle's corners and edge midpoints
     { const ca = Math.cos(r.a), sa = Math.sin(r.a); let bad = false;
       for (const [fu, fv] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5], [0, -.5], [0, .5], [-.5, 0], [.5, 0]]) { const x = r.cx + (fu * r.L) * ca - (fv * r.S) * sa, z = r.cz + (fu * r.L) * sa + (fv * r.S) * ca, q = ck.nearestRoad(x, z); if ((q && q.gap < 0.25) || ck.junctionGap(x, z) < 0.4 || isInTownExclusion(areaId, x, z, 2)) { bad = true; break; } }
-      if (bad) continue; }
+      if (bad) { if (c.canyon) out.canyon.blocked++; continue; } }
     const { p, sx, sz, sy, flip } = pick, rings = [ring], f = foundation(rings, t), yaw = -r.a + (flip ? Math.PI / 2 : 0);
     if (p.tris > CHEAP_TRIS) heavy++;
+    if (c.canyon) { nCanyon++; out.canyon.towers++; }
     if (f.floor - f.minT > 0.12) batch.addBox(r.cx, r.cz, r.L + 0.3, r.S + 0.3, -r.a, f.bottom, f.floor + 0.02, [0.5, 0.49, 0.46], 0.9); // concrete plinth so nothing floats on a slope
     if (!batch.add(p, r.cx, f.floor, r.cz, yaw, sx, sy, sz)) break;
     used(p.path); replacedSet.add(b); out.replaced++; out.placed.push({ kind: 'building', x: r.cx, z: r.cz, r: Math.hypot(r.L, r.S) / 2, yaw: -r.a, L: r.L, S: r.S });

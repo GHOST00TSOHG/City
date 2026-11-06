@@ -59,6 +59,22 @@ Follow [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md). Multiplayer (`publi
 - `cobblestone_place_01` tiles read as dark flecks on the Paris plaza.
 - gitleaks not run (not installed here).
 
+## Wave 3b (feat/world-overhaul, 2026-11-06): visual QA + full-footprint clearance
+- **Yellow discs:** `NEON_RE` matched `arcade` in `city-paris/arcade_colonnade_01` (a stone colonnade) and lit its floor medallions; now `arcade_parlor|arcade_cabinet|arcade_sign` only.
+- **Light pools:** `glowPools.ts` set `colorNode`, which overrides `instanceColor`, so every pool clipped to a white disc. Per-instance RGB now lives in a `poolCol` InstancedBufferAttribute; radius `r * 2.5`, Gaussian x smoothstep falloff (zero at the quad edge). `reverbere` is a fixture. `lamps.ts` ground pools: softer falloff, dry gain 0.20, tight specular core only when wet.
+- **Paris:** cobblestone grid removed (dark flecks) -> `seams` + `flags` warm limestone; six `reverbere_01` lamps on the promenade (parasol moved off the lamp). **Outpost:** floating lanterns replaced by grounded `streetlamp_01` posts (hut, pump on a new 3x3 pad, two on the wharf planks).
+- **Audit (`src/audit.ts`):** full footprints. Lamps (r 0.25), trees (r 0.4), benches / planters / stops / umbrellas (own r) use an exact circle test; pack buildings and EVERY town object use 4 corners + 4 edge midpoints (+ centre); `towns.real` uses a radius from item scale (no w/d available); fountains use basin radius. Gap >= 0.20 m (buildings 0.25 m) and outside junction discs. `tests/road-clearance.spec.ts` = 5 areas + 6 towns (11/11).
+- **Newark downtown canyon (`packCity.ts`):** the avenue (`BLVD_LOCAL`, Newark-local, shifted to world by `registry.get('newark').worldOffset`; area data is WORLD space) gets up to 14 `metropolis` towers (50-95 m) on flanking lots (lateral 12-100 m, relaxed fit limits, same road / junction / town checks). Only 11 lots qualified (OSM lots, 8 no fit, 2 blocked); counts in `audit.counts.canyon*`. Towers fill the LEFT side of the view; the right side is still brick mid-rise. `downtown` view = pos [1233, 2.8, 387] -> look [1195, 17, 490]. Metropolis glass: roughness 0.06 / metalness 0.62, `envMapIntensity` 2.0 on the pack material, thin cyan crown strip on tower models.
+- **Verifier:** 14 shots incl. `edo-road`; `ONLY=id,id` re-shoots a subset (writes `webkit-report.partial.json`).
+- **Numbers:** WebKit 1280x800 WebGPU, 20 s settle: 60 fps (min 59.7-59.9) on all 14, calls 47-149 (passaic 149/150), 0 console errors, 0 placement violations, 35/35 packs, 189 models / 43 MB. Playwright (port 4191, SwiftShader): 29/31 in the parallel run; `smoke (laptop)` and `weather rain` hit the 90 s test timeout under load and pass with `--timeout=300000 --workers=1`.
+
+## Wave 3b not done / next
+- **`shot-edo-road.png` does NOT prove what Luis asked for.** Edo's plaza edge is ~22 m (82 m centre) from the nearest street, a narrow unmarked road (no lane lines), on Edo's machiya (back) side with forest between. The shot shows clear asphalt + Edo's houses, not the torii / pagoda / lanterns. Needs a site search that puts the road on the torii side (or an apron path to the road) and a marked road.
+- No apron connecting Edo to the sidewalk was built.
+- Newark canyon covers one side of the avenue; the lit crown strip and mirror reflection are only lightly visible at this distance. Whether `envMapIntensity` affects `scene.environment` on the WebGPU node material was not isolated.
+- Passaic street shot is 149 / 150 draw calls.
+- gitleaks not run (not installed here).
+
 # HANDOFF: bot/websmith-robots-v2 (PR #24), 2026-11-01
 
 - Head 533be82; preview/robots-cleanup = 7c4a482 (merge of 533be82); preview deploy 99c35432 (alias preview-robots-cleanup). Production untouched (5b0d1f48).

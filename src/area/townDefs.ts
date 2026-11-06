@@ -176,7 +176,8 @@ const parisTown: TownDef = {
       I.push(...pad(-27.2, 0, 5.4, 52, GRAN, EDGE), ...pad(27.2, 0, 5.4, 52, GRAN, EDGE), ...pad(0, -27.2, 49, 5.4, GRAN, EDGE));
       for (const u of [-34, -18, 18, 34]) I.push(pit(u, 29));
     }
-    I.push(...grid(pa('cobblestone_place_01'), -28, -28, 8, 8, 8, { s: 2 }));
+    I.push(...seams([-30, -30, 30, 30], 3.5, [0.46, 0.42, 0.36]), ...flags([-12.6, -12.6, 12.6, 12.6], 3.15, 3.15, 0.02, [0.6, 0.55, 0.46], 4141, 0.025)); // crisp warm limestone paving round the fountain ring
+    for (const [u, v] of [[-25.5, -18], [-25.5, -4], [-25.5, 10], [25.5, -18], [25.5, -4], [25.5, 10]] as const) I.push({ p: pa('reverbere_01'), u, v, s: 1.5 }); // cast-iron Parisian lamps on the granite promenade
     I.push({ p: ru('roman_fountain'), u: 0, v: 0, s: 2.2, solid: false }, { p: ru('equestrian_statue'), u: 0, v: -20, s: 1.8, rot: 0 });
     // perimeter rows of Parisian frontages, facing inward onto the promenade
     const row7 = [pa('cafe_brasserie_01'), pa('boulangerie_01'), pa('librairie_01'), pa('haussmann_apartment_01'), pa('cafe_brasserie_01'), pa('boulangerie_01'), pa('librairie_01')];
@@ -184,7 +185,7 @@ const parisTown: TownDef = {
     [-28.5, -19, -9.5, 0, 9.5, 19, 28.5].forEach((u, i) => I.push({ p: i === 3 ? pa('haussmann_apartment_01') : i % 2 ? pa('arcade_colonnade_01') : row7[i], u, v: -33.5, s: 1.5, rot: face(u, -33.5, u, 0), solid: true }));
     I.push({ p: pa('metro_entrance_01'), u: -24, v: 31, s: 1.5, solid: true }, { p: pa('news_kiosk_01'), u: 26.8, v: 14, s: 1.5, rot: -90 }, { p: pa('morris_column_01'), u: -26.8, v: 16, s: 1.5 });
     I.push({ p: pa('wallace_fountain_01'), u: -22, v: 14, s: 1.5 }, { p: pa('wallace_fountain_01'), u: 22, v: 14, s: 1.5 });
-    I.push({ p: pa('cafe_parasol_01'), u: -26.8, v: -5, s: 1.5 }, { p: pa('cafe_parasol_01'), u: 26.8, v: 4, s: 1.5 });
+    I.push({ p: pa('cafe_parasol_01'), u: -26.8, v: -10, s: 1.5 }, { p: pa('cafe_parasol_01'), u: 26.8, v: 4, s: 1.5 });
     for (const u of [-34, -18, 18, 34]) I.push({ p: pa('plane_tree_01'), u, v: 29, s: 1.3 });
     // riverfront: shoreline, river and a bateau-mouche
     I.push(...row(pa('shore_straight_01'), -40, 40, 8, 0, 11, { s: 2, tile: true, rot: 180 }), ...grid(pa('water_open_01'), -40, 48, 11, 1, 8, { s: 2 }), { p: pa('bateau_mouche_boat_01'), u: 8, v: 48, s: 1.6, rot: 90, y: 0.4 });
@@ -270,7 +271,7 @@ const outpostTown: TownDef = {
   items() {
     const I: Item[] = [];
     // pads sit under what they carry: (u, v, w, d)
-    const PADS: [number, number, number, number][] = [[14, 8, 8, 8], [30, -22, 6, 6], [-44, -34, 14, 12], [-30, -46, 8, 8], [8, -42, 14, 12], [-8, -46, 8, 7], [36, 30, 19, 14], [44, 12, 9, 9], [28, -46, 9, 6], [46, -30, 8, 8], [40, -40, 7, 7], [-22, 34, 12, 12], [-46, 33, 18, 9]];
+    const PADS: [number, number, number, number][] = [[14, 8, 8, 8], [30, -22, 6, 6], [-44, -34, 14, 12], [-30, -46, 8, 8], [8, -42, 14, 12], [-8, -46, 8, 7], [36, 30, 19, 14], [44, 12, 9, 9], [28, -46, 9, 6], [46, -30, 8, 8], [40, -40, 7, 7], [-22, 34, 12, 12], [-46, 33, 18, 9], [-9.2, 25, 3, 3]];
     { // packed dirt clearing, weathered stone / packed-earth pads under every structure, timber dock planks by the wharf
       const DIRT: RGB = [0.27, 0.2, 0.14], FLG: RGB = [0.41, 0.4, 0.37], FLGC: RGB = [0.28, 0.28, 0.26], PLANK: RGB = [0.37, 0.25, 0.15], PLKD: RGB = [0.22, 0.15, 0.09];
       I.push(...ground([-16, -6, 16, 34], DIRT, [], { rough: 0.95 }), ...ground([-6, 34, 6, 46], DIRT, [], { rough: 0.95 }));
@@ -284,10 +285,10 @@ const outpostTown: TownDef = {
     I.push({ p: au('reflecting_pond'), u: -26, v: -4, s: 2, tile: true }, { p: na('waterfall'), u: -26, v: -14, s: 2, solid: true }, { p: na('lichen_granite_boulder'), u: -32, v: -8, s: 2 });
     I.push({ p: na('ranger_hut'), u: 14, v: 8, s: 2.4, rot: -90, solid: true }, { p: na('lookout_tower'), u: 30, v: -22, s: 1.8, solid: true });
     I.push({ p: fm('windmill_pump'), u: -10, v: 26, s: 1.6 }); // farm pack: a hand pump on the packed-dirt clearing
-    I.push({ p: na('lantern'), u: 10.2, v: 12.2, s: 3, y: 1.1 }, { p: na('lantern'), u: 3, v: 20, s: 3, y: 1.1 }); // cabin porch lantern and a trail lantern
+    I.push({ p: cz('streetlamp_01'), u: 10.2, v: 11.2, s: 1.5, y: 0 }, { p: cz('streetlamp_01'), u: -8.5, v: 24, s: 1.5, y: 0 }); // ground-standing lamp posts: beside the ranger hut and the pump (no floating props)
     // viking-fjord wharf village on the lee side
     I.push({ p: vk('turf_longhouse'), u: 36, v: 30, s: 2.4, rot: -90, solid: true }, { p: vk('pit_house'), u: 44, v: 12, s: 2, rot: -90, solid: true }, { p: vk('boathouse_naust'), u: 56, v: 38, s: 2, rot: -90, solid: true });
-    I.push({ p: sw('oil_lantern'), u: 46.5, v: 20, s: 3, y: 1 }, { p: sw('oil_lantern'), u: 46.5, v: 30, s: 3, y: 1 });
+    I.push({ p: cz('streetlamp_01'), u: 46.5, v: 20, s: 1.5, y: 0.1 }, { p: cz('streetlamp_01'), u: 46.5, v: 30, s: 1.5, y: 0.1 }); // wharf lamps stand on the planks
     // bunker + radar compound
     I.push(...row(bk('corridor_straight'), -46, 33, 4, 0, 4, { s: 2 }), { p: bk('blast_door_frame'), u: -46, v: 33, s: 2, rot: 90 }, { p: bk('blast_door'), u: -46, v: 33, s: 2, rot: 90 }, { p: bk('radar_scope'), u: -44, v: 40, s: 4 }, { p: bk('alarm_beacon'), u: -46, v: 37, s: 3, y: 4 });
     I.push({ p: ar('weather_mast'), u: -22, v: 38, s: 2.4, solid: true }, { p: ar('generator_hut'), u: -20, v: 30, s: 2, solid: true }, { p: ar('station_sign'), u: -26, v: 46, s: 2 });

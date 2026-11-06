@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Mac WebKit (Safari engine, Metal GPU) verification of the world overhaul.
 //   node tools/verify-overhaul-webkit.mjs            (starts `vite preview` on :4191 unless CITY_URL is set; headed window; HEADLESS=1 for headless)
-// 13 street-level shots (eye 2.2-4.0 m, curbed street / town square): newark downtown skyline, a street in each of the 5 areas, the 6 towns, and the dev panel.
+// 14 shots (street level 2.2-4.0 m, plus one elevated road-side Edo shot): newark downtown skyline, a street in each of the 5 areas, the 6 towns, edo-road (asphalt + lane lines beside Edo), and the dev panel.
 // Records fps, draw calls, console errors, placement-audit violations and pack coverage; writes .proof/shot-<id>.png and .proof/webkit-report.json.
 import { webkit } from 'playwright';
 import { spawn } from 'node:child_process';
@@ -15,8 +15,9 @@ if (!base) {
   server = spawn('npx', ['vite', 'preview', '--port', '4191', '--strictPort'], { cwd: root, stdio: 'ignore' });
   await new Promise((r) => setTimeout(r, 2500));
 }
-const shots = [{ id: 'newark-downtown', q: 'area=newark&view=downtown' }, ...['newark', 'passaic', 'bayshore', 'sandyhook', 'keywest'].map((a) => ({ id: `${a}-street`, q: `area=${a}`, street: a })),
-  ...['edo', 'cyber', 'paris', 'harbor', 'airfield', 'outpost'].map((t) => ({ id: t, q: `town=${t}`, town: t })), { id: 'dev', q: 'area=newark&dev=1' }];
+const ONLY = (process.env.ONLY ?? '').split(',').filter(Boolean); // ONLY=edo-road,newark-downtown re-shoots just those (report goes to webkit-report.partial.json)
+const shots0 = [{ id: 'newark-downtown', q: 'area=newark&view=downtown' }, ...['newark', 'passaic', 'bayshore', 'sandyhook', 'keywest'].map((a) => ({ id: `${a}-street`, q: `area=${a}`, street: a })),
+  ...['edo', 'cyber', 'paris', 'harbor', 'airfield', 'outpost'].map((t) => ({ id: t, q: `town=${t}`, town: t })), { id: 'edo-road', q: 'town=edo', town: 'edo', roadside: true }, { id: 'dev', q: 'area=newark&dev=1' }];
 /** Runs in the page: stands on a straight run of a major street (lane side, eye 2.8 m) and looks down it. */
 const placeOnStreet = () => {
   const inp = window.__app.auditInput(), roads = inp.area.roads, ctr = (window.__app.views.find((v) => v.name === 'street') ?? window.__app.views[0]), cx = ctr.look[0], cz = ctr.look[2];
@@ -39,6 +40,23 @@ const placeOnStreet = () => {
   cam.position.set(x, y, z); cam.lookAt(x + Math.cos(best.h) * 60, y - 0.5, z + Math.sin(best.h) * 60); window.__cityControls.syncAngles(); window.__cityControls.setWalk(true);
   return { x: +x.toFixed(1), z: +z.toFixed(1), heading: +best.h.toFixed(2), roadW: best.w, runLen: +best.L.toFixed(0), eye: 2.8 };
 };
+/** Runs in the page: elevated three-quarter view (eye ~12 m) from the street nearest to the town, looking along it with the town beside it, so asphalt + lane lines and the town are in one frame. */
+const placeRoadside = (townId) => {
+  const inp = window.__app.auditInput(), s = inp.sites.find((q) => q.id === townId); let best = null;
+  for (const g of inp.ck.segments) {
+    const dx = g.bx - g.ax, dz = g.bz - g.az, L2 = dx * dx + dz * dz || 1, u = Math.max(0, Math.min(1, ((s.cx - g.ax) * dx + (s.cz - g.az) * dz) / L2)), px = g.ax + u * dx, pz = g.az + u * dz, d = Math.hypot(px - s.cx, pz - s.cz);
+    if (!best || d < best.d) best = { d, px, pz, h: Math.atan2(dz, dx) };
+  }
+  if (!best) return null;
+  // camera 42 m along the road from the closest point, 14 m off its far side, eye ~14 m; looks at the town centre, so the asphalt + lane lines run through the frame with the town beside it
+  const hx = Math.cos(best.h), hz = Math.sin(best.h), tx = s.cx - best.px, tz = s.cz - best.pz, tl = Math.hypot(tx, tz) || 1;
+  const sgn = (hx * tx + hz * tz) > 0 ? -1 : 1; // back along the road away from the town's side
+  const cx = best.px + hx * 42 * sgn - (tx / tl) * 14, cz = best.pz + hz * 42 * sgn - (tz / tl) * 14, y = window.__ground(cx, cz).floor.y + 14, cam = window.__cityCam;
+  const lx = s.cx - tx * 0.12, lz = s.cz - tz * 0.12;
+  cam.position.set(cx, y, cz); cam.lookAt(lx, y - 11, lz); window.__cityControls.syncAngles();
+  return { gapToTownCentre: +best.d.toFixed(1), eye: 14 };
+};
+const shots = ONLY.length ? shots0.filter((q) => ONLY.includes(q.id)) : shots0;
 const browser = await webkit.launch({ headless: process.env.HEADLESS === '1' });
 const report = { when: new Date().toISOString(), viewport: '1280x800', browser: 'webkit', shots: [], packsUsed: [], packsRegistered: [] };
 const used = new Set();
@@ -51,6 +69,7 @@ for (const s of shots) {
   await page.goto(`${base}/?mp=0&join=0&mode=free&perf=1&${s.q}`);
   await page.waitForFunction(() => window.__city?.ready, null, { timeout: 240_000 });
   let street = null; if (s.street) { street = await page.evaluate(placeOnStreet); await page.waitForTimeout(1500); }
+  if (s.roadside) { street = await page.evaluate(placeRoadside, s.town); await page.waitForTimeout(1500); }
   await page.waitForTimeout(5000);
   const early = await page.evaluate(() => window.__city.fps); // load-time window: neighbour areas are still preloading here
   await page.waitForTimeout(Number(process.env.SETTLE_MS ?? 20000));
@@ -68,6 +87,6 @@ await browser.close(); server?.kill();
 const reg = JSON.parse(readFileSync(root + 'public/tja/used-files.json', 'utf8'));
 report.packsRegistered = reg.packs; report.packsUsed = [...used].sort(); report.modelsRegistered = reg.count;
 report.ok = report.shots.every((s) => s.calls <= 150 && s.consoleErrors.length === 0 && s.placement.total === 0 && s.minFps >= 55) && reg.packs.length === 35 && report.shots.find((s) => s.id === 'dev')?.devPanelVisible === true;
-writeFileSync(proof + 'webkit-report.json', JSON.stringify(report, null, 2));
+writeFileSync(proof + (ONLY.length ? 'webkit-report.partial.json' : 'webkit-report.json'), JSON.stringify(report, null, 2));
 console.log(`packs registered ${reg.packs.length}/35 (${reg.count} models), used at runtime in these shots: ${used.size}; ok=${report.ok}`);
 process.exit(report.ok ? 0 : 1);
