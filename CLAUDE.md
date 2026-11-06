@@ -1,5 +1,5 @@
 # CLAUDE.md (City)
-Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Jonn's bots: `knowledge/JONN-DIRECTIONS.md`. Order: world, robot, zombies, multiplayer.
+Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Claude briefs follow `/workspace/standards/claude-prompt-template.md` (Machine line, Target device, privacy rule). Jonn's bots: `knowledge/JONN-DIRECTIONS.md`. Order: world, robot, zombies, multiplayer.
 
 ## Scripts
 - `npm ci` install (lockfile)
@@ -16,6 +16,7 @@ Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Jonn's b
 - `src/world/registry.ts` the one world registry (areas, origins, bounds, world offsets, load state, tiles); `src/world/player.ts` the one player-state object (pos/vel/speed/altitude/mode/area)
 - `src/area/pack*.ts`, `fountains.ts`, `townDefs.ts` pack-asset engine (one merged mesh per town / city layer), 6 towns, animated fountains; `src/devPanel.ts` hidden tuning panel (`?dev=1` or Backtick); `?town=edo|cyber|paris|harbor|airfield|outpost` warps to a town
 - `tools/stage-used-tja.mjs` writes `public/tja/used-files.json` (the ship list; `public/tja/*.glb` is never committed, the build prunes `dist/tja` to that list); `tools/verify-overhaul-webkit.mjs` WebKit proof run
+- `tools/simplify-tja.mjs` offline decimation of shipped pack models >20k tris (backups in `.proof/glb-backup/`); rerun `stage-used-tja.mjs` after
 - `tools/bake/` offline area bake (fetch.mjs, bake.mjs, infer.mjs, areas.json) -> `public/areas/<id>/`
 - `tests/` Playwright smoke + `cameras.json`
 - `knowledge/` build guide, rules, plan, data sources
@@ -29,3 +30,4 @@ Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Jonn's b
 - Budget: 150 draw calls max (smoke test asserts it), 50 fps or better at 1080p. `?stats` shows calls/fps.
 - SwiftShader fps in headless CI is not representative; only real GPUs count.
 - No CDNs: fonts come from `@fontsource/inter`, bundled by Vite.
+- WebKit refuses port 4190; the proof harness uses 4191. Playwright can attach to another server on :4173, so run it with `CITY_URL=http://localhost:<port>`.

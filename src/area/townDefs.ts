@@ -5,7 +5,7 @@ export interface Item {
   /** ground tile: top surface flush with the paved plaza level (pad.y + 0.03) */ tile?: boolean;
   /** adds a collider box from the model's size */ solid?: boolean;
   box?: { w: number; d: number; y0?: number; y1: number; rgb: [number, number, number]; rough?: number; emissive?: number };
-  ring?: { r0: number; r1: number; y0?: number; y1: number; rgb: [number, number, number] };
+  ring?: { r0: number; r1: number; y0?: number; y1: number; rgb: [number, number, number]; rough?: number; emissive?: number };
 }
 export interface FountainDef { x: number; z: number; y: number; radius: number; height: number; waterY: number; tone: 'sky' | 'neon' | 'coral' | 'gold'; jets?: number }
 export interface TownDef {
@@ -46,6 +46,31 @@ function room(kit: (f: string) => string, wall: string, win: string, floor: stri
   return out;
 }
 
+// ---- plazas, paths and curbs: boxes / rings stamped into each town's merged mesh (no extra draw calls) ----
+// Heights are metres above the town pad: base slab 0.02 (under the pack tiles at 0.03), raised pads 0.07 (solid, so walkers stand on them), curb strips 0.10.
+type RGB = [number, number, number];
+const PAD_H = 0.07, CURB_H = 0.10;
+const B = (u: number, v: number, w: number, d: number, y1: number, rgb: RGB, o: { y0?: number; rough?: number; emissive?: number; solid?: boolean; rot?: number } = {}): Item => ({ p: '', u, v, rot: o.rot, solid: o.solid, box: { w, d, y0: o.y0, y1, rgb, rough: o.rough, emissive: o.emissive } });
+type Rect = [number, number, number, number]; // u0 v0 u1 v1
+const rectMinus = (r: Rect, holes: Rect[]): Rect[] => holes.reduce<Rect[]>((rs, h) => rs.flatMap((q) => {
+  if (h[2] <= q[0] || h[0] >= q[2] || h[3] <= q[1] || h[1] >= q[3]) return [q];
+  const o: Rect[] = [], a = Math.max(q[0], h[0]), b = Math.max(q[1], h[1]), c = Math.min(q[2], h[2]), d = Math.min(q[3], h[3]);
+  if (q[1] < b) o.push([q[0], q[1], q[2], b]); if (d < q[3]) o.push([q[0], d, q[2], q[3]]); if (q[0] < a) o.push([q[0], b, a, d]); if (c < q[2]) o.push([c, b, q[2], d]);
+  return o;
+}), [r]);
+/** ground slab under a whole footprint (holes keep ponds / streams open) */
+const ground = (r: Rect, rgb: RGB, holes: Rect[] = [], o: { rough?: number } = {}): Item[] => rectMinus(r, holes).map(([a, b, c, d]) => B((a + c) / 2, (b + d) / 2, c - a, d - b, 0.02, rgb, { y0: -0.08, rough: o.rough }));
+/** raised, curbed walkway or apron centred at u,v (w across u, d across v) */
+const pad = (u: number, v: number, w: number, d: number, rgb: RGB, curb: RGB, o: { rough?: number; h?: number } = {}): Item[] => {
+  const h = o.h ?? PAD_H, c = 0.3, ch = h + 0.03;
+  return [B(u, v, w, d, h, rgb, { y0: -0.02, rough: o.rough, solid: true }), B(u, v - d / 2 + c / 2, w, c, ch, curb, { y0: -0.02 }), B(u, v + d / 2 - c / 2, w, c, ch, curb, { y0: -0.02 }), B(u - w / 2 + c / 2, v, c, d - 2 * c, ch, curb, { y0: -0.02 }), B(u + w / 2 - c / 2, v, c, d - 2 * c, ch, curb, { y0: -0.02 })];
+};
+/** soft warm light pool on the paving (emissive disc) */
+const glow = (u: number, v: number, r: number, rgb: RGB, y = 0.045, e = 0.55): Item => ({ p: '', u, v, ring: { r0: 0, r1: r, y0: y - 0.012, y1: y, rgb, rough: 0.5, emissive: e } });
+const WARM: RGB = [1, 0.72, 0.38];
+/** thin emissive strip (neon seams, grates) lying on the paving */
+const strip = (u: number, v: number, w: number, d: number, rgb: RGB, e = 1.3, y = 0.036): Item => B(u, v, w, d, y, rgb, { y0: 0.03, rough: 0.2, emissive: e });
+
 const edoTown: TownDef = {
   id: 'edo', name: 'Edo', area: 'bayshore', half: [46, 46], minH: 1.0,
   view: { stand: [0, 30], look: [0, -22, 6] }, slab: { u: 0, v: 0, w: 24, d: 88 },
@@ -53,6 +78,12 @@ const edoTown: TownDef = {
   real: [{ p: rc('realistic_rock_boulder_01'), u: -40, v: -20, s: 2 }, { p: rc('realistic_rock_boulder_01'), u: 40, v: 24, s: 1.6 }],
   items() {
     const S = 2.2, I: Item[] = [];
+    { // raked sand courtyard, flagstone sando from the road through the torii to the shrine, timber-dark plinths, lantern pools
+      const SAND: RGB = [0.62, 0.54, 0.4], FLAG: RGB = [0.46, 0.45, 0.43], CURB: RGB = [0.3, 0.29, 0.28], PLINTH: RGB = [0.22, 0.17, 0.13];
+      I.push(...ground([-46, -46, 46, 46], SAND, [[-29, -29, -19, 21]]), ...pad(0, 28, 4.4, 36, FLAG, CURB), ...pad(0, -19, 4.4, 22, FLAG, CURB));
+      for (const [u, v, w, d] of [[0, -37, 13, 10], [-20, -34, 12, 9], [-32, -28, 8, 8], [32, -30, 6, 6]]) I.push(B(u, v, w, d, 0.16, PLINTH, { y0: -0.1, rough: 0.8 }), B(u, v, w + 0.6, d + 0.6, 0.1, CURB, { y0: -0.1 }));
+      for (const v of [34, 22, 10]) I.push(glow(-7, v, 1.9, WARM), glow(7, v, 1.9, WARM));
+    }
     I.push(...grid(edo('raked_gravel_tile'), -8, -8, 3, 3, 8, { s: 2 }));
     I.push(...row(edo('road_stone_straight'), 0, 16, 0, 8, 4, { s: 2, tile: true, rot: 90 }), ...row(edo('road_stone_straight'), 0, -16, 0, -8, 3, { s: 2, tile: true, rot: 90 }));
     I.push(...grid(edo('moss_tile'), 16, -8, 1, 3, 8, { s: 2 }));
@@ -83,6 +114,14 @@ const cyberTown: TownDef = {
   real: [{ p: rc('realistic_warehouse_01'), u: 40, v: -34, s: 1.2, rot: -90 }, { p: rc('realistic_rail_signal_01'), u: 30, v: 38, s: 1.5 }, { p: rc('realistic_subway_faregate_01'), u: -12, v: 36, s: 1.5 }],
   items() {
     const S = 1.9, I: Item[] = [];
+    { // wet dark-slate street slabs, raised storefront sidewalks, neon seams and grates
+      const SLATE: RGB = [0.09, 0.1, 0.13], WALK: RGB = [0.2, 0.21, 0.26], KERB: RGB = [0.34, 0.35, 0.4], CY: RGB = [0.1, 0.9, 1], MG: RGB = [1, 0.1, 0.8];
+      I.push(...ground([-48, -48, 48, 40], SLATE, [], { rough: 0.22 }));
+      for (const [u, v] of [[-11.5, -12], [11.5, -12], [-11.5, 10], [11.5, 10]] as const) I.push(...pad(u, v, 3.4, 14, WALK, KERB, { rough: 0.35 }));
+      for (const v of [-30, -20, 20, 30]) I.push(strip(0, v, 90, 0.12, v < 0 ? CY : MG, 1.1));
+      for (const u of [-30, 30]) I.push(strip(u, 0, 0.12, 80, u < 0 ? MG : CY, 1.1));
+      for (const [u, v, c] of [[-7, -3, CY], [7, 3, MG], [-7, 14, MG], [7, -16, CY], [0, 26, CY]] as const) I.push(strip(u, v, 1.6, 0.9, c, 1.8, 0.04), strip(u, v, 1.2, 0.08, [0.02, 0.02, 0.03], 0, 0.045));
+    }
     I.push(...grid(cy('wet_street_tile'), -40, -40, 11, 11, 8, { s: 2 }).filter((t) => Math.abs(t.u) > 8 || Math.abs(t.v) > 8 ? ((t.u + 40) / 8) % 2 === 0 || ((t.v + 40) / 8) % 2 === 0 : false));
     I.push(...basin(3.6, 0.7));
     I.push({ p: cy('noodle_bar'), u: -22, v: -12, s: S, rot: face(-22, -12, 0, -12), solid: true }, { p: cy('arcade_parlor'), u: 22, v: -12, s: S, rot: face(22, -12, 0, -12), solid: true }, { p: cy('ripperdoc_clinic'), u: -22, v: 10, s: S, rot: face(-22, 10, 0, 10), solid: true }, { p: cy('konbini_store'), u: 22, v: 10, s: S, rot: face(22, 10, 0, 10), solid: true });
@@ -106,6 +145,14 @@ const parisTown: TownDef = {
   real: [{ p: rc('realistic_brownstone_01'), u: -46, v: -2, s: 0.8, rot: 90 }, { p: rc('realistic_bench_01'), u: 4, v: 24, s: 1.6, rot: 180 }],
   items() {
     const I: Item[] = [];
+    { // warm stone esplanade with a radial pattern, granite promenade aprons, café pools
+      const STONE2: RGB = [0.55, 0.5, 0.42], GRAN: RGB = [0.4, 0.4, 0.43], EDGE: RGB = [0.26, 0.26, 0.28], LIGHT: RGB = [0.7, 0.64, 0.52], DARKS: RGB = [0.36, 0.33, 0.3];
+      I.push(...ground([-50, -50, 50, 37], STONE2));
+      for (const [r0, r1, c] of [[6.2, 6.8, LIGHT], [9.4, 9.9, DARKS], [13, 13.6, LIGHT]] as const) I.push({ p: '', u: 0, v: 0, ring: { r0, r1, y0: 0.02, y1: 0.05, rgb: c } });
+      for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; I.push(B(Math.cos(a) * 9.6, Math.sin(a) * 9.6, 0.3, 6.4, 0.048, DARKS, { y0: 0.02, rot: 90 - (a * 180) / Math.PI })); }
+      for (const [u, v, w, d] of [[-27.5, -8, 5, 16], [27.5, -8, 5, 16], [-27.5, 12, 5, 12], [-26, -31, 14, 4.5], [-39, -26, 5, 12], [39, -26, 5, 12]]) I.push(...pad(u, v, w, d, GRAN, EDGE));
+      for (const [u, v] of [[-29, -8], [29, -8], [-29, 4], [29, 4], [-10, 14], [10, 14], [0, 22]] as const) I.push(glow(u, v, 2.4, WARM, 0.052));
+    }
     I.push(...grid(pa('cobblestone_place_01'), -28, -28, 8, 8, 8, { s: 2 }));
     I.push({ p: ru('roman_fountain'), u: 0, v: 0, s: 2.2, solid: false }, { p: ru('equestrian_statue'), u: 0, v: -22, s: 1.8, rot: 0 }, { p: ru('amphitheater_segment'), u: 0, v: -42, s: 1.2, rot: 180, solid: true });
     I.push(...row(ru('ionic_column'), -30, -26, 12, 0, 6, { s: 1.5 }));
@@ -139,6 +186,14 @@ const harborTown: TownDef = {
   real: [{ p: rc('realistic_bench_01'), u: 10, v: -8, s: 1.6, rot: 0 }, { p: rc('realistic_bench_01'), u: -10, v: -8, s: 1.6, rot: 0 }],
   items() {
     const I: Item[] = [], S = 2;
+    { // sun-bleached coral-stone plaza, weathered timber decks, string-light glow
+      const CORAL: RGB = [0.82, 0.74, 0.62], TIM: RGB = [0.4, 0.28, 0.18], TIMD: RGB = [0.24, 0.16, 0.1], CK: RGB = [0.6, 0.54, 0.46];
+      I.push(...ground([-46, -46, 46, 21], CORAL, [[-4, 21, 4, 22]]));
+      for (const [u, v, w, d] of [[0, -31, 40, 6], [-18, -14, 5, 12], [18, -14, 5, 12], [18, 6, 5, 12], [0, 31, 9, 22]]) I.push(...pad(u, v, w, d, TIM, TIMD, { rough: 0.9, h: 0.09 }));
+      for (const [u, v, w, d] of [[-18, -14, 5, 12], [18, -14, 5, 12], [18, 6, 5, 12], [0, -31, 40, 6]]) for (let k = -2; k <= 2; k++) I.push(B(u + (w < d ? k * 0.9 : 0), v + (w < d ? 0 : k * 1.1), w < d ? 0.04 : w - 0.8, w < d ? d - 0.8 : 0.04, 0.095, TIMD, { y0: 0.09 }));
+      I.push(...pad(0, 8, 14, 8, CK, TIMD));
+      for (const [u, v] of [[-10, -28], [0, -28], [10, -28], [-14, -8], [14, -8], [14, 6], [0, 12]] as const) I.push(glow(u, v, 2.6, [1, 0.78, 0.45], 0.058, 0.6));
+    }
     I.push(...grid(cz('road_cobble_straight_01'), -32, -32, 9, 9, 8, { s: 2 }));
     I.push({ p: ci('park_fountain_01'), u: 0, v: 0, s: 2 }, { p: cz('well_01'), u: -22, v: 22, s: 2 }, { p: cz('water_pond_01'), u: 22, v: 30, s: 2, tile: true });
     I.push({ p: vb('grand_deco_hotel'), u: 0, v: -40, s: 1.3, solid: true }, { p: vb('deco_shopfront_row'), u: 38, v: 0, s: 1.2, rot: -90, solid: true });
@@ -161,6 +216,14 @@ const airfieldTown: TownDef = {
   real: [{ p: rc('realistic_road_gantry_01'), u: -20, v: 4, s: 1.2 }, { p: rc('realistic_rail_signal_01'), u: 40, v: 4, s: 1.6 }],
   items() {
     const I: Item[] = [];
+    { // tarmac apron, taxi centreline, tie-down T marks, threshold stripes
+      const TAR: RGB = [0.16, 0.16, 0.18], YEL: RGB = [0.92, 0.76, 0.1], WHT: RGB = [0.85, 0.85, 0.82], RED: RGB = [0.72, 0.1, 0.1];
+      I.push(...ground([-92, -12, 92, 40], TAR, [], { rough: 0.7 }));
+      for (let u = -58; u < 42; u += 5) I.push(strip(u, -6, 2.6, 0.22, YEL, 0.05, 0.035));
+      for (const [u, v] of [[-30, 12], [-14, 14], [2, 12], [20, 8], [44, 8], [-44, 8]] as const) I.push(strip(u, v + 1.6, 0.2, 3.2, WHT, 0.05, 0.035), strip(u, v + 3.2, 3, 0.2, WHT, 0.05, 0.035));
+      for (let k = 0; k < 8; k++) I.push(strip(-84, -27 + k * 1.6, 6, 0.8, k % 2 ? RED : WHT, 0.1, 0.035));
+      for (let u = -48; u < 60; u += 12) I.push(strip(u, 26, 0.25, 8, YEL, 0.05, 0.035));
+    }
     I.push(...row(af('road_runway'), -88, -22, 12, 0, 15, { s: 3, tile: true, rot: 90 }), ...row(af('road_taxiway_straight'), -60, -6, 12, 0, 8, { s: 3, tile: true, rot: 90 }), ...grid(af('tarmac_tile'), -48, 6, 8, 3, 12, { s: 3 }));
     I.push({ p: af('control_tower'), u: -4, v: 34, s: 2.4, solid: true }, { p: af('hangar'), u: 38, v: 20, s: 2.2, rot: 180, solid: true }, { p: af('hangar'), u: 62, v: 20, s: 2.2, rot: 180, solid: true }, { p: af('t_hangar_block'), u: 82, v: 24, s: 2, rot: 180, solid: true }, { p: af('fire_rescue_station'), u: 20, v: 34, s: 2, rot: 180, solid: true }, { p: af('apron_canopy'), u: 0, v: 22, s: 2.2 });
     for (const [u, v, r] of [[-30, 12, 20], [-14, 14, -10], [2, 12, 60], [20, 8, 0], [44, 8, 30], [-44, 8, -30]] as const) I.push({ p: af('light_aircraft_cessna'), u, v, s: 2, rot: r });
@@ -179,6 +242,14 @@ const outpostTown: TownDef = {
   real: [{ p: rc('realistic_rock_boulder_01'), u: -34, v: 6, s: 2 }, { p: rc('realistic_rock_boulder_01'), u: 10, v: 34, s: 1.6 }, { p: rc('realistic_rock_boulder_01'), u: -40, v: -22, s: 2.4 }],
   items() {
     const I: Item[] = [];
+    { // packed dirt clearing, weathered flagstones round the cabin and ruins, timber dock planks by the wharf
+      const DIRT: RGB = [0.27, 0.2, 0.14], FLG: RGB = [0.41, 0.4, 0.37], FLGC: RGB = [0.28, 0.28, 0.26], PLANK: RGB = [0.37, 0.25, 0.15], PLKD: RGB = [0.22, 0.15, 0.09];
+      I.push(...ground([-16, -6, 16, 34], DIRT, [], { rough: 0.95 }), ...ground([-6, 34, 6, 46], DIRT, [], { rough: 0.95 }));
+      for (const [u, v, w, d] of [[7.5, 8, 6, 10], [-40, -30, 10, 8], [8, -37, 8, 5], [-8, -41, 8, 5], [-16, -28, 9, 6]]) I.push(...pad(u, v, w, d, FLG, FLGC, { rough: 0.95 }));
+      I.push(...pad(46, 25, 9, 16, PLANK, PLKD, { rough: 0.9, h: 0.1 }));
+      for (let k = -3; k <= 3; k++) I.push(B(46, 25 + k * 2, 8.2, 0.05, 0.105, PLKD, { y0: 0.1 }));
+      for (const [u, v] of [[4, 8], [-4, 20], [42, 20], [44, 30]] as const) I.push(glow(u, v, 2.4, WARM, 0.052, 0.45));
+    }
     const clear = (u: number, v: number) => Math.hypot(u + 26, v + 4) > 6 && !(Math.abs(u) < 14 && Math.abs(v - 14) < 18);
     I.push(...grid(na('dirt_trail'), -4, 4, 1, 6, 8, { s: 2, rot: 90 }));
     // waterfall pond with a cascade (animated)

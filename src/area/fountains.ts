@@ -24,7 +24,7 @@ function plumeGeometry(nJets: number) {
   };
   for (let j = 0; j < nJets; j++) { // outward parabolic jets: unit radius 0.85, unit height 0.55
     const a = (j / nJets) * Math.PI * 2, c = Math.cos(a), s = Math.sin(a), ph = (j * 0.618) % 1;
-    for (const side of [0, 1]) ribbon((t) => [c * 0.85 * t, 0.55 * 4 * t * (1 - t) + 0.02, s * 0.85 * t], [-s * 0.035 * (side ? 0.5 : 1), 0, c * 0.035 * (side ? 0.5 : 1)], 1, 0, (ph + side * 0.31) % 1);
+    for (const side of [0, 1]) ribbon((t) => [c * 0.85 * t, 0.55 * 4 * t * (1 - t) + 0.02, s * 0.85 * t], [-s * 0.022 * (side ? 0.5 : 1), 0, c * 0.022 * (side ? 0.5 : 1)], 1, 0, (ph + side * 0.31) % 1);
   }
   for (let k = 0; k < 2; k++) ribbon((t) => [0, t * 1.0, 0], [k ? 0 : 0.05, 0, k ? 0.05 : 0], 1, 1, k * 0.4); // central column, unit height 1
   for (let j = 0; j < 20; j++) { // curtain: a falling sheet from a raised ring (unit radius 0.34, from y 0.62 to the water)
@@ -51,10 +51,11 @@ export function buildFountains(specs: FountainSpec[]) {
   const V = normalize(cameraPosition.sub(p)), fres = pow(float(1).sub(max(V.y, 0)), 3);
   const rr = positionLocal.xz.length(); // 0 centre .. 1 rim (disc is unit radius in local space)
   const ringPulse = sin(rr.mul(26).sub(t.mul(3.2))).mul(0.5).add(0.5);
-  wmat.colorNode = mix(tA.mul(0.35), vec3(0.02, 0.05, 0.09), rr.mul(0.4));
-  wmat.roughnessNode = float(0.05); wmat.metalnessNode = float(0.1);
+  wmat.colorNode = mix(tA.mul(0.16), vec3(0.01, 0.03, 0.07), rr.mul(0.7)); // dark teal / sapphire depth
+  wmat.roughnessNode = float(0.04); wmat.metalnessNode = float(0.1);
   wmat.normalNode = transformNormalToView(normalize(rip));
-  wmat.emissiveNode = tB.mul(float(0.45).add(ringPulse.mul(0.22))).mul(float(1).sub(rr.mul(0.45))).mul(uFountain).add(vec3(0.1, 0.16, 0.26).mul(fres));
+  const foam = smoothstep(0.74, 0.82, rr).mul(float(1).sub(smoothstep(0.86, 0.95, rr))).mul(mx_noise_float(vec3(p.x.mul(5), p.z.mul(5), t.mul(2.2))).mul(0.35).add(0.75)); // white foam ring where the jets land
+  wmat.emissiveNode = tB.mul(float(0.45).add(ringPulse.mul(0.22))).mul(float(1).sub(rr.mul(0.45))).mul(uFountain).add(vec3(0.1, 0.16, 0.26).mul(fres)).add(vec3(0.55, 0.62, 0.66).mul(foam));
   const water = new THREE.InstancedMesh(disc, wmat, N); water.name = 'fountain water';
   // plumes
   const geo = plumeGeometry(Math.max(...specs.map((s) => s.jets ?? 14)));

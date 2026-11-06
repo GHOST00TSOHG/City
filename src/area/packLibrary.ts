@@ -135,10 +135,10 @@ export class PackBatch {
     this.tris += 10; this.count++;
   }
   /** A flat annulus wall (round basin rim): ring between radii r0 and r1, from y0 to y1, as n segments. */
-  addRing(cx: number, cz: number, r0: number, r1: number, y0: number, y1: number, rgb: [number, number, number], n = 24) {
+  addRing(cx: number, cz: number, r0: number, r1: number, y0: number, y1: number, rgb: [number, number, number], n = 24, rough = 0.88, emissive = 0) {
     for (let i = 0; i < n; i++) {
       const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2, am = (a0 + a1) / 2, rm = (r0 + r1) / 2, seg = Math.hypot(rm * (a1 - a0), 0) + 0.02;
-      this.addBox(cx + Math.cos(am) * rm, cz + Math.sin(am) * rm, r1 - r0, seg * 1.04, -am + Math.PI / 2 - Math.PI / 2 + Math.PI / 2, y0, y1, rgb);
+      this.addBox(cx + Math.cos(am) * rm, cz + Math.sin(am) * rm, r1 - r0, seg * 1.04, -am + Math.PI / 2 - Math.PI / 2 + Math.PI / 2, y0, y1, rgb, rough, emissive);
     }
   }
   build(name: string, material: THREE.Material): THREE.Mesh | null {

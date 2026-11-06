@@ -109,7 +109,7 @@ export async function buildTowns(sites: TownSite[], t: Terrain): Promise<TownBui
     for (const it of items) {
       const x = site.cx + it.u, z = site.cz + it.v, rot = (it.rot ?? 0) * D2R;
       if (it.box) { batch.addBox(x, z, it.box.w, it.box.d, rot, site.y + (it.box.y0 ?? 0), site.y + it.box.y1, it.box.rgb, it.box.rough ?? 0.88, it.box.emissive ?? 0); if (it.solid) res.colliders.push(boxCollider(x, z, it.box.w, it.box.d, rot, site.y, site.y + it.box.y1)); continue; }
-      if (it.ring) { batch.addRing(x, z, it.ring.r0, it.ring.r1, site.y + (it.ring.y0 ?? 0), site.y + it.ring.y1, it.ring.rgb); continue; }
+      if (it.ring) { batch.addRing(x, z, it.ring.r0, it.ring.r1, site.y + (it.ring.y0 ?? 0), site.y + it.ring.y1, it.ring.rgb, 24, it.ring.rough ?? 0.88, it.ring.emissive ?? 0); continue; }
       const p = protos.get(it.p); if (!p) continue;
       const sx = it.s ?? 1, sy = it.sy ?? sx;
       const y = it.tile ? gy(x, z) + 0.03 - p.h * sy : gy(x, z) + (it.y ?? 0);

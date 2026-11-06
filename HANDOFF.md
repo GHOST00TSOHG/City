@@ -23,6 +23,24 @@ Follow [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md). Multiplayer (`publi
 - Offline simplification of the heaviest pack models; per-town LOD.
 - Tune fountain water heights per basin by eye (`waterY` in `townDefs.ts`).
 
+## Wave 2 (feat/world-overhaul, 2026-11-06)
+- **Plazas (`townDefs.ts`):** every town now has a ground slab (0.02 m, under the pack tiles), raised curbed pads (0.07 m, `solid` so `surfaceAt` matches), curb strips (0.10 m) and emissive light pools, all as `box`/`ring` items in the town's merged mesh (no extra draws). edo sand + flagstone sando + plinths; cyber wet slate + sidewalks + neon seams/grates; paris warm stone, radial rings/spokes, granite aprons; harbor coral stone + timber decks; airfield tarmac + taxi centreline, tie-down Ts, threshold stripes; outpost dirt clearing + flagstones + dock planks. Helpers `ground/pad/glow/strip/B` at the top of `townDefs.ts`. `addRing` takes optional rough/emissive.
+- **Fountains:** deeper teal/sapphire water, roughness 0.04, white foam ring where jets land, slimmer jets. NOT done: per-fountain rim measurement for `waterY`, TSL arc/mist rework, 2 civic fountains in Newark / Key West.
+- **Culling:** `scene.ts` hides each town mesh beyond 650 m of the camera (every 10th frame); the per-area 1100 m gate stays. Town vertices are already in world coordinates (do not add `worldOffset`).
+- **Decimation:** `node tools/simplify-tja.mjs` (>20k-tri shipped models, ratio 0.35, error 0.005; drops normals, welds, simplifies, restores flat normals, meshopt-encodes; originals in `.proof/glb-backup/`). 38 models, 1.44 M -> 0.99 M tris (flat per-face vertex colours limit collapses; pagoda only 174k -> 158k). Then `node tools/stage-used-tja.mjs` (197 models, 50 MB). `draco3dgltf` added as devDependency.
+- **View:** `?area=newark&view=downtown` (street-level, Military Park toward Penn Station). The header title shows Passaic there because that spot is nearer Passaic's origin.
+- **Harness:** `tools/verify-overhaul-webkit.mjs` now uses port 4191 (WebKit blocks 4190 as a restricted port), samples after a 20 s settle (`SETTLE_MS`) and also records `earlyFps`.
+
+## Wave 2 numbers
+- WebKit 1280x800 WebGPU, settled: 60 fps (min 59.8-59.9) on all 9 views, 0 console errors, calls 53-135 (paris 135). Triangles 3.7-11.2 M: dominated by tree LOD0/1 and road chunks, not pack towns, so decimation did not reach the 1.5-3.2 M goal. Earlier "50 fps" on paris/outpost was load-time hitching (neighbour areas preloading), not steady state; `earlyFps` in the report shows it (outpost 13.5 in the first 5 s).
+- Playwright: 9/9 (run with `CITY_URL=http://localhost:4191`; `:4173` can be held by another server and `reuseExistingServer` would test the wrong site; roads spec needs `READY_MS=200000` under SwiftShader when run in parallel).
+- Tarballs in `~/builds/`: `city-overhaul-w2-{slim,modified-glbs,proof}.tgz`.
+
+## Wave 2 not done / next
+- Facade curtain-wall/interior-lighting upgrade, road wheel-track specular + manholes/grates, curated downtown glass towers (`packCity.ts`), 2 civic fountains, per-fountain `waterY`. Wave 2's downtown view shows brick mid-rises, not a glass-tower core.
+- Reduce load-time hitching in passaic/sandyhook (towns cost upload/compile while neighbours preload); tree LOD0 and road chunk triangles are the next triangle targets.
+- Glow discs are hard-edged; soften with a radial alpha later.
+
 # HANDOFF: bot/websmith-robots-v2 (PR #24), 2026-11-01
 
 - Head 533be82; preview/robots-cleanup = 7c4a482 (merge of 533be82); preview deploy 99c35432 (alias preview-robots-cleanup). Production untouched (5b0d1f48).

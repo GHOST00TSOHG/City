@@ -253,6 +253,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   scene.add(flight.group);
   const priorityTile = (x: number, z: number) => { for (const id of PRIORITY) { const t = tiles.get(id); if (t && inRect(t.bounds, x, z)) return t; } return null; };
   const linkAt = (x: number, z: number) => { for (const l of links.values()) if (inRect(l.rect, x, z)) return l; return null; };
+  let townTick = 0; // frame counter for the throttled per-town distance cull
   const nearestTile = (x: number, z: number) => { let b: Content | null = null, bd = Infinity; for (const t of tiles.values()) { const d = registry.distTo(t.id, x, z); if (d < bd) { bd = d; b = t; } } return b; };
   const tileRects = () => [...tiles.values()].map((t) => t.bounds);
   /** Re-own rings, cut sea planes and (de)build links after tiles were added or removed. */
@@ -494,11 +495,16 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       const here = priorityTile(f.x, f.z) ?? nearestTile(f.x, f.z); if (here && here !== act) setActive(here);
       stream.lastTick += dt; if (stream.lastTick >= TICK) { streamTick(stream.lastTick); stream.lastTick = 0; }
       sky.follow(camera);
+      townTick = (townTick + 1) % 10;
       for (const tl of tiles.values()) {
         tl.fadeStep(dt);
         if (tl.far) continue;
         const d = registry.distTo(tl.id, camera.position.x, camera.position.z);
         for (const g of tl.packGroups) g.visible = d < 1100; // pack towns / street life only draw when the player is in or near the area
+        if (townTick === 0 && d < 1100) { // per-town cull: a town mesh only draws within 650 m of the camera (checked every 10th frame)
+          const tg = tl.packGroups.find((g) => g.name === 'towns');
+          if (tg) for (const m of tg.children) { const s = tl.sites.find((q) => 'town ' + q.id === m.name); if (s) m.visible = Math.hypot(camera.position.x - s.cx, camera.position.z - s.cz) < 650; }
+        }
         if (d < 600) tl.trees.update(camera.position);
         if (tl === act) { tl.grass.update(d === 0 ? camera.position : eye.set(camera.position.x, 1e5, camera.position.z)); tl.ferry?.update(t); tl.interiors.update(player.avatar ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); }
       }
