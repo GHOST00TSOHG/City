@@ -25,7 +25,7 @@ export function projectLatLon(origin: LatLon, lat: number, lon: number): [number
 
 export type LoadState = 'idle' | 'loading' | 'data' | 'built' | 'active' | 'error';
 export interface Bounds { minX: number; maxX: number; minZ: number; maxZ: number }
-export interface AreaView { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean }
+export interface AreaView { name: string; pos: [number, number, number]; look: [number, number, number]; snap?: boolean; /** eye height above the street for snapped views (m, default 1.7) */ eye?: number }
 /** A built tile: the scene content for one area (meshes in `group`, freed by `dispose`). */
 export interface Tile { id: string; group: { visible: boolean }; dispose(): void }
 export interface AreaEntry {
@@ -61,7 +61,7 @@ const META: Record<string, { label: string; title: string; views: AreaView[] }> 
   newark: { label: 'Newark', title: 'Newark, NJ · Schools Stadium', views: [
     { name: 'aerial', pos: [650, 360, 650], look: [0, 0, 0] },
     { name: 'street', pos: [200, 1.7, 120], look: [700, 3, 120], snap: true },
-    { name: 'downtown', pos: [1215, 1.7, 3425], look: [1700, 30, 3960], snap: true }] },
+    { name: 'downtown', pos: [1238, 2.8, 360], look: [1157, 30, 473], snap: true, eye: 2.8 }] },
   passaic: { label: 'Passaic', title: 'Newark, NJ · Passaic waterfront', views: [
     { name: 'aerial', pos: [-600, 320, 800], look: [150, 0, -150] },
     { name: 'dock', pos: [76, 70, 171], look: [0, 3, 0] }] }, // run F: was a straight-down 30 m view of one road; now an oblique 70 m view of the waterfront, ferry and towers

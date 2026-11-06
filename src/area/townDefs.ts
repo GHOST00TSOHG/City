@@ -1,4 +1,4 @@
-/** Layout data for the six towns (local metres around the town centre: u east, v south; rot in degrees about Y, 0 = model front toward +v / south).
+/** Layout data for the six towns (fountain waterY = measured basin water level x item scale, tools/measure-basins.mjs) (local metres around the town centre: u east, v south; rot in degrees about Y, 0 = model front toward +v / south).
  *  Every model path here is a pack file under public/tja/ (tools/stage-used-tja.mjs reads this file to build the ship list). */
 export interface Item {
   p: string; u: number; v: number; rot?: number; s?: number; sy?: number; y?: number;
@@ -14,6 +14,16 @@ export interface TownDef {
   slab?: { u: number; v: number; w: number; d: number };
   items(): Item[]; fountains(y: number): FountainDef[];
   /** photoreal textured `realistic-city` models (their own PBR textures, instanced; a few draw calls) */ real?: { p: string; u: number; v: number; rot?: number; s?: number }[];
+}
+
+// ---- town exclusion: world rectangles of every custom town per area (registered by planTowns), so no street, lane line, lamp, house box or forest tree is made inside a paved plaza ----
+const EXCLUSION = new Map<string, { x0: number; z0: number; x1: number; z1: number }[]>();
+export function setTownExclusion(areaId: string, rects: { x0: number; z0: number; x1: number; z1: number }[]) { EXCLUSION.set(areaId, rects); }
+/** true when (x, z) lies within `pad` metres of a custom town's paved rectangle in that area */
+export function isInTownExclusion(areaId: string, x: number, z: number, pad = 0): boolean {
+  const l = EXCLUSION.get(areaId); if (!l) return false;
+  for (const r of l) if (x > r.x0 - pad && x < r.x1 + pad && z > r.z0 - pad && z < r.z1 + pad) return true;
+  return false;
 }
 
 const rc = (f: string) => `realistic-city/${f}.glb`;
@@ -65,71 +75,84 @@ const pad = (u: number, v: number, w: number, d: number, rgb: RGB, curb: RGB, o:
   const h = o.h ?? PAD_H, c = 0.3, ch = h + 0.03;
   return [B(u, v, w, d, h, rgb, { y0: -0.02, rough: o.rough, solid: true }), B(u, v - d / 2 + c / 2, w, c, ch, curb, { y0: -0.02 }), B(u, v + d / 2 - c / 2, w, c, ch, curb, { y0: -0.02 }), B(u - w / 2 + c / 2, v, c, d - 2 * c, ch, curb, { y0: -0.02 }), B(u + w / 2 - c / 2, v, c, d - 2 * c, ch, curb, { y0: -0.02 })];
 };
-/** soft warm light pool on the paving (emissive disc) */
-const glow = (u: number, v: number, r: number, rgb: RGB, y = 0.045, e = 0.55): Item => ({ p: '', u, v, ring: { r0: 0, r1: r, y0: y - 0.012, y1: y, rgb, rough: 0.5, emissive: e } });
-const WARM: RGB = [1, 0.72, 0.38];
 /** thin emissive strip (neon seams, grates) lying on the paving */
 const strip = (u: number, v: number, w: number, d: number, rgb: RGB, e = 1.3, y = 0.036): Item => B(u, v, w, d, y, rgb, { y0: 0.03, rough: 0.2, emissive: e });
 
+/** dark-granite flagstone slabs laid on a raised pad (top at h): one box per slab with a small colour variation, grout left open between them */
+const flags = (r: Rect, sw: number, sd: number, h: number, base: RGB, seed: number, vary = 0.05): Item[] => {
+  const rn = rng(seed), out: Item[] = [], nu = Math.max(1, Math.floor((r[2] - r[0]) / sw)), nv = Math.max(1, Math.floor((r[3] - r[1]) / sd)), u0 = r[0] + (r[2] - r[0] - nu * sw) / 2 + sw / 2, v0 = r[1] + (r[3] - r[1] - nv * sd) / 2 + sd / 2;
+  for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) { const k = (rn() - 0.5) * vary * 2, c: RGB = [base[0] + k, base[1] + k, base[2] + k * 1.15]; out.push(B(u0 + i * sw, v0 + j * sd, sw - 0.1, sd - 0.1, h + 0.012, c, { y0: h - 0.004, rough: 0.8 })); }
+  return out;
+};
+/** subtle tile seams across a ground rect (thin darker lines every `step` m) */
+const seams = (r: Rect, step: number, rgb: RGB, y = 0.027): Item[] => {
+  const out: Item[] = [];
+  for (let u = Math.ceil(r[0] / step) * step; u <= r[2]; u += step) out.push(B(u, (r[1] + r[3]) / 2, 0.07, r[3] - r[1], y, rgb, { y0: 0.02, rough: 0.9 }));
+  for (let v = Math.ceil(r[1] / step) * step; v <= r[3]; v += step) out.push(B((r[0] + r[2]) / 2, v, r[2] - r[0], 0.07, y, rgb, { y0: 0.02, rough: 0.9 }));
+  return out;
+};
+/** stone tree pit: low ring round a tree */
+const pit = (u: number, v: number, r = 1.2, rgb: RGB = [0.5, 0.47, 0.42]): Item => ({ p: '', u, v, ring: { r0: r * 0.55, r1: r, y0: -0.02, y1: 0.12, rgb } });
+const BENCH_RC = rc('realistic_bench_01');
+/** a ring of town benches round a focus: seat toward the focus (model seat faces +z, so yaw = face()) */
+const benchesAround = (cu: number, cv: number, pts: [number, number][], s = 1.6): NonNullable<TownDef['real']> => pts.map(([u, v]) => ({ p: BENCH_RC, u: cu + u, v: cv + v, s, rot: face(cu + u, cv + v, cu, cv) }));
+
 const edoTown: TownDef = {
   id: 'edo', name: 'Edo', area: 'bayshore', half: [46, 46], minH: 1.0,
-  view: { stand: [0, 30], look: [0, -22, 6] }, slab: { u: 0, v: 0, w: 24, d: 88 },
-  fountains: () => [{ x: 0, z: 0, y: 0, radius: 2.0, height: 3.2, waterY: 0.7, tone: 'gold', jets: 12 }, { x: -24, z: 8, y: 0, radius: 2.6, height: 1.2, waterY: 0.55, tone: 'sky', jets: 8 }],
+  view: { stand: [0, 32], look: [0, -22, 4] }, slab: { u: 0, v: 0, w: 24, d: 88 },
+  fountains: () => [{ x: 0, z: 0, y: 0, radius: 2.0, height: 3.2, waterY: 0.7, tone: 'gold', jets: 12 }, { x: -24, z: 8, y: 0, radius: 2.6, height: 1.2, waterY: 0.32, tone: 'sky', jets: 8 }],
   real: [{ p: rc('realistic_rock_boulder_01'), u: -40, v: -20, s: 2 }, { p: rc('realistic_rock_boulder_01'), u: 40, v: 24, s: 1.6 }],
   items() {
     const S = 2.2, I: Item[] = [];
-    { // raked sand courtyard, flagstone sando from the road through the torii to the shrine, timber-dark plinths, lantern pools
-      const SAND: RGB = [0.62, 0.54, 0.4], FLAG: RGB = [0.46, 0.45, 0.43], CURB: RGB = [0.3, 0.29, 0.28], PLINTH: RGB = [0.22, 0.17, 0.13];
+    { // raked-sand courtyard, dark-granite flagstone sando from the gate to the shrine, raised stone borders, timber-dark plinths, moss garden beds
+      const SAND: RGB = [0.62, 0.54, 0.4], FLAG: RGB = [0.17, 0.17, 0.19], SLAB: RGB = [0.27, 0.27, 0.29], CURB: RGB = [0.34, 0.33, 0.32], PLINTH: RGB = [0.22, 0.17, 0.13], MOSS: RGB = [0.15, 0.23, 0.11];
       I.push(...ground([-46, -46, 46, 46], SAND, [[-29, -29, -19, 21]]), ...pad(0, 28, 4.4, 36, FLAG, CURB), ...pad(0, -19, 4.4, 22, FLAG, CURB));
-      for (const [u, v, w, d] of [[0, -37, 13, 10], [-20, -34, 12, 9], [-32, -28, 8, 8], [32, -30, 6, 6]]) I.push(B(u, v, w, d, 0.16, PLINTH, { y0: -0.1, rough: 0.8 }), B(u, v, w + 0.6, d + 0.6, 0.1, CURB, { y0: -0.1 }));
-      for (const v of [34, 22, 10]) I.push(glow(-7, v, 1.9, WARM), glow(7, v, 1.9, WARM));
+      I.push(...flags([-1.9, 10.3, 1.9, 45.7], 1.9, 1.4, PAD_H, SLAB, 11), ...flags([-1.9, -29.7, 1.9, -8.3], 1.9, 1.4, PAD_H, SLAB, 12));
+      for (const [u, v, w, d] of [[-7.1, 12.3, 10.4, 0.5], [7.1, 12.3, 10.4, 0.5], [-7.1, -12.3, 10.4, 0.5], [7.1, -12.3, 10.4, 0.5], [-12.3, 0, 0.5, 24.6], [12.3, 0, 0.5, 24.6]] as const) I.push(B(u, v, w, d, CURB_H, CURB, { y0: -0.1 })); // gravel court border
+      for (const [u, v, w, d] of [[0, -37, 13, 10], [-20, -34, 12, 9], [-32, -28, 9, 9], [32, -30, 9, 9]]) I.push(B(u, v, w, d, 0.16, PLINTH, { y0: -0.1, rough: 0.8 }), B(u, v, w + 0.6, d + 0.6, 0.1, CURB, { y0: -0.1 }));
+      for (const [u, v] of [[-38, 10], [36, 8], [12, -36]] as const) I.push(...pad(u, v, 7, 7, MOSS, CURB, { rough: 0.95 })); // maple garden beds
     }
-    I.push(...grid(edo('raked_gravel_tile'), -8, -8, 3, 3, 8, { s: 2 }));
-    I.push(...row(edo('road_stone_straight'), 0, 16, 0, 8, 4, { s: 2, tile: true, rot: 90 }), ...row(edo('road_stone_straight'), 0, -16, 0, -8, 3, { s: 2, tile: true, rot: 90 }));
-    I.push(...grid(edo('moss_tile'), 16, -8, 1, 3, 8, { s: 2 }));
+    I.push(...grid(edo('raked_gravel_tile'), -8, -8, 3, 3, 8, { s: 2 }), ...grid(edo('moss_tile'), 16, -8, 1, 3, 8, { s: 2 }));
     I.push({ p: edo('koi_pond_tile'), u: -24, v: 8, s: 2, tile: true }, { p: edo('koi_pond_tile'), u: -24, v: 16, s: 2, tile: true }, ...row(edo('garden_stream_tile'), -24, -8, 0, -8, 3, { s: 2, tile: true }));
     I.push({ p: edo('arched_bridge'), u: -24, v: -12, s: 2.2, rot: 90 }, { p: edo('chozuya_pavilion'), u: 0, v: 0, s: S });
     I.push({ p: edo('great_torii'), u: 0, v: 40, s: S }, { p: edo('great_torii'), u: 0, v: 28, s: S });
-    for (const v of [34, 22, 10]) I.push({ p: edo('stone_lantern'), u: -7, v, s: 2 }, { p: edo('stone_lantern'), u: 7, v, s: 2 });
-    for (const v of [38, 26, 14, 2]) I.push({ p: edo('andon_lantern_post'), u: -11, v, s: 2 }, { p: edo('andon_lantern_post'), u: 11, v, s: 2 });
+    for (const v of [34, 22, -12, -24]) I.push({ p: edo('stone_lantern'), u: -3.4, v, s: 2 }, { p: edo('stone_lantern'), u: 3.4, v, s: 2 }); // lanterns stand along the path curbs
+    for (const v of [40, 16, -18]) I.push({ p: edo('andon_lantern_post'), u: -3.4, v, s: 2 }, { p: edo('andon_lantern_post'), u: 3.4, v, s: 2 });
     I.push({ p: edo('shinto_shrine'), u: 0, v: -37, s: S, solid: true }, { p: edo('komainu_pair'), u: 0, v: -27, s: 2 }, { p: edo('worship_hall'), u: -20, v: -34, s: S, rot: 20, solid: true });
     I.push({ p: edo('multi_tier_pagoda'), u: -32, v: -28, s: 1.7, solid: true }, { p: edo('shoro_bell_tower'), u: 32, v: -30, s: 1.9, solid: true });
-    I.push({ p: edo('machiya_townhouse'), u: 26, v: 18, s: S, rot: face(26, 18, 0, 18), solid: true }, { p: edo('merchant_shop'), u: 26, v: 6, s: S, rot: face(26, 6, 0, 6), solid: true }, { p: edo('teahouse'), u: 26, v: -6, s: S, rot: face(26, -6, 0, -6), solid: true });
-    I.push({ p: edo('noodle_shop'), u: -28, v: 30, s: S, rot: face(-28, 30, 0, 30), solid: true });
-    I.push();
+    // machiya lining both sides of the walkway, facing inward
+    I.push({ p: edo('machiya_townhouse'), u: 27, v: 18, s: S, rot: face(27, 18, 0, 18), solid: true }, { p: edo('merchant_shop'), u: 27, v: 6, s: S, rot: face(27, 6, 0, 6), solid: true }, { p: edo('teahouse'), u: 27, v: -6, s: S, rot: face(27, -6, 0, -6), solid: true });
+    I.push({ p: edo('noodle_shop'), u: -29, v: 30, s: S, rot: face(-29, 30, 0, 30), solid: true }, { p: edo('machiya_townhouse'), u: -29, v: 41, s: S, rot: face(-29, 41, 0, 41), solid: true }, { p: edo('merchant_shop'), u: 27, v: 30, s: S, rot: face(27, 30, 0, 30), solid: true }, { p: edo('machiya_townhouse'), u: 27, v: 41, s: S, rot: face(27, 41, 0, 41), solid: true });
     I.push({ p: edo('karesansui_center'), u: 18, v: -22, s: 2 });
-    I.push();
-    I.push();
-    I.push();
-    I.push({ p: edo('maple_tree'), u: -36, v: 24, s: 2 }, { p: edo('maple_tree'), u: 36, v: 8, s: 2 }, { p: edo('maple_tree'), u: 12, v: -36, s: 2.2 }, { p: edo('pine_tree'), u: -38, v: -14, s: 2 }, { p: edo('pine_tree'), u: 38, v: -26, s: 2 });
-    I.push();
+    I.push({ p: edo('maple_tree'), u: -38, v: 10, s: 2 }, { p: edo('maple_tree'), u: 36, v: 8, s: 2 }, { p: edo('maple_tree'), u: 12, v: -36, s: 2.2 }, { p: edo('pine_tree'), u: -40, v: -16, s: 2 }, { p: edo('pine_tree'), u: 41, v: -18, s: 2 });
     return I;
   },
 };
 
 const cyberTown: TownDef = {
   id: 'cyber', name: 'Neon Alley', area: 'newark', half: [48, 48], minH: 0.8,
-  view: { stand: [0, 30], look: [0, -30, 10] }, slab: { u: 0, v: 0, w: 96, d: 96 },
+  view: { stand: [0, 30], look: [0, -30, 8] }, slab: { u: 0, v: 0, w: 96, d: 96 },
   fountains: () => [{ x: 0, z: 0, y: 0, radius: 3.4, height: 3.8, waterY: 0.55, tone: 'neon', jets: 16 }],
   real: [{ p: rc('realistic_warehouse_01'), u: 40, v: -34, s: 1.2, rot: -90 }, { p: rc('realistic_rail_signal_01'), u: 30, v: 38, s: 1.5 }, { p: rc('realistic_subway_faregate_01'), u: -12, v: 36, s: 1.5 }],
   items() {
     const S = 1.9, I: Item[] = [];
-    { // wet dark-slate street slabs, raised storefront sidewalks, neon seams and grates
-      const SLATE: RGB = [0.09, 0.1, 0.13], WALK: RGB = [0.2, 0.21, 0.26], KERB: RGB = [0.34, 0.35, 0.4], CY: RGB = [0.1, 0.9, 1], MG: RGB = [1, 0.1, 0.8];
-      I.push(...ground([-48, -48, 48, 40], SLATE, [], { rough: 0.22 }));
-      for (const [u, v] of [[-11.5, -12], [11.5, -12], [-11.5, 10], [11.5, 10]] as const) I.push(...pad(u, v, 3.4, 14, WALK, KERB, { rough: 0.35 }));
-      for (const v of [-30, -20, 20, 30]) I.push(strip(0, v, 90, 0.12, v < 0 ? CY : MG, 1.1));
-      for (const u of [-30, 30]) I.push(strip(u, 0, 0.12, 80, u < 0 ? MG : CY, 1.1));
-      for (const [u, v, c] of [[-7, -3, CY], [7, 3, MG], [-7, 14, MG], [7, -16, CY], [0, 26, CY]] as const) I.push(strip(u, v, 1.6, 0.9, c, 1.8, 0.04), strip(u, v, 1.2, 0.08, [0.02, 0.02, 0.03], 0, 0.045));
+    { // dark wet-asphalt street (rough 0.12), dark-slate curbed sidewalks along both facades, neon seams, grates and marked kerb bays, raised island round the fountain
+      const ASPH: RGB = [0.04, 0.045, 0.06], WALK: RGB = [0.13, 0.14, 0.18], KERB: RGB = [0.3, 0.31, 0.36], CY: RGB = [0.1, 0.9, 1], MG: RGB = [1, 0.1, 0.8];
+      I.push(...ground([-48, -48, 48, 40], ASPH, [], { rough: 0.12 }), ...pad(-11.5, -4, 3.4, 68, WALK, KERB, { rough: 0.3 }), ...pad(11.5, -4, 3.4, 68, WALK, KERB, { rough: 0.3 }), ...pad(0, 0, 13, 13, WALK, KERB, { rough: 0.3 }));
+      I.push(strip(0, -4, 0.14, 40, CY, 1.1), strip(0, 26, 0.14, 24, MG, 1.1));
+      for (const v of [-30, -20, 20, 30]) I.push(strip(0, v, 17.6, 0.12, v < 0 ? CY : MG, 1.1));
+      for (const [u, v, c] of [[-5, -16, CY], [5, 14, MG], [-5, 22, MG], [5, -26, CY]] as const) I.push(strip(u, v, 1.6, 0.9, c, 1.8, 0.04), strip(u, v, 1.2, 0.08, [0.02, 0.02, 0.03], 0, 0.045));
+      for (const v of [-24, -17]) I.push(strip(8.6, v, 2.4, 0.1, CY, 0.9)); for (const v of [8, 15]) I.push(strip(-8.6, v, 2.4, 0.1, MG, 0.9)); // marked kerb bays
     }
-    I.push(...grid(cy('wet_street_tile'), -40, -40, 11, 11, 8, { s: 2 }).filter((t) => Math.abs(t.u) > 8 || Math.abs(t.v) > 8 ? ((t.u + 40) / 8) % 2 === 0 || ((t.v + 40) / 8) % 2 === 0 : false));
     I.push(...basin(3.6, 0.7));
-    I.push({ p: cy('noodle_bar'), u: -22, v: -12, s: S, rot: face(-22, -12, 0, -12), solid: true }, { p: cy('arcade_parlor'), u: 22, v: -12, s: S, rot: face(22, -12, 0, -12), solid: true }, { p: cy('ripperdoc_clinic'), u: -22, v: 10, s: S, rot: face(-22, 10, 0, 10), solid: true }, { p: cy('konbini_store'), u: 22, v: 10, s: S, rot: face(22, 10, 0, 10), solid: true });
-    I.push({ p: cy('megatower_arcology'), u: 0, v: -42, s: 2.4, solid: true }, { p: cy('hab_stack_tower'), u: -34, v: -38, s: 2, solid: true }, { p: cy('hab_stack_tower'), u: 34, v: -38, s: 2, solid: true }, { p: cy('mixed_use_highrise'), u: -42, v: -14, s: 2, solid: true }, { p: cy('corporate_hq_spire'), u: 42, v: -14, s: 2, solid: true });
-    for (const [u, v] of [[-11, -12], [11, -12], [-11, 10], [11, 10]] as const) I.push({ p: cy('alley_sign_cluster'), u, v, s: 1.8, y: 5.5, rot: u < 0 ? 90 : -90 });
-    I.push({ p: cy('holo_billboard'), u: 16, v: -24, s: 1.6, y: 2 });
-    I.push({ p: cy('hover_car'), u: -4, v: 18, s: 1.7, rot: 90, y: 1.3 }, { p: cy('ground_sedan'), u: 4, v: -20, s: 1.6, rot: 0 });
-    I.push();
+    // buildings tight along both facades and across the back, all facing the street
+    const W = (p: string, v: number, s = S) => I.push({ p, u: -17.5, v, s, rot: face(-17.5, v, 0, v), solid: true }), E = (p: string, v: number, s = S) => I.push({ p, u: 17.5, v, s, rot: face(17.5, v, 0, v), solid: true });
+    W(cy('hab_stack_tower'), -34, 2); W(cy('mixed_use_highrise'), -23, 2); W(cy('noodle_bar'), -12); W(cy('konbini_store'), 0); W(cy('ripperdoc_clinic'), 13);
+    E(cy('corporate_hq_spire'), -34, 2); E(cy('hab_stack_tower'), -23, 2); E(cy('arcade_parlor'), -10); E(cy('mixed_use_highrise'), 4, 2); E(cy('noodle_bar'), 17);
+    I.push({ p: cy('megatower_arcology'), u: 0, v: -43, s: 2.4, solid: true });
+    for (const [u, v] of [[-13.7, -12], [-13.7, 13], [13.7, -10], [13.7, 17]] as const) I.push({ p: cy('alley_sign_cluster'), u, v, s: 1.8, y: 5.5, rot: u < 0 ? 90 : -90 });
+    [-32, -20, -6, 6, 20, 28].forEach((v, i) => I.push({ p: cy('neon_lamppost'), u: i % 2 ? 11.8 : -11.8, v, s: 1.5, rot: i % 2 ? -90 : 90 }));
+    I.push({ p: cy('ground_sedan'), u: 8.6, v: -20.5, s: 1.6, rot: 0 }, { p: cy('hover_car'), u: -8.6, v: 11.5, s: 1.7, rot: 0, y: 0.45 });
     // railway: a short station spur along the south edge
     I.push(...row(rw('track_road_level_tile'), -36, 44, 8, 0, 10, { s: 2, tile: true }), { p: rw('station_building'), u: -10, v: 36, s: 1.6, solid: true, rot: 180 }, { p: rw('passenger_coach'), u: 6, v: 44, s: 2, rot: 90 }, { p: rw('diesel_locomotive'), u: -8, v: 44, s: 2, rot: 90 });
     // construction site: tower crane, cabin, plant
@@ -141,30 +164,31 @@ const cyberTown: TownDef = {
 const parisTown: TownDef = {
   id: 'paris', name: 'Esplanade', area: 'passaic', half: [50, 50], minH: 0.8, water: true,
   view: { stand: [0, 34], look: [0, -30, 8] }, slab: { u: 0, v: 0, w: 100, d: 100 },
-  fountains: () => [{ x: 0, z: 0, y: 0, radius: 4.8, height: 5.2, waterY: 1.15, tone: 'sky', jets: 18 }, { x: -22, z: 14, y: 0, radius: 0.9, height: 1.2, waterY: 0.9, tone: 'sky', jets: 6 }, { x: 22, z: 14, y: 0, radius: 0.9, height: 1.2, waterY: 0.9, tone: 'sky', jets: 6 }],
-  real: [{ p: rc('realistic_brownstone_01'), u: -46, v: -2, s: 0.8, rot: 90 }, { p: rc('realistic_bench_01'), u: 4, v: 24, s: 1.6, rot: 180 }],
+  fountains: () => [{ x: 0, z: 0, y: 0, radius: 4.8, height: 5.2, waterY: 1.21, tone: 'sky', jets: 18 }, { x: -22, z: 14, y: 0, radius: 0.9, height: 1.2, waterY: 0.45, tone: 'sky', jets: 6 }, { x: 22, z: 14, y: 0, radius: 0.9, height: 1.2, waterY: 0.45, tone: 'sky', jets: 6 }],
+  real: benchesAround(0, 0, [[6.4, 6.4], [-6.4, 6.4], [6.4, -6.4], [-6.4, -6.4], [10.2, 0], [-10.2, 0]]),
   items() {
     const I: Item[] = [];
-    { // warm stone esplanade with a radial pattern, granite promenade aprons, café pools
+    { // warm stone esplanade with a radial pattern, raised granite promenade round three sides (buildings face it), tree pits
       const STONE2: RGB = [0.55, 0.5, 0.42], GRAN: RGB = [0.4, 0.4, 0.43], EDGE: RGB = [0.26, 0.26, 0.28], LIGHT: RGB = [0.7, 0.64, 0.52], DARKS: RGB = [0.36, 0.33, 0.3];
       I.push(...ground([-50, -50, 50, 37], STONE2));
       for (const [r0, r1, c] of [[6.2, 6.8, LIGHT], [9.4, 9.9, DARKS], [13, 13.6, LIGHT]] as const) I.push({ p: '', u: 0, v: 0, ring: { r0, r1, y0: 0.02, y1: 0.05, rgb: c } });
       for (let k = 0; k < 8; k++) { const a = (k * Math.PI) / 4; I.push(B(Math.cos(a) * 9.6, Math.sin(a) * 9.6, 0.3, 6.4, 0.048, DARKS, { y0: 0.02, rot: 90 - (a * 180) / Math.PI })); }
-      for (const [u, v, w, d] of [[-27.5, -8, 5, 16], [27.5, -8, 5, 16], [-27.5, 12, 5, 12], [-26, -31, 14, 4.5], [-39, -26, 5, 12], [39, -26, 5, 12]]) I.push(...pad(u, v, w, d, GRAN, EDGE));
-      for (const [u, v] of [[-29, -8], [29, -8], [-29, 4], [29, 4], [-10, 14], [10, 14], [0, 22]] as const) I.push(glow(u, v, 2.4, WARM, 0.052));
+      I.push(...pad(-27.2, 0, 5.4, 52, GRAN, EDGE), ...pad(27.2, 0, 5.4, 52, GRAN, EDGE), ...pad(0, -27.2, 49, 5.4, GRAN, EDGE));
+      for (const u of [-34, -18, 18, 34]) I.push(pit(u, 29));
     }
     I.push(...grid(pa('cobblestone_place_01'), -28, -28, 8, 8, 8, { s: 2 }));
-    I.push({ p: ru('roman_fountain'), u: 0, v: 0, s: 2.2, solid: false }, { p: ru('equestrian_statue'), u: 0, v: -22, s: 1.8, rot: 0 }, { p: ru('amphitheater_segment'), u: 0, v: -42, s: 1.2, rot: 180, solid: true });
-    I.push(...row(ru('ionic_column'), -30, -26, 12, 0, 6, { s: 1.5 }));
-    I.push({ p: pa('arcade_colonnade_01'), u: -26, v: -36, s: 1.5, rot: 0, solid: true }, { p: pa('cafe_brasserie_01'), u: -34, v: -8, s: 1.5, rot: face(-34, -8, 0, -8), solid: true }, { p: pa('boulangerie_01'), u: 34, v: -8, s: 1.5, rot: face(34, -8, 0, -8), solid: true }, { p: pa('librairie_01'), u: -34, v: 12, s: 1.5, rot: face(-34, 12, 0, 12), solid: true });
-    I.push({ p: pa('haussmann_apartment_01'), u: -44, v: -26, s: 1.5, rot: 60, solid: true }, { p: pa('haussmann_apartment_01'), u: 44, v: -26, s: 1.5, rot: -60, solid: true }, { p: pa('metro_entrance_01'), u: -24, v: 30, s: 1.5, solid: true }, { p: pa('news_kiosk_01'), u: 10, v: 14, s: 1.5 }, { p: pa('morris_column_01'), u: -10, v: 14, s: 1.5 });
+    I.push({ p: ru('roman_fountain'), u: 0, v: 0, s: 2.2, solid: false }, { p: ru('equestrian_statue'), u: 0, v: -20, s: 1.8, rot: 0 });
+    // perimeter rows of Parisian frontages, facing inward onto the promenade
+    const row7 = [pa('cafe_brasserie_01'), pa('boulangerie_01'), pa('librairie_01'), pa('haussmann_apartment_01'), pa('cafe_brasserie_01'), pa('boulangerie_01'), pa('librairie_01')];
+    row7.forEach((p, i) => { const v = -22.5 + i * 7.5; I.push({ p, u: -33.5, v, s: 1.5, rot: face(-33.5, v, 0, v), solid: true }, { p: row7[(i + 3) % 7], u: 33.5, v, s: 1.5, rot: face(33.5, v, 0, v), solid: true }); });
+    [-28.5, -19, -9.5, 0, 9.5, 19, 28.5].forEach((u, i) => I.push({ p: i === 3 ? pa('haussmann_apartment_01') : i % 2 ? pa('arcade_colonnade_01') : row7[i], u, v: -33.5, s: 1.5, rot: face(u, -33.5, u, 0), solid: true }));
+    I.push({ p: pa('metro_entrance_01'), u: -24, v: 31, s: 1.5, solid: true }, { p: pa('news_kiosk_01'), u: 26.8, v: 14, s: 1.5, rot: -90 }, { p: pa('morris_column_01'), u: -26.8, v: 16, s: 1.5 });
     I.push({ p: pa('wallace_fountain_01'), u: -22, v: 14, s: 1.5 }, { p: pa('wallace_fountain_01'), u: 22, v: 14, s: 1.5 });
-    for (const [u, v] of [[-30, 2], [-28, 6], [-30, 10], [30, 2], [28, 6]] as const) I.push();
-    I.push({ p: pa('cafe_parasol_01'), u: -29, v: 4, s: 1.5 }, { p: pa('cafe_parasol_01'), u: 29, v: 4, s: 1.5 });
-    I.push(...row(pa('plane_tree_01'), -40, 22, 16, 0, 6, { s: 1.4 }));
+    I.push({ p: pa('cafe_parasol_01'), u: -26.8, v: -5, s: 1.5 }, { p: pa('cafe_parasol_01'), u: 26.8, v: 4, s: 1.5 });
+    for (const u of [-34, -18, 18, 34]) I.push({ p: pa('plane_tree_01'), u, v: 29, s: 1.3 });
     // riverfront: shoreline, river and a bateau-mouche
     I.push(...row(pa('shore_straight_01'), -40, 40, 8, 0, 11, { s: 2, tile: true, rot: 180 }), ...grid(pa('water_open_01'), -40, 48, 11, 1, 8, { s: 2 }), { p: pa('bateau_mouche_boat_01'), u: 8, v: 48, s: 1.6, rot: 90, y: 0.4 });
-    // cutaway shops along the west side, dressed with the interior kits (lit windows face the plaza)
+    // cutaway shops behind the frontages, dressed with the interior kits (lit windows face the plaza)
     const SH = 1.7;
     I.push(...room(bs, 'bookshop_wall_panel', 'bookshop_window_wall', 'bookshop_floor_tile', -44, 40, { cols: 3, depth: 3, piece: 1.2, s: SH * 1.4, props: [['checkout_counter', 0, 0, 0]] }));
     I.push(...room(lb, 'library_wall_panel', 'library_wall_panel', null, -22, 40, { cols: 2, depth: 2, piece: 2, s: SH, props: [['reading_table', 0, 0, 0], ['chesterfield_sofa', 0, -3, 0]] }));
@@ -181,30 +205,30 @@ const parisTown: TownDef = {
 
 const harborTown: TownDef = {
   id: 'harbor', name: 'Old Town Harbor', area: 'keywest', half: [46, 46], minH: 0.7, water: true,
-  view: { stand: [-13, 22], look: [0, -22, 6] }, slab: { u: 0, v: 0, w: 92, d: 92 },
-  fountains: () => [{ x: 0, z: 0, y: 0, radius: 2.4, height: 3.4, waterY: 0.85, tone: 'coral', jets: 14 }, { x: 22, z: 30, y: 0, radius: 1.2, height: 0.8, waterY: 0.2, tone: 'sky', jets: 6 }],
-  real: [{ p: rc('realistic_bench_01'), u: 10, v: -8, s: 1.6, rot: 0 }, { p: rc('realistic_bench_01'), u: -10, v: -8, s: 1.6, rot: 0 }],
+  view: { stand: [-9, 29], look: [0, -22, 6] }, slab: { u: 0, v: 0, w: 92, d: 92 },
+  fountains: () => [{ x: 0, z: 0, y: 0, radius: 2.4, height: 3.4, waterY: 1.55, tone: 'coral', jets: 14 }],
+  real: benchesAround(0, 0, [[7.4, 7.4], [-7.4, 7.4], [7.4, -7.4], [-7.4, -7.4], [11, 0], [-11, 0]]),
   items() {
     const I: Item[] = [], S = 2;
-    { // sun-bleached coral-stone plaza, weathered timber decks, string-light glow
-      const CORAL: RGB = [0.82, 0.74, 0.62], TIM: RGB = [0.4, 0.28, 0.18], TIMD: RGB = [0.24, 0.16, 0.1], CK: RGB = [0.6, 0.54, 0.46];
-      I.push(...ground([-46, -46, 46, 21], CORAL, [[-4, 21, 4, 22]]));
-      for (const [u, v, w, d] of [[0, -31, 40, 6], [-18, -14, 5, 12], [18, -14, 5, 12], [18, 6, 5, 12], [0, 31, 9, 22]]) I.push(...pad(u, v, w, d, TIM, TIMD, { rough: 0.9, h: 0.09 }));
-      for (const [u, v, w, d] of [[-18, -14, 5, 12], [18, -14, 5, 12], [18, 6, 5, 12], [0, -31, 40, 6]]) for (let k = -2; k <= 2; k++) I.push(B(u + (w < d ? k * 0.9 : 0), v + (w < d ? 0 : k * 1.1), w < d ? 0.04 : w - 0.8, w < d ? d - 0.8 : 0.04, 0.095, TIMD, { y0: 0.09 }));
-      I.push(...pad(0, 8, 14, 8, CK, TIMD));
-      for (const [u, v] of [[-10, -28], [0, -28], [10, -28], [-14, -8], [14, -8], [14, 6], [0, 12]] as const) I.push(glow(u, v, 2.6, [1, 0.78, 0.45], 0.058, 0.6));
+    { // cream-coral travertine square with a tile grid and a raised perimeter curb, weathered timber boardwalk along the harbour side
+      const TRAV: RGB = [0.86, 0.78, 0.66], SEAM: RGB = [0.7, 0.62, 0.5], CURB: RGB = [0.62, 0.56, 0.48], TIM: RGB = [0.4, 0.28, 0.18], TIMD: RGB = [0.24, 0.16, 0.1];
+      I.push(...ground([-46, -46, 46, 20], TRAV), ...seams([-44, -44, 44, 18], 4, SEAM));
+      for (const [u, v, w, d] of [[0, -45.7, 92, 0.6], [-45.7, -13, 0.6, 66], [45.7, -13, 0.6, 66]] as const) I.push(B(u, v, w, d, CURB_H, CURB, { y0: -0.1 }));
+      I.push(...pad(0, 24, 88, 7, TIM, TIMD, { rough: 0.9, h: 0.09 }));
+      for (let u = -42; u <= 42; u += 1.1) I.push(B(u, 24, 0.04, 6.3, 0.095, TIMD, { y0: 0.09 })); // plank seams
+      I.push(...pad(0, 0, 11, 11, [0.78, 0.7, 0.58], CURB)); // raised plinth round the fountain
     }
-    I.push(...grid(cz('road_cobble_straight_01'), -32, -32, 9, 9, 8, { s: 2 }));
-    I.push({ p: ci('park_fountain_01'), u: 0, v: 0, s: 2 }, { p: cz('well_01'), u: -22, v: 22, s: 2 }, { p: cz('water_pond_01'), u: 22, v: 30, s: 2, tile: true });
-    I.push({ p: vb('grand_deco_hotel'), u: 0, v: -40, s: 1.3, solid: true }, { p: vb('deco_shopfront_row'), u: 38, v: 0, s: 1.2, rot: -90, solid: true });
-    I.push({ p: cz('bld_bakery_01'), u: -26, v: -14, s: S, rot: face(-26, -14, 0, -14), solid: true }, { p: cz('bld_tavern_inn_01'), u: 26, v: -14, s: S, rot: face(26, -14, 0, -14), solid: true }, { p: cz('bld_market_hall_01'), u: 26, v: 6, s: S, rot: face(26, 6, 0, 6), solid: true });
-    I.push();
-    I.push({ p: fm('greenhouse'), u: -36, v: 24, s: 1.5, solid: true }, { p: fm('farm_gate_sign'), u: -30, v: 36, s: 1.5 }, { p: fm('windmill_pump'), u: -42, v: 14, s: 1.6 });
+    I.push({ p: ci('park_fountain_01'), u: 0, v: 0, s: 2 });
+    I.push({ p: vb('grand_deco_hotel'), u: 0, v: -40, s: 1.3, solid: true });
+    // red-tile cottages, bakery, tavern, market storefronts round the perimeter, all facing the fountain
+    const W = (p: string, v: number, s = S) => I.push({ p, u: -26, v, s, rot: face(-26, v, 0, v), solid: true }), E = (p: string, v: number, s = S) => I.push({ p, u: 26, v, s, rot: face(26, v, 0, v), solid: true });
+    W(cz('bld_bakery_01'), -22); W(cz('home_cottage_01'), -11, 2.2); W(cz('home_cottage_01'), 0, 2.2); W(cz('home_cottage_01'), 11, 2.2);
+    E(cz('bld_tavern_inn_01'), -22); E(cz('bld_market_hall_01'), -10); E(vb('deco_shopfront_row'), 3, 1.2); E(cz('home_cottage_01'), 14, 2.2);
+    [-24, -12, 8, 17].forEach((v) => I.push({ p: vb('deco_street_lamp'), u: -14.5, v, s: 1.3 }, { p: vb('deco_street_lamp'), u: 14.5, v, s: 1.3 })); // lamps along the promenade, each with its own pool
+    // palms in stone tree-pits
+    for (const u of [-18, 18]) for (const v of [-28, -16, -4, 4, 14]) { I.push(pit(u, v, 1.3), { p: [vb('coconut_palm'), vb('royal_palm'), vb('sabal_fan_palm')][Math.abs(u + v) % 3 | 0], u, v, s: 1.3 }); }
     // swamp-bayou boardwalk pier with boathouse out to the water side (south)
-    I.push(...row(sw('road_boardwalk_straight'), 0, 24, 0, 8, 3, { s: 2, rot: 90, y: 0.25 }), { p: sw('boat_house'), u: 8, v: 40, s: 1.6, rot: 180, solid: true }, { p: sw('bayou_landing_sign'), u: 0, v: 20, s: 1.6 });
-    // palms: only here, in Key West
-    const pl = [vb('coconut_palm'), vb('royal_palm'), vb('sabal_fan_palm')];
-    I.push(...scatter(pl, 22, [-44, -44, 44, 44], 31, 1.1, 1.6, (u, v) => Math.hypot(u, v) > 8 && Math.abs(u) < 44), { p: vb('beach_umbrella'), u: 18, v: 18, s: 1.6 });
+    I.push(...row(sw('road_boardwalk_straight'), 0, 28, 0, 8, 2, { s: 2, rot: 90, y: 0.25 }), { p: sw('boat_house'), u: 8, v: 42, s: 1.6, rot: 180, solid: true }, { p: sw('bayou_landing_sign'), u: 12, v: 22, s: 1.6 });
     return I;
   },
 };
@@ -216,19 +240,22 @@ const airfieldTown: TownDef = {
   real: [{ p: rc('realistic_road_gantry_01'), u: -20, v: 4, s: 1.2 }, { p: rc('realistic_rail_signal_01'), u: 40, v: 4, s: 1.6 }],
   items() {
     const I: Item[] = [];
-    { // tarmac apron, taxi centreline, tie-down T marks, threshold stripes
-      const TAR: RGB = [0.16, 0.16, 0.18], YEL: RGB = [0.92, 0.76, 0.1], WHT: RGB = [0.85, 0.85, 0.82], RED: RGB = [0.72, 0.1, 0.1];
+    { // tarmac apron kept clear for the aircraft; floodlights stand on raised concrete islands and a hangar-front sidewalk
+      const TAR: RGB = [0.16, 0.16, 0.18], YEL: RGB = [0.92, 0.76, 0.1], WHT: RGB = [0.85, 0.85, 0.82], RED: RGB = [0.72, 0.1, 0.1], CONC: RGB = [0.52, 0.52, 0.5], CONCC: RGB = [0.36, 0.36, 0.35];
       I.push(...ground([-92, -12, 92, 40], TAR, [], { rough: 0.7 }));
       for (let u = -58; u < 42; u += 5) I.push(strip(u, -6, 2.6, 0.22, YEL, 0.05, 0.035));
       for (const [u, v] of [[-30, 12], [-14, 14], [2, 12], [20, 8], [44, 8], [-44, 8]] as const) I.push(strip(u, v + 1.6, 0.2, 3.2, WHT, 0.05, 0.035), strip(u, v + 3.2, 3, 0.2, WHT, 0.05, 0.035));
       for (let k = 0; k < 8; k++) I.push(strip(-84, -27 + k * 1.6, 6, 0.8, k % 2 ? RED : WHT, 0.1, 0.035));
       for (let u = -48; u < 60; u += 12) I.push(strip(u, 26, 0.25, 8, YEL, 0.05, 0.035));
+      I.push(...pad(-40, 29.5, 70, 3.2, CONC, CONCC), ...pad(40, 31.5, 60, 3.2, CONC, CONCC)); // raised concrete sidewalks along the building line
     }
     I.push(...row(af('road_runway'), -88, -22, 12, 0, 15, { s: 3, tile: true, rot: 90 }), ...row(af('road_taxiway_straight'), -60, -6, 12, 0, 8, { s: 3, tile: true, rot: 90 }), ...grid(af('tarmac_tile'), -48, 6, 8, 3, 12, { s: 3 }));
     I.push({ p: af('control_tower'), u: -4, v: 34, s: 2.4, solid: true }, { p: af('hangar'), u: 38, v: 20, s: 2.2, rot: 180, solid: true }, { p: af('hangar'), u: 62, v: 20, s: 2.2, rot: 180, solid: true }, { p: af('t_hangar_block'), u: 82, v: 24, s: 2, rot: 180, solid: true }, { p: af('fire_rescue_station'), u: 20, v: 34, s: 2, rot: 180, solid: true }, { p: af('apron_canopy'), u: 0, v: 22, s: 2.2 });
     for (const [u, v, r] of [[-30, 12, 20], [-14, 14, -10], [2, 12, 60], [20, 8, 0], [44, 8, 30], [-44, 8, -30]] as const) I.push({ p: af('light_aircraft_cessna'), u, v, s: 2, rot: r });
     I.push({ p: af('fuel_truck'), u: 8, v: 22, s: 1.8, rot: 90 });
-    I.push(...row(af('apron_floodlight'), -50, 18, 20, 0, 6, { s: 1.7 }), ...row(af('approach_light_bar'), -88, -30, 0, 0, 1, { s: 2 }), ...row(af('approach_light_bar'), -90, -22, -4, 0, 1, { s: 2 }), ...row(af('runway_edge_light'), -84, -30, 8, 0, 21, { s: 2.2 }), ...row(af('runway_edge_light'), -84, -14, 8, 0, 21, { s: 2.2 }), ...row(af('taxiway_blue_light'), -56, -10, 8, 0, 14, { s: 2.2 }), ...row(af('taxiway_blue_light'), -56, -2, 8, 0, 14, { s: 2.2 }));
+    for (const u of [-66, -48, -30, -12]) I.push({ p: af('apron_floodlight'), u, v: 29.5, s: 1.7, rot: 180 }); // on the concrete sidewalk, never on the aircraft apron
+    for (const u of [30, 50, 70]) I.push({ p: af('apron_floodlight'), u, v: 31.5, s: 1.7, rot: 180 });
+    I.push(...row(af('approach_light_bar'), -88, -30, 0, 0, 1, { s: 2 }), ...row(af('approach_light_bar'), -90, -22, -4, 0, 1, { s: 2 }), ...row(af('runway_edge_light'), -84, -30, 8, 0, 21, { s: 2.2 }), ...row(af('runway_edge_light'), -84, -14, 8, 0, 21, { s: 2.2 }), ...row(af('taxiway_blue_light'), -56, -10, 8, 0, 14, { s: 2.2 }), ...row(af('taxiway_blue_light'), -56, -2, 8, 0, 14, { s: 2.2 }));
     I.push({ p: af('windsock'), u: 90, v: -10, s: 2 }, { p: af('windsock'), u: -90, v: -10, s: 2 }, { p: af('rotating_beacon'), u: 4, v: 34, s: 2, y: 25 });
     I.push(...scatter([af('perimeter_shrub'), af('reed_clump'), af('wildflower_scatter'), af('infield_grass_tuft')], 18, [-90, -36, 90, -26], 5, 1.5, 2.2));
     return I;
@@ -242,27 +269,31 @@ const outpostTown: TownDef = {
   real: [{ p: rc('realistic_rock_boulder_01'), u: -34, v: 6, s: 2 }, { p: rc('realistic_rock_boulder_01'), u: 10, v: 34, s: 1.6 }, { p: rc('realistic_rock_boulder_01'), u: -40, v: -22, s: 2.4 }],
   items() {
     const I: Item[] = [];
-    { // packed dirt clearing, weathered flagstones round the cabin and ruins, timber dock planks by the wharf
+    // pads sit under what they carry: (u, v, w, d)
+    const PADS: [number, number, number, number][] = [[14, 8, 8, 8], [30, -22, 6, 6], [-44, -34, 14, 12], [-30, -46, 8, 8], [8, -42, 14, 12], [-8, -46, 8, 7], [36, 30, 19, 14], [44, 12, 9, 9], [28, -46, 9, 6], [46, -30, 8, 8], [40, -40, 7, 7], [-22, 34, 12, 12], [-46, 33, 18, 9]];
+    { // packed dirt clearing, weathered stone / packed-earth pads under every structure, timber dock planks by the wharf
       const DIRT: RGB = [0.27, 0.2, 0.14], FLG: RGB = [0.41, 0.4, 0.37], FLGC: RGB = [0.28, 0.28, 0.26], PLANK: RGB = [0.37, 0.25, 0.15], PLKD: RGB = [0.22, 0.15, 0.09];
       I.push(...ground([-16, -6, 16, 34], DIRT, [], { rough: 0.95 }), ...ground([-6, 34, 6, 46], DIRT, [], { rough: 0.95 }));
-      for (const [u, v, w, d] of [[7.5, 8, 6, 10], [-40, -30, 10, 8], [8, -37, 8, 5], [-8, -41, 8, 5], [-16, -28, 9, 6]]) I.push(...pad(u, v, w, d, FLG, FLGC, { rough: 0.95 }));
-      I.push(...pad(46, 25, 9, 16, PLANK, PLKD, { rough: 0.9, h: 0.1 }));
-      for (let k = -3; k <= 3; k++) I.push(B(46, 25 + k * 2, 8.2, 0.05, 0.105, PLKD, { y0: 0.1 }));
-      for (const [u, v] of [[4, 8], [-4, 20], [42, 20], [44, 30]] as const) I.push(glow(u, v, 2.4, WARM, 0.052, 0.45));
+      for (const [u, v, w, d] of PADS) I.push(...pad(u, v, w, d, FLG, FLGC, { rough: 0.95 }));
+      I.push(...pad(50, 25, 9, 16, PLANK, PLKD, { rough: 0.9, h: 0.1 }));
+      for (let k = -3; k <= 3; k++) I.push(B(50, 25 + k * 2, 8.2, 0.05, 0.105, PLKD, { y0: 0.1 }));
     }
-    const clear = (u: number, v: number) => Math.hypot(u + 26, v + 4) > 6 && !(Math.abs(u) < 14 && Math.abs(v - 14) < 18);
+    const clear = (u: number, v: number) => Math.hypot(u + 26, v + 4) > 6 && !(Math.abs(u) < 14 && Math.abs(v - 14) < 18) && !PADS.some(([pu, pv, w, d]) => Math.abs(u - pu) < w / 2 + 3 && Math.abs(v - pv) < d / 2 + 3);
     I.push(...grid(na('dirt_trail'), -4, 4, 1, 6, 8, { s: 2, rot: 90 }));
     // waterfall pond with a cascade (animated)
     I.push({ p: au('reflecting_pond'), u: -26, v: -4, s: 2, tile: true }, { p: na('waterfall'), u: -26, v: -14, s: 2, solid: true }, { p: na('lichen_granite_boulder'), u: -32, v: -8, s: 2 });
     I.push({ p: na('ranger_hut'), u: 14, v: 8, s: 2.4, rot: -90, solid: true }, { p: na('lookout_tower'), u: 30, v: -22, s: 1.8, solid: true });
+    I.push({ p: fm('windmill_pump'), u: -10, v: 26, s: 1.6 }); // farm pack: a hand pump on the packed-dirt clearing
+    I.push({ p: na('lantern'), u: 10.2, v: 12.2, s: 3, y: 1.1 }, { p: na('lantern'), u: 3, v: 20, s: 3, y: 1.1 }); // cabin porch lantern and a trail lantern
     // viking-fjord wharf village on the lee side
-    I.push({ p: vk('turf_longhouse'), u: 36, v: 30, s: 2.4, rot: -90, solid: true }, { p: vk('pit_house'), u: 44, v: 12, s: 2, rot: -90, solid: true }, { p: vk('boathouse_naust'), u: 50, v: 38, s: 2, rot: -90, solid: true });
+    I.push({ p: vk('turf_longhouse'), u: 36, v: 30, s: 2.4, rot: -90, solid: true }, { p: vk('pit_house'), u: 44, v: 12, s: 2, rot: -90, solid: true }, { p: vk('boathouse_naust'), u: 56, v: 38, s: 2, rot: -90, solid: true });
+    I.push({ p: sw('oil_lantern'), u: 46.5, v: 20, s: 3, y: 1 }, { p: sw('oil_lantern'), u: 46.5, v: 30, s: 3, y: 1 });
     // bunker + radar compound
-    I.push(...row(bk('corridor_straight'), -46, 30, 4, 0, 4, { s: 2 }), { p: bk('blast_door_frame'), u: -46, v: 30, s: 2, rot: 90 }, { p: bk('blast_door'), u: -46, v: 30, s: 2, rot: 90 }, { p: bk('radar_scope'), u: -44, v: 40, s: 4 }, { p: bk('alarm_beacon'), u: -46, v: 36, s: 3, y: 4 });
+    I.push(...row(bk('corridor_straight'), -46, 33, 4, 0, 4, { s: 2 }), { p: bk('blast_door_frame'), u: -46, v: 33, s: 2, rot: 90 }, { p: bk('blast_door'), u: -46, v: 33, s: 2, rot: 90 }, { p: bk('radar_scope'), u: -44, v: 40, s: 4 }, { p: bk('alarm_beacon'), u: -46, v: 37, s: 3, y: 4 });
     I.push({ p: ar('weather_mast'), u: -22, v: 38, s: 2.4, solid: true }, { p: ar('generator_hut'), u: -20, v: 30, s: 2, solid: true }, { p: ar('station_sign'), u: -26, v: 46, s: 2 });
     // ruin & folly trail along the peninsula
     I.push({ p: dk('sphinx_statue'), u: 40, v: -40, s: 2 }, { p: dk('pylon_gateway'), u: 28, v: -46, s: 1.8, solid: true }, { p: dk('mudbrick_house'), u: 46, v: -30, s: 2, solid: true });
-    I.push({ p: wl('collapsed_office_ruin'), u: -44, v: -34, s: 1.8, solid: true }, { p: wl('bunker'), u: -30, v: -46, s: 1.8, solid: true }, { p: wl('dead_tree'), u: -36, v: -26, s: 1.6 });
+    I.push({ p: wl('collapsed_office_ruin'), u: -44, v: -34, s: 1.8, solid: true }, { p: wl('bunker'), u: -30, v: -46, s: 1.8, solid: true }, { p: wl('dead_tree'), u: -38, v: -26, s: 1.6 });
     I.push({ p: hw('spooky_cottage_01'), u: 8, v: -42, s: 2, solid: true }, { p: hw('crypt_tomb_01'), u: -8, v: -46, s: 2, solid: true }, { p: hw('gnarled_face_tree_01'), u: 16, v: -38, s: 2 }, { p: hp('desk_writing'), u: 6, v: -42, s: 1.8 }, { p: hp('cabinet_curio'), u: 11, v: -44, s: 1.8, rot: 180 }, { p: hp('sofa_2seat'), u: 9, v: -39, s: 1.8, rot: 180 });
     I.push({ p: dg('dun_stone_well'), u: -12, v: -30, s: 2 }, { p: dg('dun_cell_bar_wall'), u: -18, v: -28, s: 1.8 }, { p: dg('dun_arcade_bay'), u: -22, v: -26, s: 1.8 });
     // forest: nature trees plus cheap fjord / village conifers

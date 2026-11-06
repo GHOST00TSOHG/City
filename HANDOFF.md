@@ -41,6 +41,24 @@ Follow [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md). Multiplayer (`publi
 - Reduce load-time hitching in passaic/sandyhook (towns cost upload/compile while neighbours preload); tree LOD0 and road chunk triangles are the next triangle targets.
 - Glow discs are hard-edged; soften with a radial alpha later.
 
+## Wave 3 (feat/world-overhaul, 2026-11-06): spatial common sense + visual QA
+- **Root causes:** (1) `carveRoads` only tested polyline *vertices* against a town rect, so any long segment crossing a plaza survived (Edo's through-road with lamps, Harbor's "floating lane lines"); it now walks every crossing segment in 1 m steps and cuts to the plaza edge. (2) `findSite` only penalised roads softly; it now prefers sites with no road crossing the plaza and rewards a road 10-30 m outside it (falls back to the old scoring where none exists).
+- **`src/area/clearance.ts`:** one index per area over street segments (half width), junction discs, footprints and town rects. Rules: nothing within `hw + 0.25 m` of ANY road centreline, `junction r + 0.4 m`, inside a footprint or a town. `placeLamps` re-aims lamp arms at the street and steps lamps back onto the strip; `placeTrees` filters; `packCity.ts` puts benches / planters / stops / umbrellas on the outer strip (`hw + 0.95..1.8 m`), cars in the kerb lane >= 4 m from any junction disc and off crossing streets, and skips pack-building replacements whose rectangle touches a street / junction / town. OSM footprints centred on asphalt are dropped. `isInTownExclusion(areaId,x,z,pad)` lives in `townDefs.ts` (set by `planTowns`).
+- **Bench axis:** `tools/bench-axis.mjs` measured both bench GLBs: backrest on -z, seat faces +z (same as `face()`). The city-layer bench yaw was backwards (seat away from the street) and is fixed.
+- **Glow pools (`glowPools.ts`):** one additive instanced mesh per area; a pool exists only under a placed fixture (stone/andon lanterns, neon lamppost, street lamps, floodlights, cabin/oil lanterns) with `alpha = pow(max(0, 1 - r^2), 2.2)`. The old hard-edged ring `glow()` items are gone.
+- **Towns relaid from measured sizes** (`tools/glb-size.mjs`): edo (dark-granite flagstone sando, raked-sand court, curbs, moss beds, machiya both sides, lanterns on path curbs), cyber (dark wet asphalt rough 0.12, curbed slate sidewalks, buildings tight on both sides + back, kerb bays, raised fountain island), paris (column deleted, 3-sided raised granite promenade with frontages facing in, 6 benches round the fountain, tree pits), harbor (travertine tile grid + perimeter curb, timber boardwalk, cottages / bakery / tavern / market facing the fountain, palms in stone pits, 6 benches inward), airfield (floodlights on raised concrete sidewalks, apron clear), outpost (pads under every structure, fixture lanterns). Fountain `waterY` is measured (`tools/measure-basins.mjs`: largest upward-facing level x scale).
+- **Facade:** curtain-wall mode for towers > 32 m (thin mullions, dark spandrels, mirror-glass metalness / reflection), lit-floor runs, lit crown band (cyan / amber) under the roof edge.
+- **Newark downtown view:** now `pos [1238, 2.8, 360]` (Newark-local), inside Newark's bounds and outside Passaic's, eye 2.8 m (`View.eye`). Newark's own tile holds only two 40 m+ towers (the rest sit in Passaic's overlap), so the "glass skyline" reads best in the Passaic and Newark street shots; Newark uses the curated glass high-rises from 30 m. `tools/find-downtown.mjs` finds the vantage.
+- **Gate:** `window.__auditPlacements(townId?)` (`src/audit.ts`) + `tests/placement.spec.ts` (5 areas + 6 towns). Flags lamp / tree / bench / fountain / building / pole on asphalt or junction, streets left inside a plaza, benches with seat . focus < 0.3, towns with 0 buildings or overlapping footprints.
+- **Proof:** `tools/verify-overhaul-webkit.mjs` = 13 street-level shots (`.proof/shot-*.png`; street shots stand 2.8 m up on a straight run of a major street); report includes per-shot audit. WebKit 1280x800 WebGPU, 20 s settle: 59.8-60 fps (min) on all 13, calls 47-148 (passaic 148, paris 132), 0 console errors, 0 placement violations, 35/35 packs. Playwright (SwiftShader, port 4191): 20/20.
+
+## Wave 3 not done / next
+- Newark's tile has few tall towers; a true glass-skyline view needs Passaic-tile towers (they belong to the overlap owner) or more curated placements.
+- Passaic street shot is at 148 / 150 draw calls: little headroom.
+- Fountain jets are unchanged (already parabolic arcs + foam ring); waterY is measured but only checked by eye on harbor / paris.
+- `cobblestone_place_01` tiles read as dark flecks on the Paris plaza.
+- gitleaks not run (not installed here).
+
 # HANDOFF: bot/websmith-robots-v2 (PR #24), 2026-11-01
 
 - Head 533be82; preview/robots-cleanup = 7c4a482 (merge of 533be82); preview deploy 99c35432 (alias preview-robots-cleanup). Production untouched (5b0d1f48).

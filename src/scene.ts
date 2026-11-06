@@ -14,6 +14,7 @@ import { buildBuildings, buildBuildingsFar } from './area/buildings';
 import { createFacadeMaterial } from './area/facade';
 import { loadMaterialTextures, styleFor, GROUND_GAIN, GROUND_SCALE } from './area/textures';
 import { buildLamps } from './area/lamps';
+import { buildClearance, placeLamps, placeTrees } from './area/clearance';
 import { buildTrees } from './area/trees';
 import { A6 } from './perf/frame';
 import { prewarm } from './perf/prewarm';
@@ -173,9 +174,11 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     mark('landmarks+flatten');
     const { kept: buildings0, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints); mark('cull');
     // Pack content: towns, then city-wide building replacement + street life. Replaced buildings leave the procedural list so they are never double-drawn.
+    // shared clearance index: every street segment + junction + footprint + town rect; lamps, trees, street life and pack buildings obey it (clearance.ts)
+    const ck = buildClearance(id, { roads: area.roads, buildings: buildings0 });
     const towns = sites.length ? await buildTowns(sites, terrain) : null; if (towns) landmarks.colliders.push(...towns.colliders); mark('towns');
-    const cc = wv[0].look, city = qs.get('packcity') === '0' ? null : await buildPackCity(id, buildings0, area, terrain, [cc[0], cc[2]]);
-    const buildings = city ? city.rest : buildings0; if (city) landmarks.colliders.push(...city.colliders); mark('pack city');
+    const cc = wv[0].look, city = qs.get('packcity') === '0' ? null : await buildPackCity(id, buildings0, area, terrain, [cc[0], cc[2]], ck);
+    const buildings = (city ? city.rest : buildings0).filter((b) => { const r = ck.nearestRoad(b.o[0] / 10, b.o[1] / 10); return !r || r.gap > 0.5; }); // a footprint centred on street asphalt is a data error if (city) landmarks.colliders.push(...city.colliders); mark('pack city');
     const real = towns?.real.length ? await buildRealistic(towns.real, 14) : null;
     const packGroups: THREE.Object3D[] = [towns?.group, city?.group, real?.group].filter(Boolean) as THREE.Object3D[];
     if (towns || city) console.info(`[City] pack ${id}: towns ${towns ? towns.placed + ' items ' + (towns.tris / 1000).toFixed(0) + 'k tris' : '-'}, city ${city ? city.replaced + ' buildings, ' + city.furniture + ' street props, ' + city.roofProps + ' roof props, ' + (city.tris / 1000).toFixed(0) + 'k tris' : '-'}, realistic ${real ? real.draws + ' draws' : '-'}`);
@@ -183,9 +186,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     await nextTask();
     const style = styleFor(id); const tg = await buildTileGeo(terrain, buildings, area.roads, style, roadMat, lambert, farMat, groundMat, skip); // roads + building meshes: built in a short-lived worker
     const blds = tg.blds, farBlds = tg.far; farBlds.visible = false; mark('geo-worker');
-    const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lamps = buildLamps(area.lamps, terrain); mark('ocean+lamps');
+    const inland = !!(area as any).inland, ocean = buildOcean(terrain, inland), lampList = placeLamps(area.lamps, ck), lamps = buildLamps(lampList, terrain); mark('ocean+lamps');
     await nextTask();
-    const trees = await buildTrees(SK.has('trees') ? [] : cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), terrain, id === 'keywest'); // palms only in Key West
+    const treeList = SK.has('trees') ? [] : placeTrees(cullTreesUnderLandmarks(lmTrees.flat, landmarks.footprints), ck), trees = await buildTrees(treeList, terrain, id === 'keywest'); // palms only in Key West
     trees.materials.forEach((m) => shared.add(m)); // species materials + textures are built once and reused by every area
     const grass = buildGrass(terrain, SK.has('grass') ? null : grassMask); mark('trees+grass');
     const ferry = area.dock ? buildFerryDock(area.dock, terrain) : null;
@@ -223,7 +226,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     group.traverse((o) => { const l = o as THREE.PointLight; if (l.isPointLight) floods.push({ parent: l.parent!, pos: l.getWorldPosition(new THREE.Vector3()), color: l.color.clone(), intensity: l.intensity, distance: l.distance, decay: l.decay }); });
     for (const f of floods) for (const l of f.parent.children.filter((c) => (c as any).isPointLight)) f.parent.remove(l);
     if (floods.length) console.info(`[City] ${id}: ${floods.length} flood point lights moved to the scene pool`);
-    return { id, floods, sites, packGroups, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
+    return { id, floods, sites, packGroups, audit: { ck, lampList, treeList, towns, city, buildings }, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
@@ -357,7 +360,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
           best = d; const L = Math.sqrt(L2), ux = dx / L, uz = dz / L;
           const s = Math.sign((v.look[0] - px) * ux + (v.look[2] - pz) * uz) || 1, off = r.w / 2 - 1.2;
           const x = px - uz * off, z = pz + ux * off;
-          out = { ...v, pos: [x, ground(x, z) + 1.7, z], look: [x + ux * s * 150, ground(x, z) + 4, z + uz * s * 150] };
+          const eye = v.eye ?? 1.7; out = { ...v, pos: [x, ground(x, z) + eye, z], look: [x + ux * s * 150, ground(x, z) + eye + 2.3, z + uz * s * 150] };
         }
       }
     }
@@ -466,6 +469,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     worldState() { return { tiles: [...tiles.values()].map((t) => ({ id: t.id, far: t.far, fade: t.farBlds.userData.fade ?? 0, bounds: t.bounds })), building: [...building.keys()], links: [...links.values()].map((l) => ({ id: l.def.id, rect: l.rect, path: l.path, tris: l.triangles })), fastHigh, active: act.id,
       stream: { radius: stream.radius, lead: stream.lead, want: stream.want, builds: stream.builds, unloads: stream.unloads }, flight: { gates: flight.gates, length: flight.length, end: flight.end } }; },
     /** Town sites of the built tiles, with the stand point and look target of each. */
+    auditInput() { return { id: act.id, ck: act.audit.ck, lampList: act.audit.lampList, treeList: act.audit.treeList, towns: act.audit.towns, city: act.audit.city, sites: act.sites, area: act.area }; },
     towns() { return [...tiles.values()].flatMap((t) => t.sites).map((q) => ({ id: q.id, name: q.name, area: q.area, x: +q.stand[0].toFixed(1), y: +q.stand[1].toFixed(2), z: +q.stand[2].toFixed(1), look: q.look.map((v) => +v.toFixed(1)) })); },
     townMeta: TOWN_META, usedPaths,
     townFocus: null as string | null,

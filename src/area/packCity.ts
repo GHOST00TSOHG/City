@@ -11,6 +11,8 @@ import { foundation } from './foundation';
 import { junctionSpots } from './ground';
 import { loadProto, PackBatch, type Proto } from './packLibrary';
 import { packMaterial } from './packTowns';
+import type { Clearance } from './clearance';
+import { isInTownExclusion } from './townDefs';
 import { releaseTextureSources } from './landmarks';
 
 const mk = (pack: string) => (f: string) => `${pack}/${f}.glb`;
@@ -53,11 +55,13 @@ function boxCollider(cx: number, cz: number, w: number, d: number, rot: number, 
   return { tris: new Float32Array(tris), minX: Math.min(...c.map((q) => q[0])), maxX: Math.max(...c.map((q) => q[0])), minZ: Math.min(...c.map((q) => q[1])), maxZ: Math.max(...c.map((q) => q[1])) };
 }
 
-export interface CityPack { group: THREE.Group; rest: Building[]; colliders: LandmarkCollider[]; replaced: number; furniture: number; roofProps: number; tris: number; paths: Set<string> }
+/** placed street objects and replaced buildings (placement audit) */
+export interface CityObj { kind: 'car' | 'bench' | 'planter' | 'stop' | 'umbrella' | 'building'; x: number; z: number; r: number; yaw: number; L?: number; S?: number }
+export interface CityPack { placed: CityObj[]; group: THREE.Group; rest: Building[]; colliders: LandmarkCollider[]; replaced: number; furniture: number; roofProps: number; tris: number; paths: Set<string> }
 
-export async function buildPackCity(areaId: string, buildings: Building[], area: AreaData, t: Terrain, center: [number, number]): Promise<CityPack> {
+export async function buildPackCity(areaId: string, buildings: Building[], area: AreaData, t: Terrain, center: [number, number], ck: Clearance): Promise<CityPack> {
   const group = new THREE.Group(); group.name = 'pack city';
-  const out: CityPack = { group, rest: buildings, colliders: [], replaced: 0, furniture: 0, roofProps: 0, tris: 0, paths: new Set() };
+  const out: CityPack = { placed: [], group, rest: buildings, colliders: [], replaced: 0, furniture: 0, roofProps: 0, tris: 0, paths: new Set() };
   const st = STYLE[areaId]; if (!st) return out;
   const batch = new PackBatch(520_000), protos = new Map<string, Proto | null>();
   const get = async (p: string) => { if (!protos.has(p)) protos.set(p, await loadProto(p)); return protos.get(p)!; };
@@ -80,7 +84,7 @@ export async function buildPackCity(areaId: string, buildings: Building[], area:
   for (const c of cand) {
     if (replacedSet.size >= st.cap || batch.tris > 420_000) break;
     const { b, ring, r } = c, seed = ((b.o[0] * 73856093) ^ (b.o[1] * 19349663)) >>> 0;
-    const list = b.h >= 45 ? st.tall : b.h >= 18 ? st.mid : st.low;
+    const list = b.h >= (areaId === 'newark' ? 30 : 45) ? st.tall : b.h >= 18 ? st.mid : st.low; // Newark downtown: curated glass high-rises from 30 m
     let pick: { p: Proto; sx: number; sz: number; sy: number; flip: boolean; dist: number } | null = null;
     for (let k = 0; k < 4; k++) {
       const path = list[Math.floor(hash(seed + k * 977) * list.length)], p = await get(path); if (!p) continue;
@@ -93,11 +97,15 @@ export async function buildPackCity(areaId: string, buildings: Building[], area:
       }
     }
     if (!pick) continue;
+    // the replacement must keep clear of every street (not only its own), every junction disc and any custom town: sample its rectangle's corners and edge midpoints
+    { const ca = Math.cos(r.a), sa = Math.sin(r.a); let bad = false;
+      for (const [fu, fv] of [[-.5, -.5], [.5, -.5], [.5, .5], [-.5, .5], [0, -.5], [0, .5], [-.5, 0], [.5, 0]]) { const x = r.cx + (fu * r.L) * ca - (fv * r.S) * sa, z = r.cz + (fu * r.L) * sa + (fv * r.S) * ca, q = ck.nearestRoad(x, z); if ((q && q.gap < 0.25) || ck.junctionGap(x, z) < 0.4 || isInTownExclusion(areaId, x, z, 2)) { bad = true; break; } }
+      if (bad) continue; }
     const { p, sx, sz, sy, flip } = pick, rings = [ring], f = foundation(rings, t), yaw = -r.a + (flip ? Math.PI / 2 : 0);
     if (p.tris > CHEAP_TRIS) heavy++;
     if (f.floor - f.minT > 0.12) batch.addBox(r.cx, r.cz, r.L + 0.3, r.S + 0.3, -r.a, f.bottom, f.floor + 0.02, [0.5, 0.49, 0.46], 0.9); // concrete plinth so nothing floats on a slope
     if (!batch.add(p, r.cx, f.floor, r.cz, yaw, sx, sy, sz)) break;
-    used(p.path); replacedSet.add(b); out.replaced++;
+    used(p.path); replacedSet.add(b); out.replaced++; out.placed.push({ kind: 'building', x: r.cx, z: r.cz, r: Math.hypot(r.L, r.S) / 2, yaw: -r.a, L: r.L, S: r.S });
     out.colliders.push(boxCollider(r.cx, r.cz, r.L, r.S, -r.a, f.floor - 0.2, f.floor + p.h * sy));
   }
   out.rest = buildings.filter((b) => !replacedSet.has(b));
@@ -124,7 +132,7 @@ export async function buildPackCity(areaId: string, buildings: Building[], area:
   const bench = [mt('plaza_bench_01')], planter = [mt('plaza_planter_01')], stop = [mt('bus_stop_flag_01')];
   let nCar = 0, nBench = 0, nPlant = 0, nStop = 0, nUmb = 0;
   const lift = sp.walkLift, gy = (x: number, z: number) => Math.max(t.heightAt(x, z), 0.05);
-  for (const rd of area.roads) {
+  for (const [ri, rd] of area.roads.entries()) {
     if (rd.c > 2 || rd.w < 5) continue;
     const pts = ringPts(rd.p), hw = rd.w / 2; let acc = 0;
     for (let i = 0; i + 1 < pts.length; i++) {
@@ -135,11 +143,15 @@ export async function buildPackCity(areaId: string, buildings: Building[], area:
         const x = ax + ux * d, z = az + uz * d, seed = ((Math.round(x * 10) * 73856093) ^ (Math.round(z * 10) * 19349663)) >>> 0, r = hash(seed);
         if (Math.hypot(x - center[0], z - center[1]) > 520 || near(x, z, 8)) continue;
         const side = hash(seed + 3) < 0.5 ? 1 : -1;
-        if (r < 0.36 && nCar < 150) { const p = await get(cars[Math.floor(hash(seed + 1) * cars.length)]); const ox = x + nx * side * (hw - 1.3), oz = z + nz * side * (hw - 1.3); if (p && batch.add(p, ox, gy(ox, oz) + 0.06, oz, yaw + (side > 0 ? 0 : Math.PI), 1.55)) { nCar++; used(p.path); } }
-        else if (r < 0.5 && nBench < 56) { const p = await get(bench[0]); const ox = x + nx * side * (hw + 1.3), oz = z + nz * side * (hw + 1.3); if (p && batch.add(p, ox, gy(ox, oz) + lift, oz, yaw + (side > 0 ? -Math.PI / 2 : Math.PI / 2), 1.5)) { nBench++; used(p.path); } }
-        else if (r < 0.6 && nPlant < 40) { const p = await get(planter[0]); const ox = x + nx * side * (hw + 0.9), oz = z + nz * side * (hw + 0.9); if (p && batch.add(p, ox, gy(ox, oz) + lift, oz, yaw, 1.5)) { nPlant++; used(p.path); } }
-        else if (r < 0.64 && nStop < 14) { const p = await get(stop[Math.floor(hash(seed + 2) * stop.length)]); const ox = x + nx * side * (hw + 1.6), oz = z + nz * side * (hw + 1.6); if (p && batch.add(p, ox, gy(ox, oz) + lift, oz, yaw + (side > 0 ? -Math.PI / 2 : Math.PI / 2), 1.5)) { nStop++; used(p.path); } }
-        else if (r < 0.68 && nUmb < 14) { const p = await get(furniture[0]); const ox = x + nx * side * (hw + 2.0), oz = z + nz * side * (hw + 2.0); if (p && batch.add(p, ox, gy(ox, oz) + lift, oz, hash(seed + 4) * 6.28, 1.4)) { nUmb++; used(p.path); } }
+        // furniture sits on the outer sidewalk strip (hw + 0.75 .. 1.8 m from the centreline), never beside a different street, a junction or inside a footprint / custom town
+        const strip = (off: number, rad: number) => { const ox = x + nx * side * (hw + off), oz = z + nz * side * (hw + off); return ck.ok(ox, oz, rad) && ck.onStrip(ox, oz) ? [ox, oz] as const : null; };
+        const lane = () => { const ox = x + nx * side * (hw - 1.3), oz = z + nz * side * (hw - 1.3), other = ck.nearestRoad(ox, oz, ri); // cars: curbside lane, >= junction r + 4 m from any junction, not on a crossing street
+          return ck.junctionGap(ox, oz) >= 4 && (!other || other.gap > 3) && !isInTownExclusion(areaId, ox, oz, 3) && !ck.inBuilding(ox, oz) ? [ox, oz] as const : null; };
+        if (r < 0.36 && nCar < 150) { const q = lane(); if (q) { const p = await get(cars[Math.floor(hash(seed + 1) * cars.length)]); if (p && batch.add(p, q[0], gy(q[0], q[1]) + 0.06, q[1], yaw + (side > 0 ? 0 : Math.PI), 1.55)) { nCar++; used(p.path); out.placed.push({ kind: 'car', x: q[0], z: q[1], r: 1.2, yaw }); } } }
+        else if (r < 0.5 && nBench < 56) { const q = strip(1.3, 0.8); if (q) { const p = await get(bench[0]); if (p && batch.add(p, q[0], gy(q[0], q[1]) + lift, q[1], yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2), 1.5)) { nBench++; used(p.path); out.placed.push({ kind: 'bench', x: q[0], z: q[1], r: 0.8, yaw: yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2) }); } } } // model seat faces +z (tools/bench-axis.mjs): seat toward the street
+        else if (r < 0.6 && nPlant < 40) { const q = strip(0.95, 0.7); if (q) { const p = await get(planter[0]); if (p && batch.add(p, q[0], gy(q[0], q[1]) + lift, q[1], yaw, 1.5)) { nPlant++; used(p.path); out.placed.push({ kind: 'planter', x: q[0], z: q[1], r: 0.7, yaw }); } } }
+        else if (r < 0.64 && nStop < 14) { const q = strip(1.6, 1.0); if (q) { const p = await get(stop[Math.floor(hash(seed + 2) * stop.length)]); if (p && batch.add(p, q[0], gy(q[0], q[1]) + lift, q[1], yaw + (side > 0 ? Math.PI / 2 : -Math.PI / 2), 1.5)) { nStop++; used(p.path); out.placed.push({ kind: 'stop', x: q[0], z: q[1], r: 1, yaw }); } } }
+        else if (r < 0.68 && nUmb < 14) { const q = strip(1.8, 1.2); if (q) { const p = await get(furniture[0]); if (p && batch.add(p, q[0], gy(q[0], q[1]) + lift, q[1], hash(seed + 4) * 6.28, 1.4)) { nUmb++; used(p.path); out.placed.push({ kind: 'umbrella', x: q[0], z: q[1], r: 1.2, yaw }); } } }
       }
       acc += L;
     }

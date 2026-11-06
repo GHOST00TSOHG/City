@@ -1,3 +1,4 @@
+import { auditPlacements } from './audit';
 import '@fontsource/inter/400.css';
 import '@fontsource/inter/600.css';
 import './style.css';
@@ -245,6 +246,7 @@ createScene(canvas, areaId).then(async (app) => {
   w.__THREE = THREE; w.__world = () => app.worldState(); w.__app = app; w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
   Object.defineProperty(w, '__towns', { get: () => { const built = app.towns(); return TOWN_META.map((m) => built.find((q) => q.id === m.id) ?? { ...m, x: null, y: null, z: null }); } });
   w.__warpTown = (id: string) => warpTown(id); w.__packs = () => { const s = new Set([...app.usedPaths].map((p) => p.split('/')[0])); return { packs: [...s].sort(), models: app.usedPaths.size }; };
+  w.__auditPlacements = (townId?: string) => auditPlacements(app.auditInput(), townId);
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };

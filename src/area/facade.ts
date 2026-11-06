@@ -25,10 +25,12 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const w = max(fwidth(cell), vec2(0.0005));
   const band = (v: any, a: any, b: any, ww: any) => smoothstep(a.sub(ww), a.add(ww), v).mul(float(1).sub(smoothstep(b.sub(ww), b.add(ww), v)));
   const groundFloor = id.y.lessThan(0.5);
+  // curtain-wall towers (> 32 m, non-house): near-continuous glazing between thin dark mullions and spandrels, mirror-glass response
+  const hgt = top.sub(base), curtain = select(isHouse, float(0), step(32, hgt));
   // window rectangle per type; commercial ground floor = wide storefront
-  const wx0 = select(isHouse, float(0.34), select(groundFloor, float(0.08), float(0.18)));
-  const wy0 = select(isHouse, float(0.22), select(groundFloor, float(0.06), float(0.26)));
-  const wy1 = select(isHouse, float(0.74), float(0.8));
+  const wx0 = select(isHouse, float(0.34), select(curtain.greaterThan(0.5), select(groundFloor, float(0.08), float(0.035)), select(groundFloor, float(0.08), float(0.18))));
+  const wy0 = select(isHouse, float(0.22), select(groundFloor, float(0.06), select(curtain.greaterThan(0.5), float(0.14), float(0.26))));
+  const wy1 = select(isHouse, float(0.74), select(curtain.greaterThan(0.5), float(0.9), float(0.8)));
   const win = band(f.x, wx0, float(1).sub(wx0), w.x).mul(band(f.y, wy0, wy1, w.y));
   // window detail (frames, mullions, fake depth) in window-local coords wu, wv ∈ 0..1
   const ww = float(1).sub(wx0.mul(2)), wh = wy1.sub(wy0);
@@ -77,7 +79,8 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const tall = smoothstep(18, 60, top.sub(base)); // 0 low-rise .. 1 tower
   const retail = isHouse.not().and(groundFloor);
   const litFrac = select(retail, float(0.72), select(isHouse, float(0.22), float(0.3).add(tall.mul(0.16)))).mul(uNight);
-  const lit = select(h1.lessThan(litFrac), float(1), float(0));
+  const rowLit = isHouse.not().select(step(hash(id.y.mul(0.37).add(seed.mul(61)).add(2)), litFrac.mul(0.45)).mul(step(0.3, hash(floor(id.x.div(3)).add(id.y.mul(5)).add(seed.mul(17))))), float(0)); // runs of lit office floors
+  const lit = max(select(h1.lessThan(litFrac), float(1), float(0)), rowLit);
   const warm = mix(vec3(1.0, 0.56, 0.24), vec3(1.0, 0.72, 0.42), h2); // tungsten apartments
   const office = mix(vec3(0.78, 0.92, 1.0), vec3(0.62, 0.86, 1.0), h2); // cool white / cyan office floors
   const isOffice = isHouse.not().and(hash(seed.mul(91).add(5)).lessThan(float(0.3).add(tall.mul(0.55))));
@@ -101,9 +104,11 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   let col: any = wall.mul(frameDark);
   col = mix(col, shutterCol, shutter.mul(inWall).mul(crisp).mul(0.9));
   col = mix(col, glass, m.mul(mix(float(0.55), float(1), crisp)));
-  const trim = mix(wall, vec3(0.86, 0.85, 0.8), 0.7);
+  const trim = mix(mix(wall, vec3(0.86, 0.85, 0.8), 0.7), vec3(0.09, 0.1, 0.12), curtain); // anodised mullions on curtain walls
   col = mix(col, trim, frame.add(mull.mul(float(1).sub(lit.mul(0.3)))).add(sill).mul(inWall).mul(crisp).clamp(0, 1));
   col = col.mul(float(1).sub(reveal.mul(inWall).mul(crisp).mul(0.45)));
+  const spandrel = curtain.mul(inWall).mul(float(1).sub(win)).mul(float(1).sub(smoothstep(0.85, 0.98, abs(n.y)))); // dark glass spandrel between floors
+  col = mix(col, vec3(0.04, 0.05, 0.07), spandrel.mul(0.88));
   mat.colorNode = col;
   // lit glass emits; far away the averaged grid becomes a soft per-building glow instead of sparkle
   const dist = distance(cameraPosition, positionWorld);
@@ -113,22 +118,25 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const retailBoost = select(retail, float(1.9), float(1));
   const winEmit = tint.mul(roomLit.mul(glassOnly.mul(lit).mul(crisp).mul(brightness).mul(1.5).mul(retailBoost)).add(farAvg.mul(0.8))).mul(min(float(1), float(2200).div(dist.add(1)).add(0.6)));
   // Glass: low roughness, curtain-wall metalness on towers, and a Fresnel sky / horizon / city-glow reflection on lit and unlit panes.
-  const glassMask = m.mul(glassIn).mul(mix(float(0.4), float(1), crisp));
+  const glassMask = max(m.mul(glassIn).mul(mix(float(0.4), float(1), crisp)), spandrel.mul(0.85));
   mat.roughnessNode = mix(select(isHouse, float(0.9), float(0.82)).add(hash(seed.mul(5)).mul(0.08)), float(0.07), glassMask);
-  mat.metalnessNode = glassMask.mul(select(isHouse, float(0.1), mix(float(0.25), float(0.55), tall)));
+  mat.metalnessNode = glassMask.mul(select(isHouse, float(0.1), max(mix(float(0.25), float(0.55), tall), curtain.mul(0.72))));
   const Vv = normalize(cameraPosition.sub(positionWorld)), Rr = reflect(Vv.negate(), n);
   const fres = tpow(float(1).sub(max(dot(n, Vv), 0)), 3).mul(0.85).add(0.06);
   const rY = Rr.y, azR = Rr.x.mul(3.1).add(Rr.z.mul(2.3));
   const skyRefl = mix(vec3(0.16, 0.22, 0.32), vec3(0.02, 0.035, 0.08), smoothstep(0.0, 0.7, rY)) // steel horizon -> night zenith
     .add(mix(vec3(0.35, 0.2, 0.08), vec3(0.1, 0.26, 0.34), step(0.5, hash(floor(azR.mul(9))))).mul(smoothstep(0.35, 0.0, abs(rY.sub(0.08)))).mul(0.55)) // city glow bands
     .add(vec3(1.0, 0.95, 0.85).mul(tpow(max(dot(Rr, normalize(vec3(0.45, 0.62, 0.35))), 0), 90)).mul(2.5)); // moon glint
-  const reflGain = select(isHouse, float(0.35), mix(float(0.7), float(1.25), tall));
+  const reflGain = select(isHouse, float(0.35), mix(float(0.7), float(1.25), tall).mul(float(1).add(curtain.mul(0.5))));
   const glassRefl = skyRefl.mul(fres).mul(reflGain).mul(glassMask).mul(uGlass);
   // aviation beacons: sparse blinking red lights on the roofs of towers over 38 m
   const roofN = smoothstep(0.7, 0.9, n.y), cellB = positionWorld.xz.div(20), fB = fract(cellB).sub(0.5), idB = floor(cellB);
   const beaconAt = float(1).sub(smoothstep(0.03, 0.06, fB.x.mul(fB.x).add(fB.y.mul(fB.y)))).mul(step(0.45, hash(idB.x.mul(3).add(idB.y.mul(17)).add(seed.mul(53)))));
   const tower = step(38, top.sub(base)), blink = sin(time.mul(2.2).add(seed.mul(40))).mul(0.5).add(0.5);
   const beacon = vec3(1.0, 0.1, 0.06).mul(beaconAt).mul(roofN).mul(tower).mul(blink.mul(3).add(0.4));
-  mat.emissiveNode = winEmit.mul(uWindow).add(glassRefl).add(beacon);
+  // rooftop crown: a lit cornice band under the roof edge of towers over 32 m (cyan or amber per building)
+  const crown = smoothstep(hgt.sub(3.2), hgt.sub(0.5), up).mul(float(1).sub(smoothstep(hgt.sub(0.25), hgt.add(0.2), up))).mul(curtain).mul(float(1).sub(smoothstep(0.5, 0.8, abs(n.y)))).mul(select(kind.greaterThan(0.5), float(1), float(0)));
+  const crownCol = mix(vec3(0.2, 0.8, 1.0), vec3(1.0, 0.55, 0.2), step(0.5, hash(seed.mul(17).add(3))));
+  mat.emissiveNode = winEmit.mul(uWindow).add(glassRefl).add(beacon).add(crownCol.mul(crown).mul(1.6));
   return { material: mat, uNight, uGlass, uWindow };
 }
