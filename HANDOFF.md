@@ -1,3 +1,28 @@
+# HANDOFF: feat/world-overhaul (from feat/multiplayer ea7c137)
+
+Follow [knowledge/BUILD-GUIDE.md](knowledge/BUILD-GUIDE.md). Multiplayer (`public/_worker.js`, `src/net/`), robots, flying, weather and area links are untouched.
+
+## What changed
+- **Reflections:** `src/nightEnv.ts` PMREM night-city environment (`scene.environment`, intensity 1.2; WebGPU and `?gl=1`). `facade.ts` is now `MeshStandardNodeMaterial`: glass roughness ~0.07, curtain-wall metalness 0.25-0.55 on towers (0.1 houses), Fresnel sky/city-glow/moon term, tungsten / cool-office / bright-retail night windows, red rooftop beacons on towers over 38 m. Lamps: sodium + white-gold tones per instance, stronger wet glints, still 2 draw calls per area.
+- **Dev panel:** `src/devPanel.ts`, hidden; `?dev=1` or Backtick. Sliders: Glass Reflection, Window Glow, Lamp Intensity, Road Wetness, Fog Density, Exposure, Moonlight, FOV; Copy JSON.
+- **Roads (`ground.ts`, `roadMat` in `scene.ts`):** junctions (3+ street arms) get one levelled asphalt disc and arms ease to it over 6 m; sidewalks are 0.14 m raised with vertical curb faces and are cut away wherever another street or a junction crosses; zebra crossings baked into the road soup; `surfaceAt` follows the same tiers (asphalt > sidewalk > path). Vertex alpha tags surface kind for the shader (grain, wear streaks, expansion joints, wet puddles). Road wear lanes are noise streaks, not true per-lane (the soup has no lateral coordinate).
+- **Pack engine (`src/area/packLibrary.ts`):** shared GLTFLoader (Meshopt + Draco `public/draco/` + KTX2). The packs use ONE "lowpoly" material with colours in COLOR_0, so glass / neon are detected from vertex colour and file name, not material names. Prototypes bake to position / snorm normal / colour / `packMat` / `packEmissive`; instances are stamped into one merged mesh per town and one for the city layer, one shared material.
+- **Towns (`packTowns.ts`, `townDefs.ts`):** edo (bayshore), cyber (newark), paris (passaic), harbor + airfield (keywest), outpost (sandyhook). Sites are searched per area (flat, dry, few roads/buildings; deterministic), pads + footprints registered before terrain, roads carved, plaza collider slab, box colliders. `?town=<slug>` and the town pills warp; `window.__towns`, `__warpTown(id)`, `__packs()`.
+- **City layer (`packCity.ts`):** standalone rectangular footprints replaced by pack buildings (non-uniform fit, plinth, collider, removed from the procedural list), street life (cars, benches, planters, bus stops, umbrellas, tactile beacons at zebra crossings), rooftop props. No palms outside Key West. `buildRealistic` = textured `realistic-city` instances, hard-capped at 14 draws per area.
+- **Fountains (`fountains.ts`):** 2 draws per area; ripple water + shader-animated jets / column / curtain, no CPU vertex work.
+- **Shipping:** `node tools/stage-used-tja.mjs` -> `public/tja/used-files.json` (197 models, 44 MB, all 35 packs). `vite.config.ts` prunes `dist/tja` to it. `public/_headers` added (cache rules). Never commit `public/tja/*.glb`.
+- **Tests:** specs now pass `mp=0` (preview has no relay worker; the multiplayer client otherwise logs a WebSocket console error on every load).
+
+## Numbers
+- Playwright (SwiftShader, WebGL2): 9/9 pass, calls 53-59, 0 console errors. `WebGL: no buffer is bound` warnings also occur on the pre-overhaul build under SwiftShader (not errors).
+- WebKit (Metal, WebGPU, 1280x800): `tools/verify-overhaul-webkit.mjs`, report in `.proof/webkit-report.json` (gitignored).
+- Triangles: towns up to 1.3 M each, city layer <= 0.5 M, drawn only within 1.1 km of an area. Pack models are heavy (pagoda 174 k); next step would be offline decimation.
+
+## Next
+- Per-lane wear and wet curb reflections need a lateral road coordinate in the soup.
+- Offline simplification of the heaviest pack models; per-town LOD.
+- Tune fountain water heights per basin by eye (`waterY` in `townDefs.ts`).
+
 # HANDOFF: bot/websmith-robots-v2 (PR #24), 2026-11-01
 
 - Head 533be82; preview/robots-cleanup = 7c4a482 (merge of 533be82); preview deploy 99c35432 (alias preview-robots-cleanup). Production untouched (5b0d1f48).

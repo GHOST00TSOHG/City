@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 const ezLib = fileURLToPath(new URL('./node_modules/@dgreenheck/ez-tree/src/lib', import.meta.url));
 const stub = fileURLToPath(new URL('./src/area/ez-textures-stub.ts', import.meta.url));
@@ -38,10 +39,22 @@ function mpRelay(server: any) {
   }).catch((e) => console.warn('[mp] relay needs the ws package', e.message));
 }
 
+/** Ships only the pack models the code can load: dist/tja is pruned to public/tja/used-files.json (tools/stage-used-tja.mjs); the rest of the owned packs never leave this machine. */
+function pruneTja() {
+  return { name: 'prune-tja', apply: 'build' as const, closeBundle() {
+    const list = fileURLToPath(new URL('./public/tja/used-files.json', import.meta.url)), dist = fileURLToPath(new URL('./dist/tja', import.meta.url));
+    if (!existsSync(dist)) return;
+    if (!existsSync(list)) { rmSync(dist, { recursive: true, force: true }); return; }
+    const keep = new Set<string>(JSON.parse(readFileSync(list, 'utf8')).files as string[]);
+    const walk = (dir: string, rel: string) => { for (const f of readdirSync(dir)) { const p = join(dir, f), r = rel ? rel + '/' + f : f; if (statSync(p).isDirectory()) { walk(p, r); if (!readdirSync(p).length) rmSync(p, { recursive: true }); } else if (!keep.has(r)) rmSync(p); } };
+    walk(dist, '');
+  } };
+}
+
 export default defineConfig({
   define: { __HAS_TREE_SPECIES__: JSON.stringify(has('trees/species.json')), __HAS_ROBOT_GLB__: JSON.stringify(has('robot/robot.glb')) },
   resolve: { alias: { '@eztree': ezLib } },
-  plugins: [{ name: 'mp-relay', configureServer: mpRelay, configurePreviewServer: mpRelay }, {
+  plugins: [pruneTja(), { name: 'mp-relay', configureServer: mpRelay, configurePreviewServer: mpRelay }, {
     // ez-tree's textures.js eagerly loads every bark/leaf set (~3 MB). We only use its geometry and load the two leaf/bark maps we need ourselves.
     name: 'ez-tree-textures-stub', enforce: 'pre',
     resolveId(src, importer) { if (src === './textures' && importer?.includes('ez-tree')) return stub; return null; },

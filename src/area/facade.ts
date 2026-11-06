@@ -2,13 +2,14 @@ import * as THREE from 'three/webgpu';
 import type { MaterialTextures } from './textures';
 import { FACADE_Y0, FACADE_YS, FACADE_KS } from './geom';
 import { WALL_GAIN, WALL_PAINTED, WALL_MEAN, WALL_SCALE, ROOF_GAIN } from './textures';
-import { texture, mod, luminance, attribute, normalize, step, dot, positionWorld, normalWorld, vec2, vec3, float, fract, floor, fwidth, smoothstep, select, mix, hash, abs, max, min, clamp, vertexColor, uniform, cameraPosition, distance } from 'three/tsl';
+import { reflect, pow as tpow, time, sin, texture, mod, luminance, attribute, normalize, step, dot, positionWorld, normalWorld, vec2, vec3, float, fract, floor, fwidth, smoothstep, select, mix, hash, abs, max, min, clamp, vertexColor, uniform, cameraPosition, distance } from 'three/tsl';
 
 /** Procedural facades (TSL): window grid by inferred building type, lit / unlit windows, house shutters, storefronts.
  *  Reads the per-vertex `facade` attribute [baseY, wallTopY, kind, seed] written by buildings.ts. No textures. */
 export function createFacadeMaterial(tex: MaterialTextures) {
   const uNight = uniform(1); // 0..1 how many windows are lit (scales with time of day later)
-  const mat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
+  const uGlass = uniform(1), uWindow = uniform(1); // dev panel: glass reflection and window glow gains
+  const mat = new THREE.MeshStandardNodeMaterial({ vertexColors: true });
   const fa = attribute('facade', 'vec4');
   // fa.z packs kind (0 none, 1 house, 2 commercial) + 4 * wall material + 32 * roof material (see buildings.ts)
   // the attribute is snorm16 (geom.ts compactSoup): heights as (y - Y0) / YS, pack as k / KS
@@ -73,10 +74,15 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const m = win.mul(inWall);
   const h1 = hash(id.x.add(id.y.mul(131)).add(seed.mul(9973)));
   const h2 = hash(id.x.mul(17).add(id.y.mul(7)).add(seed.mul(4271)).add(3));
-  const litFrac = select(isHouse, float(0.22), float(0.3)).mul(uNight);
+  const tall = smoothstep(18, 60, top.sub(base)); // 0 low-rise .. 1 tower
+  const retail = isHouse.not().and(groundFloor);
+  const litFrac = select(retail, float(0.72), select(isHouse, float(0.22), float(0.3).add(tall.mul(0.16)))).mul(uNight);
   const lit = select(h1.lessThan(litFrac), float(1), float(0));
-  const warm = mix(vec3(1.0, 0.6, 0.3), vec3(1.0, 0.75, 0.5), h2);
-  const tint = select(h2.greaterThan(0.9), vec3(0.75, 0.85, 1.0), warm); // a few cool LED rooms
+  const warm = mix(vec3(1.0, 0.56, 0.24), vec3(1.0, 0.72, 0.42), h2); // tungsten apartments
+  const office = mix(vec3(0.78, 0.92, 1.0), vec3(0.62, 0.86, 1.0), h2); // cool white / cyan office floors
+  const isOffice = isHouse.not().and(hash(seed.mul(91).add(5)).lessThan(float(0.3).add(tall.mul(0.55))));
+  const tintBase = select(isOffice, office, warm);
+  const tint = select(retail, vec3(1.0, 0.86, 0.6), select(h2.greaterThan(0.9), vec3(0.75, 0.85, 1.0), tintBase));
   const glass = mix(vec3(0.07, 0.09, 0.12), roomCol.mul(lamp).mul(0.1), crisp.mul(0.7)); // dark room seen through unlit glass
   const shutterCol = mix(vec3(0.22, 0.42, 0.36), vec3(0.3, 0.42, 0.55), hash(seed.mul(311)));
   // Textured, painted walls and roofs (CC0 ambientCG, KTX2 arrays). Painted kinds take the texture's relief only, so the
@@ -104,6 +110,25 @@ export function createFacadeMaterial(tex: MaterialTextures) {
   const farAvg = litFrac.mul(0.35).mul(inWall).mul(float(1).sub(crisp));
   const brightness = mix(float(0.25), float(0.7), hash(id.x.add(id.y.mul(57)).add(seed.mul(1031)).add(9)));
   const glassOnly = m.mul(float(1).sub(mull.mul(crisp))).mul(float(1).sub(frame.mul(crisp))).mul(float(1).sub(reveal.mul(0.5)));
-  mat.emissiveNode = tint.mul(roomLit.mul(glassOnly.mul(lit).mul(crisp).mul(brightness).mul(1.5)).add(farAvg.mul(0.8))).mul(min(float(1), float(2200).div(dist.add(1)).add(0.6)));
-  return { material: mat, uNight };
+  const retailBoost = select(retail, float(1.9), float(1));
+  const winEmit = tint.mul(roomLit.mul(glassOnly.mul(lit).mul(crisp).mul(brightness).mul(1.5).mul(retailBoost)).add(farAvg.mul(0.8))).mul(min(float(1), float(2200).div(dist.add(1)).add(0.6)));
+  // Glass: low roughness, curtain-wall metalness on towers, and a Fresnel sky / horizon / city-glow reflection on lit and unlit panes.
+  const glassMask = m.mul(glassIn).mul(mix(float(0.4), float(1), crisp));
+  mat.roughnessNode = mix(select(isHouse, float(0.9), float(0.82)).add(hash(seed.mul(5)).mul(0.08)), float(0.07), glassMask);
+  mat.metalnessNode = glassMask.mul(select(isHouse, float(0.1), mix(float(0.25), float(0.55), tall)));
+  const Vv = normalize(cameraPosition.sub(positionWorld)), Rr = reflect(Vv.negate(), n);
+  const fres = tpow(float(1).sub(max(dot(n, Vv), 0)), 3).mul(0.85).add(0.06);
+  const rY = Rr.y, azR = Rr.x.mul(3.1).add(Rr.z.mul(2.3));
+  const skyRefl = mix(vec3(0.16, 0.22, 0.32), vec3(0.02, 0.035, 0.08), smoothstep(0.0, 0.7, rY)) // steel horizon -> night zenith
+    .add(mix(vec3(0.35, 0.2, 0.08), vec3(0.1, 0.26, 0.34), step(0.5, hash(floor(azR.mul(9))))).mul(smoothstep(0.35, 0.0, abs(rY.sub(0.08)))).mul(0.55)) // city glow bands
+    .add(vec3(1.0, 0.95, 0.85).mul(tpow(max(dot(Rr, normalize(vec3(0.45, 0.62, 0.35))), 0), 90)).mul(2.5)); // moon glint
+  const reflGain = select(isHouse, float(0.35), mix(float(0.7), float(1.25), tall));
+  const glassRefl = skyRefl.mul(fres).mul(reflGain).mul(glassMask).mul(uGlass);
+  // aviation beacons: sparse blinking red lights on the roofs of towers over 38 m
+  const roofN = smoothstep(0.7, 0.9, n.y), cellB = positionWorld.xz.div(20), fB = fract(cellB).sub(0.5), idB = floor(cellB);
+  const beaconAt = float(1).sub(smoothstep(0.03, 0.06, fB.x.mul(fB.x).add(fB.y.mul(fB.y)))).mul(step(0.45, hash(idB.x.mul(3).add(idB.y.mul(17)).add(seed.mul(53)))));
+  const tower = step(38, top.sub(base)), blink = sin(time.mul(2.2).add(seed.mul(40))).mul(0.5).add(0.5);
+  const beacon = vec3(1.0, 0.1, 0.06).mul(beaconAt).mul(roofN).mul(tower).mul(blink.mul(3).add(0.4));
+  mat.emissiveNode = winEmit.mul(uWindow).add(glassRefl).add(beacon);
+  return { material: mat, uNight, uGlass, uWindow };
 }

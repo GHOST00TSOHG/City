@@ -14,6 +14,8 @@ Rules live in `knowledge/BUILD-GUIDE.md`; that file wins over this one. Jonn's b
 - `src/main.ts` boot, render loop, attribution + stats overlay
 - `src/scene.ts` renderer (ACES), night lights, fog, camera + OrbitControls, fallback ground/sky, `START` origin
 - `src/world/registry.ts` the one world registry (areas, origins, bounds, world offsets, load state, tiles); `src/world/player.ts` the one player-state object (pos/vel/speed/altitude/mode/area)
+- `src/area/pack*.ts`, `fountains.ts`, `townDefs.ts` pack-asset engine (one merged mesh per town / city layer), 6 towns, animated fountains; `src/devPanel.ts` hidden tuning panel (`?dev=1` or Backtick); `?town=edo|cyber|paris|harbor|airfield|outpost` warps to a town
+- `tools/stage-used-tja.mjs` writes `public/tja/used-files.json` (the ship list; `public/tja/*.glb` is never committed, the build prunes `dist/tja` to that list); `tools/verify-overhaul-webkit.mjs` WebKit proof run
 - `tools/bake/` offline area bake (fetch.mjs, bake.mjs, infer.mjs, areas.json) -> `public/areas/<id>/`
 - `tests/` Playwright smoke + `cameras.json`
 - `knowledge/` build guide, rules, plan, data sources

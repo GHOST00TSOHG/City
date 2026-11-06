@@ -1,9 +1,13 @@
 import * as THREE from 'three/webgpu';
-import { uniform, attribute, vertexColor, vec3, uv, length, smoothstep, float, distance, cameraPosition, positionWorld, exp } from 'three/tsl';
+import { uniform, attribute, vertexColor, vec3, uv, length, smoothstep, float, distance, cameraPosition, positionWorld, exp, instanceIndex, hash, mix } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Terrain } from './data';
 
 const POLE_H = 6.2, ARM = 1.5;
+/** Dev-panel gain shared by every area's lamps. */
+export const uLampGain = uniform(1);
+/** About one lamp in four is a crisp boulevard white-gold, the rest warm sodium; chosen per instance, no extra draw call. */
+const lampTone = () => hash(instanceIndex.add(7)).lessThan(0.26).select(vec3(1.0, 0.9, 0.62), vec3(1.0, 0.62, 0.3));
 
 /** Street lamps: one instanced draw call for the posts (small warm lens, no sprite or halo),
  *  one for soft warm light pools on the ground that fade out with camera distance, so they never read as discs from the air. */
@@ -23,7 +27,7 @@ export function buildLamps(lamps: number[][], terrain: Terrain) {
   parts.push(paint(new THREE.BoxGeometry(0.5, 0.02, 0.22).translate(ARM, POLE_H - 0.14, 0), 0xffe2b0, 1)); // lens, facing down
   const geo = mergeGeometries(parts)!;
   const mat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
-  mat.emissiveNode = vec3(1.0, 0.78, 0.5).mul(attribute('glow', 'float')).mul(2.2);
+  mat.emissiveNode = mix(vec3(1.0, 0.78, 0.5), lampTone(), 0.6).mul(attribute('glow', 'float')).mul(3.0).mul(uLampGain);
   const posts = new THREE.InstancedMesh(geo, mat, lamps.length); posts.name = 'lamps';
 
   const pool = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
@@ -34,7 +38,7 @@ export function buildLamps(lamps: number[][], terrain: Terrain) {
   const near = float(1).sub(smoothstep(90, 260, distance(cameraPosition, positionWorld)));
   const uWet = uniform(0), uFog = uniform(0);
   // wet ground reflects the lamp as a stronger, tighter glint; fog widens the glow
-  pmat.colorNode = vec3(1.0, 0.7, 0.4).mul(fall.add(exp(r.mul(r).mul(-14)).mul(uWet.mul(0.9)))).mul(near).mul(float(0.3).add(uFog.mul(0.12)));
+  pmat.colorNode = lampTone().mul(fall.add(exp(r.mul(r).mul(-14)).mul(uWet.mul(1.6))).add(exp(r.mul(r).mul(-60)).mul(uWet.mul(1.2).add(0.15)))).mul(near).mul(float(0.36).add(uFog.mul(0.12))).mul(uLampGain);
   const pools = new THREE.InstancedMesh(pool, pmat, lamps.length); pools.name = 'lamp pools'; pools.renderOrder = 2;
 
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), s1 = new THREE.Vector3(1, 1, 1);

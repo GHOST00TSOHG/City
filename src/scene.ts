@@ -28,6 +28,12 @@ import { buildLandmarks, cullUnderLandmarks, cullTreesUnderLandmarks, flattenUnd
 import { vertexColor, uniform as tslUniform, attribute, texture as tslTexture } from 'three/tsl';
 import { positionWorld, vec3, time, normalize, smoothstep, mix, float, pow, max, cameraPosition, normalWorld, mx_noise_float, mx_fractal_noise_float } from 'three/tsl';
 import { createWeatherState, type WeatherKind } from './weather';
+import { buildNightEnv } from './nightEnv';
+import { initPackLibrary, usedPaths } from './area/packLibrary';
+import { planTowns, carveRoads, buildTowns, packMaterial, TOWN_META, type TownSite } from './area/packTowns';
+import { buildPackCity, buildRealistic } from './area/packCity';
+import { uLampGain } from './area/lamps';
+import { TUNE_DEFAULTS, type Tune } from './devPanel';
 
 /** Night haze: the fog colour. Lifted from 0x15171d (which tone-mapped to near black) so the far ground reads as a hazy blue-grey and meets the horizon glow. */
 const FOG_NIGHT = 0x1e2638;
@@ -42,6 +48,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   renderer.toneMapping = THREE.NeutralToneMapping; // keeps hues true at low light (ACES shifted night colours toward grey-orange)
   renderer.toneMappingExposure = 1.0;
   await renderer.init();
+  initPackLibrary(renderer);
   const backend = (renderer.backend as any).isWebGPUBackend ? 'webgpu' : 'webgl2';
 
   const scene = new THREE.Scene();
@@ -56,6 +63,9 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   scene.add(moon, moon.target);
   scene.add(new THREE.HemisphereLight(0xbcbcc0, 0x4c4842, 1.15));
   const sky = createSky(moonDir); scene.add(sky.group);
+  // Night-city reflection environment (PMREM): glass towers, wet roads and metal pick up skyline bands and the moon.
+  try { scene.environment = buildNightEnv(renderer, moonDir); scene.environmentIntensity = 1.2; } catch (e) { console.warn('[City] environment map skipped', e); }
+  const tune: Tune = { ...TUNE_DEFAULTS };
 
   const tex = await loadMaterialTextures(renderer);
   const facade = createFacadeMaterial(tex); const lambert = facade.material;
@@ -86,8 +96,18 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     };
     const g = mk(0.62, 0.3, 0.55, 1, 1.0, groundAlbedo), r = mk(0.52, 0.5, 0.3, 0.75, 1.5); // gain: Standard is darker than the old Lambert
     groundMat.colorNode = g.color; groundMat.roughnessNode = g.rough; groundMat.emissiveNode = g.emissive;
-    roadMat.colorNode = r.color.mul(mx_noise_float(positionWorld.mul(2.7)).mul(0.12).add(mx_noise_float(positionWorld.mul(0.35)).mul(0.08)).add(1)); // asphalt grain + patching
-    roadMat.roughnessNode = r.rough; roadMat.emissiveNode = r.emissive;
+    // Road surfaces: the vertex alpha tags the kind (255 asphalt, ~200 sidewalk, ~150 curb face). Asphalt gets multi-frequency aggregate grain, patching and
+    // polished/oily wear streaks; sidewalks get expansion joints; wet roads turn glossy so the lamps and skyline reflect.
+    const kindA = vertexColor().a, isWalk = smoothstep(0.7, 0.75, kindA).mul(float(1).sub(smoothstep(0.85, 0.9, kindA))), isCurb = float(1).sub(smoothstep(0.55, 0.62, kindA));
+    const isAsph = float(1).sub(isWalk).sub(isCurb);
+    const grain = mx_noise_float(p.mul(2.7)).mul(0.1).add(mx_noise_float(p.mul(9.5)).mul(0.07)).add(mx_noise_float(p.mul(31)).mul(0.05)).add(mx_noise_float(p.mul(0.35)).mul(0.08)).add(1);
+    const streak = smoothstep(0.1, 0.5, mx_noise_float(vec3(p.x.mul(0.35), p.y, p.z.mul(0.35)).mul(vec3(1, 1, 1)))).mul(0.5); // polished, darker wear lanes
+    const jx = p.x.div(1.6).fract().sub(0.5).abs(), jz = p.z.div(1.6).fract().sub(0.5).abs();
+    const joint = smoothstep(0.485, 0.498, max(jx, jz)); // expansion joints every 1.6 m
+    const walkTone = vec3(1).sub(joint.mul(0.22)).mul(mx_noise_float(p.mul(5)).mul(0.05).add(1));
+    roadMat.colorNode = mix(r.color.mul(grain).mul(float(1).sub(streak.mul(0.14))), r.color.mul(walkTone), isWalk.add(isCurb));
+    roadMat.metalnessNode = float(0);
+    roadMat.roughnessNode = r.rough.mul(mix(float(1).sub(streak.mul(0.25).mul(isAsph)), float(1.05), isWalk.add(isCurb))).clamp(0.03, 1); roadMat.emissiveNode = r.emissive.mul(float(1).sub(isCurb.mul(0.7)));
   }
   { // snow settles on roofs and other up-facing building surfaces
     const fm = facade.material as any, base = fm.colorNode;
@@ -95,7 +115,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     fm.colorNode = mix(base, vec3(0.95, 0.96, 1), roof);
     if (fm.emissiveNode) fm.emissiveNode = fm.emissiveNode.add(vec3(0.075, 0.08, 0.095).mul(roof));
   }
-  const shared = new Set<THREE.Material>([groundMat, roadMat, lambert]);
+  const shared = new Set<THREE.Material>([groundMat, roadMat, lambert, packMaterial()]);
   const farMat = new THREE.MeshLambertNodeMaterial({ vertexColors: true });
   shared.add(farMat);
   (lambert as any).maskNode = nearMask(); (farMat as any).maskNode = farMask(); // near <-> far building detail cross-fade (lodFade.ts)
@@ -117,11 +137,11 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     // ...and drop any building the owner already has at the same spot (its bake covers a little more than its terrain rect, so along the cut the same OSM building was drawn twice: 15 found in run F)
     const ownerHas = (() => { const g = new Map<string, number[]>(); for (const o of owners) for (const b of registry.get(o).bundle?.area.buildings ?? []) { const k = Math.round(b.o[0] / 30) + ',' + Math.round(b.o[1] / 30); (g.get(k) ?? g.set(k, []).get(k)!).push(b.o[0], b.o[1]); }
       return (x: number, z: number) => { for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const a = g.get((Math.round(x / 30) + i) + ',' + (Math.round(z / 30) + j)); if (a) for (let q = 0; q < a.length; q += 2) if (Math.abs(a[q] - x) < 30 && Math.abs(a[q + 1] - z) < 30) return true; } return false; }; })();
-    const area = skip.length ? { ...area0,
+    const areaBase = skip.length ? { ...area0,
       buildings: area0.buildings.filter((b) => !inAny(skip, b.o[0] / 10, b.o[1] / 10) && (qs.get('ovl') === '0' || !ownerHas(b.o[0], b.o[1]))),
       trees: (() => { const o: number[] = []; for (let i = 0; i < area0.trees.length; i += 5) if (!inAny(skip, area0.trees[i] / 10, area0.trees[i + 1] / 10)) o.push(area0.trees[i], area0.trees[i + 1], area0.trees[i + 2], area0.trees[i + 3], area0.trees[i + 4]); return o; })(),
       lamps: area0.lamps.filter((l) => !inAny(skip, l[0] / 10, l[1] / 10)) } : area0;
-    if (skip.length) console.info('[City] overlap', id, 'buildings dropped (owner rect / same footprint at owner):', area0.buildings.length - area.buildings.length, 'of', area0.buildings.length);
+    if (skip.length) console.info('[City] overlap', id, 'buildings dropped (owner rect / same footprint at owner):', area0.buildings.length - areaBase.buildings.length, 'of', area0.buildings.length);
     const group = new THREE.Group(); group.name = 'area:' + id;
     // Landmarks first: their footprints decide which generated buildings are never built (once per area load).
     const origin = entry.origin;
@@ -137,11 +157,28 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     }
     // Seat each landmark: level the ground under its pad to its base height (before the terrain mesh, roads, trees and grass sample it),
     // and keep trees and grass out of the pad.
+    // Custom small towns: choose each site and register its pad + footprint like a landmark, so the ground is levelled and nothing else is built there.
+    const wv = registry.worldViews(id), cpos = (v: [number, number, number]) => ({ x: v[0], z: v[2] });
+    const avoidZones = [...landmarks.pads.map((q) => ({ x: (q.minX + q.maxX) / 2, z: (q.minZ + q.maxZ) / 2, r: Math.max(q.maxX - q.minX, q.maxZ - q.minZ) / 2 + 24 })),
+      ...wv.filter((v) => v.snap).flatMap((v) => [{ ...cpos(v.pos), r: 130 }, { ...cpos(v.look), r: 90 }]), ...wv.map((v) => ({ ...cpos(v.look), r: 50 }))];
+    const anchors: Record<string, [number, number]> = { edo: [wv[0].look[0], wv[0].look[2]], cyber: [wv[0].look[0], wv[0].look[2]], paris: [wv[wv.length - 1].look[0], wv[wv.length - 1].look[2]], harbor: [wv[1].look[0], wv[1].look[2]], outpost: [wv[0].look[0], wv[0].look[2]] };
+    const sites: TownSite[] = qs.get('towns') === '0' ? [] : planTowns(id, areaBase, terrain, avoidZones, anchors);
+    for (const st of sites) { landmarks.pads.push(st.pad); landmarks.footprints.push(st.footprint); }
+    if (sites.length) console.info('[City] towns', id, sites.map((q) => `${q.id}@${q.cx.toFixed(0)},${q.cz.toFixed(0)} y${q.y}`));
+    const area = sites.length ? { ...areaBase, roads: carveRoads(areaBase.roads, sites) } : areaBase;
+    const lmTreesInput = area.trees as number[];
     const grassMask = mask ? parseGroundMask(mask) : null; mark('mask');
-    const lmTrees = treesOutsideLandmarks(area.trees as number[], landmarks.pads);
+    const lmTrees = treesOutsideLandmarks(lmTreesInput, landmarks.pads);
     if (landmarks.pads.length) console.info('[City] landmark pads', { flattened: flattenUnderLandmarks(terrain, landmarks.pads), treesRemoved: lmTrees.removed, grassCellsBlocked: grassMask ? blockGrassUnderLandmarks(grassMask, landmarks.pads) : 0 });
     mark('landmarks+flatten');
-    const { kept: buildings, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints); mark('cull');
+    const { kept: buildings0, culled: landmarkCull } = cullUnderLandmarks(area.buildings, landmarks.footprints); mark('cull');
+    // Pack content: towns, then city-wide building replacement + street life. Replaced buildings leave the procedural list so they are never double-drawn.
+    const towns = sites.length ? await buildTowns(sites, terrain) : null; if (towns) landmarks.colliders.push(...towns.colliders); mark('towns');
+    const cc = wv[0].look, city = qs.get('packcity') === '0' ? null : await buildPackCity(id, buildings0, area, terrain, [cc[0], cc[2]]);
+    const buildings = city ? city.rest : buildings0; if (city) landmarks.colliders.push(...city.colliders); mark('pack city');
+    const real = towns?.real.length ? await buildRealistic(towns.real, 14) : null;
+    const packGroups: THREE.Object3D[] = [towns?.group, city?.group, real?.group].filter(Boolean) as THREE.Object3D[];
+    if (towns || city) console.info(`[City] pack ${id}: towns ${towns ? towns.placed + ' items ' + (towns.tris / 1000).toFixed(0) + 'k tris' : '-'}, city ${city ? city.replaced + ' buildings, ' + city.furniture + ' street props, ' + city.roofProps + ' roof props, ' + (city.tris / 1000).toFixed(0) + 'k tris' : '-'}, realistic ${real ? real.draws + ' draws' : '-'}`);
     if (Object.keys(landmarkCull).length) console.info('[City] buildings culled under landmarks', landmarkCull);
     await nextTask();
     const style = styleFor(id); const tg = await buildTileGeo(terrain, buildings, area.roads, style, roadMat, lambert, farMat, groundMat, skip); // roads + building meshes: built in a short-lived worker
@@ -158,7 +195,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const poolsPiers = buildPoolsPiers(area, terrain, roadMat); mark('pools+piers'); await nextTask(); lap = performance.now();
     group.add(tg.ground, roads, poolsPiers, blds.group, farBlds, ocean.mesh, lamps.posts, lamps.pools, trees.group, grass.mesh);
     if (ferry) group.add(ferry.group);
-    group.add(landmarks.group); mark('terrain+roads+pools');
+    group.add(landmarks.group, ...packGroups); mark('terrain+roads+pools');
     await nextTask(); lap = performance.now();
     const interiors = await createInteriors(SK.has('int') ? [] : buildings, terrain); group.add(interiors.group);
     const collision = await createCollision(SK.has('col') ? [] : buildings, terrain, landmarks.colliders); mark('interiors+collision');
@@ -174,7 +211,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const fadeStep = (dt: number) => { if (lod.step(dt)) applyFade(); };
     const setFar = (f: boolean, vh = false, instant = false) => {
       if (!ready || (f === far && vh === tiny)) return; far = f; tiny = vh;
-      lod.set(f, instant); applyFade(); lamps.posts.visible = !f; lamps.pools.visible = !f; grass.mesh.visible = !f; interiors.group.visible = !f; if (ferry) ferry.group.visible = !f;
+      lod.set(f, instant); applyFade(); lamps.posts.visible = !f; lamps.pools.visible = !f; grass.mesh.visible = !f; interiors.group.visible = !f; if (ferry) ferry.group.visible = !f; for (const g of packGroups) g.visible = !f;
       const maxHi = Math.max(...treeMeshes.map((t) => t.hi));
       for (const t of treeMeshes) { t.o.visible = !tiny && (!f || t.hi >= maxHi); (t.o as any).userData.lo = f && t.hi >= maxHi ? 0 : t.lo; }
     };
@@ -186,7 +223,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     group.traverse((o) => { const l = o as THREE.PointLight; if (l.isPointLight) floods.push({ parent: l.parent!, pos: l.getWorldPosition(new THREE.Vector3()), color: l.color.clone(), intensity: l.intensity, distance: l.distance, decay: l.decay }); });
     for (const f of floods) for (const l of f.parent.children.filter((c) => (c as any).isPointLight)) f.parent.remove(l);
     if (floods.length) console.info(`[City] ${id}: ${floods.length} flood point lights moved to the scene pool`);
-    return { id, floods, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
+    return { id, floods, sites, packGroups, area, terrain, roads: roads.surface, roadChunks, landmarkCull, group, ocean, lamps, trees, grass, ferry, blds, interiors, collision, ring, farBlds, setFar, fadeStep, get far() { return far; }, get ready() { return ready; }, setReady(v: boolean) { ready = v; },
       get bounds() { return registry.get(id).bounds; }, builtAt: performance.now(),
       dispose() { grass.dispose(); group.traverse((o: any) => { o.geometry?.dispose?.(); if (o.isInstancedMesh) o.dispose(); // instance buffers (matrix/colour) are not freed by geometry.dispose
         for (const m of [o.material].flat()) if (m && !shared.has(m)) m.dispose?.(); }); } };
@@ -333,7 +370,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
     const f = scene.fog as THREE.FogExp2;
     f.color.set(FOG_NIGHT).lerp(cTmp.set(0x34373e), Math.min(1, snow * 1.4)).lerp(cTmp.set(0x3e4148), Math.min(1, fog));
     sky.setFog(f.color);
-    f.density = 0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016;
+    f.density = (0.00016 + rain * 0.0012 + snow * 0.0022 + fog * 0.016) * tune.fog;
     const cover = Math.min(1, rain + snow + fog * 0.9); sky.setOvercast(cover);
     sky.setClouds(0.22 + cover * 0.78, cRain.set(0x26334a).lerp(cTmp.set(0x2a303c), snow).lerp(cTmp.set(0x2a3140), Math.min(1, fog)));
     uSkyRefl.value.set(0x1a2438).lerp(cTmp.set(0x2e3c58), Math.min(1, rain * 1.5));
@@ -342,7 +379,13 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
       trees.uWind.value = 1 + rain * 1.8 + snow * 0.6 - fog * 0.6; grass.uWind.value = 1 + rain * 1.5 + snow * 0.4 - fog * 0.6;
       grass.uWet.value = wet; grass.uSnow.value = snowCover; lamps.uWet.value = wet; lamps.uFog.value = fog;
     }
-    uWet.value = wet; uSnow.value = snowCover;
+    uWet.value = Math.min(1, wet + tune.wet); uSnow.value = snowCover;
+  }
+  /** Dev panel: push the tuning values into the shared uniforms and lights. */
+  function applyTune() {
+    facade.uGlass.value = tune.glass; facade.uWindow.value = tune.window; uLampGain.value = tune.lamp; renderer.toneMappingExposure = tune.exposure;
+    moon.intensity = 1.25 * tune.moon; if (camera.fov !== tune.fov) { camera.fov = tune.fov; camera.updateProjectionMatrix(); }
+    applyWeather();
   }
   applyWeather();
 
@@ -413,14 +456,26 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
   }
 
   return {
-    renderer, scene, camera, controls, sky, backend, setView, world, flight, stream, dropTile,
+    renderer, scene, camera, controls, sky, backend, tune, applyTune, setView, world, flight, stream, dropTile,
     /** Drop-in point: the street start view (on a road) if the area has one, else the first view's look target. World coordinates. */
-    spawnPoint() { const vs = viewsOf(act.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
+    spawnPoint() { const tf = (this as any).townFocus && [...tiles.values()].flatMap((t) => t.sites).find((z) => z.id === (this as any).townFocus); if (tf) return { x: tf.stand[0], z: tf.stand[2], ground: tf.y + 0.03, heading: Math.atan2(tf.look[0] - tf.stand[0], tf.look[2] - tf.stand[2]) }; const vs = viewsOf(act.id); const v = vs.find((x) => x.snap); const s = v ? snapToStreet(v) : null; const p = s ? s.pos : vs[0].look; const l = s ? s.look : [0, 0, 0]; return { x: p[0], z: p[2], ground: ground(p[0], p[2]), heading: Math.atan2(l[0] - p[0], l[2] - p[2]) }; },
     get areaId() { return registry.activeId!; }, get area() { return act.area; }, get views() { return viewsOf(act.id); },
-    get stats() { const a = act.area; return { buildings: act.blds.count, trees: a.trees.length / 5, palms: act.trees.palms, lamps: a.lamps.length, chunks: act.blds.group.children.length, landmarkCull: act.landmarkCull, interiorCands: act.interiors.count, interior: act.interiors.current, roads: a.roads.length }; },
+    get stats() { const a = act.area; return { buildings: act.blds.count, trees: a.trees.length / 5, palms: act.trees.palms, lamps: a.lamps.length, chunks: act.blds.group.children.length, landmarkCull: act.landmarkCull, interiorCands: act.interiors.count, interior: act.interiors.current, roads: a.roads.length, towns: act.sites.map((q) => q.id) }; },
     /** world state for tests / HUD: built tiles, links, detail mode, streaming ring */
     worldState() { return { tiles: [...tiles.values()].map((t) => ({ id: t.id, far: t.far, fade: t.farBlds.userData.fade ?? 0, bounds: t.bounds })), building: [...building.keys()], links: [...links.values()].map((l) => ({ id: l.def.id, rect: l.rect, path: l.path, tris: l.triangles })), fastHigh, active: act.id,
       stream: { radius: stream.radius, lead: stream.lead, want: stream.want, builds: stream.builds, unloads: stream.unloads }, flight: { gates: flight.gates, length: flight.length, end: flight.end } }; },
+    /** Town sites of the built tiles, with the stand point and look target of each. */
+    towns() { return [...tiles.values()].flatMap((t) => t.sites).map((q) => ({ id: q.id, name: q.name, area: q.area, x: +q.stand[0].toFixed(1), y: +q.stand[1].toFixed(2), z: +q.stand[2].toFixed(1), look: q.look.map((v) => +v.toFixed(1)) })); },
+    townMeta: TOWN_META, usedPaths,
+    townFocus: null as string | null,
+    /** Stand in front of a town's centrepiece looking at its architecture (builds and switches to the town's area first). Free camera or robot spawn use this point. */
+    async focusTown(id: string) {
+      const meta = TOWN_META.find((m) => m.id === id); if (!meta) return null;
+      await (this as any).switchArea(meta.area); await ensureTile(meta.area);
+      const q = [...tiles.values()].flatMap((t) => t.sites).find((z) => z.id === id); if (!q) return null;
+      (this as any).townFocus = id; camera.position.set(q.stand[0], q.stand[1] + 1.8, q.stand[2]); camera.lookAt(q.look[0], q.look[1], q.look[2]); controls.syncAngles(); controls.setWalk(true);
+      return q;
+    },
     interiorEntry(x: number, z: number) { return act.interiors.entry(x, z); },
     /** Warm the data cache for an area (cheap, run when idle). */
     preload(id: string) { return registry.loadData(id).then(() => undefined, () => undefined); },
@@ -443,6 +498,7 @@ export async function createScene(canvas: HTMLCanvasElement, areaId: string) {
         tl.fadeStep(dt);
         if (tl.far) continue;
         const d = registry.distTo(tl.id, camera.position.x, camera.position.z);
+        for (const g of tl.packGroups) g.visible = d < 1100; // pack towns / street life only draw when the player is in or near the area
         if (d < 600) tl.trees.update(camera.position);
         if (tl === act) { tl.grass.update(d === 0 ? camera.position : eye.set(camera.position.x, 1e5, camera.position.z)); tl.ferry?.update(t); tl.interiors.update(player.avatar ? eye.set(f.x, f.y + 1.6, f.z) : f, ground(f.x, f.z), dt); }
       }

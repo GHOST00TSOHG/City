@@ -19,3 +19,8 @@ tools/map-audit.out/.build/
 *.bvh
 *.blend
 tools/map-audit.out/shots-*/*.png
+/public/tja/*
+!/public/tja/used-files.json
+*.glb.tmp
+/.tja-cache/
+/.proof/

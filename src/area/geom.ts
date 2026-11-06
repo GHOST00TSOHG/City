@@ -40,6 +40,8 @@ export class Soup {
   private sF = new Int16Array(4); private sFu = new Uint32Array(this.sF.buffer);
   /** Per-vertex facade data [baseY, wallTopY, kind pack, seed] is written when enabled (before the first triangle). */
   cur: [number, number, number, number] = [0, 0, 0, 0];
+  /** Vertex-colour alpha (0..255) written with every corner: road surfaces use it as a surface-kind tag (asphalt 255, sidewalk 200, curb 150). */
+  alpha = 255;
   enableFacade() { this.F16 = new Int16Array(this.cap * 4); this.Fu = new Uint32Array(this.F16.buffer); }
   private static e1 = new THREE.Vector3(); private static e2 = new THREE.Vector3(); private static nn = new THREE.Vector3();
 
@@ -86,7 +88,7 @@ export class Soup {
     this.sP[0] = v[0]; this.sP[1] = v[1]; this.sP[2] = v[2];
     const sN = this.sN, sC = this.sC;
     sN[0] = Math.round(nx * 127); sN[1] = Math.round(ny * 127); sN[2] = Math.round(nz * 127); sN[3] = 0;
-    sC[0] = Math.round(Math.min(1, Math.max(0, r)) * 255); sC[1] = Math.round(Math.min(1, Math.max(0, g)) * 255); sC[2] = Math.round(Math.min(1, Math.max(0, b)) * 255); sC[3] = 255;
+    sC[0] = Math.round(Math.min(1, Math.max(0, r)) * 255); sC[1] = Math.round(Math.min(1, Math.max(0, g)) * 255); sC[2] = Math.round(Math.min(1, Math.max(0, b)) * 255); sC[3] = this.alpha;
     if (this.F16) {
       const c = this.cur, sF = this.sF, sn = (x: number) => Math.round(Math.min(1, Math.max(-1, x)) * 32767);
       sF[0] = sn((c[0] - FACADE_Y0) / FACADE_YS); sF[1] = sn((c[1] - FACADE_Y0) / FACADE_YS); sF[2] = sn(c[2] / FACADE_KS); sF[3] = sn(c[3]);

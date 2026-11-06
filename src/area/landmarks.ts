@@ -30,7 +30,7 @@ let index: Promise<Record<string, string[]>> | null = null;
 
 /** Area origins come from the baked area manifest (same point the bake projected from). */
 /** Drops the decoded CPU copy of every texture (ImageBitmap) once the renderer has uploaded it (onUpdate runs after the upload), so the page keeps only the GPU copy. */
-function releaseTextureSources(root: THREE.Object3D) {
+export function releaseTextureSources(root: THREE.Object3D) {
   const seen = new Set<THREE.Texture>();
   root.traverse((o) => {
     for (const m of [(o as THREE.Mesh).material].flat()) {

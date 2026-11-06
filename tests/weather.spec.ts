@@ -6,7 +6,7 @@ test('rain eases in clean', async ({ page }) => {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   page.on('pageerror', (e) => errors.push(e.message));
   await page.setViewportSize({ width: 960, height: 600 });
-  await page.goto('/?gl=1&join=0');
+  await page.goto('/?gl=1&join=0&mp=0');
   await page.waitForFunction(() => (window as any).__city?.ready, null, { timeout: Number(process.env.READY_MS ?? 60_000) });
   await page.evaluate(() => (window as any).__setWeather('rain', 0.8));
   await page.waitForTimeout(400);

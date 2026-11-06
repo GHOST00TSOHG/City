@@ -24,13 +24,16 @@ import { pacing } from './perf/pacing';
 import { quality, warmupTier, dynres, qualityLabel } from './perf/quality';
 import { prewarm } from './perf/prewarm';
 import { registry } from './world/registry';
+import { createDevPanel } from './devPanel';
+import { TOWN_META } from './area/packTowns';
 import { player } from './world/player';
 import { createSnow, createRain, createWeatherUI, WEATHER_PRESETS, type WeatherKind } from './weather';
 
 const qs = new URLSearchParams(location.search);
 const canvas = document.getElementById('city') as HTMLCanvasElement;
 const loading = document.getElementById('loading');
-const areaId = registry.has(qs.get('area')) ? qs.get('area')! : 'keywest';
+const townQ = TOWN_META.find((m) => m.id === qs.get('town')) ?? null;
+const areaId = registry.has(qs.get('area')) ? qs.get('area')! : townQ?.area ?? 'keywest';
 const titleEl = document.querySelector('#hud .title span');
 const setTitle = (id: string) => { if (titleEl) titleEl.textContent = registry.has(id) ? registry.get(id).title : id; };
 setTitle(areaId);
@@ -48,9 +51,14 @@ createScene(canvas, areaId).then(async (app) => {
   const bar = document.createElement('div'); bar.id = 'areas';
   bar.innerHTML = registry.areas.map(({ id, label }) => `<button data-a="${id}" aria-pressed="${id === areaId}">${label}</button>`).join('');
   document.body.appendChild(bar);
+  // Town jump pills: one compact button per town, right under the area switcher.
+  const pills = document.createElement('div'); pills.id = 'towns';
+  pills.innerHTML = TOWN_META.map(({ id, name }) => `<button data-t="${id}" aria-pressed="false">${name}</button>`).join('');
+  document.body.appendChild(pills);
   let busy = false;
   const switchTo = async (id: string, view?: string) => {
     if (busy || id === app.areaId) return; busy = true;
+    app.townFocus = null; pills.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', 'false'));
     bar.querySelectorAll('button').forEach((b) => { b.disabled = true; b.setAttribute('aria-pressed', String(b.dataset.a === id)); });
     fade.classList.add('on'); await new Promise((r) => setTimeout(r, 380));
     try { await app.switchArea(id, view); setTitle(id); if (robotMode) { if (cust.open) placeHangar(); else dropIn(); } const u = new URL(location.href); u.searchParams.set('area', id); u.searchParams.delete('view'); history.replaceState(null, '', u); }
@@ -59,6 +67,18 @@ createScene(canvas, areaId).then(async (app) => {
     fade.classList.remove('on'); bar.querySelectorAll('button').forEach((b) => (b.disabled = false)); busy = false;
   };
   bar.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.a) switchTo(b.dataset.a); });
+  const warpTown = async (id: string) => {
+    if (busy) return; busy = true; pills.querySelectorAll('button').forEach((b) => ((b as HTMLButtonElement).disabled = true));
+    fade.classList.add('on'); await new Promise((r) => setTimeout(r, 380));
+    try {
+      const q = await app.focusTown(id);
+      if (q) { setTitle(q.area); shownArea = q.area; bar.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.a === q.area))); pills.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String((b as HTMLElement).dataset.t === id)));
+        if (robotMode) { if (cust.open) placeHangar(); else dropIn(3); } }
+    } catch (e) { console.warn('[City] town warp failed', e); }
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    fade.classList.remove('on'); pills.querySelectorAll('button').forEach((b) => ((b as HTMLButtonElement).disabled = false)); busy = false;
+  };
+  pills.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest('button'); if (b?.dataset.t) void warpTown(b.dataset.t); });
   // (no blanket preload of every area's decoded data: it stayed resident for the whole session; streaming prefetches the areas near the player, scene.ts streamTick)
   const idle = (window as any).requestIdleCallback ?? ((f: () => void) => setTimeout(f, 1500));
   // Key West fly-over cue: distance + a heading arrow to the beacon, shown while the player is out over the water between NJ and Key West
@@ -104,7 +124,7 @@ createScene(canvas, areaId).then(async (app) => {
     const l = lookOf(save); void robot.setType(t, l); applyType(t); fx.setColor(l.visor); return l;
   };
   const hud = createRobotHud();
-  const dropIn = (height = 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
+  const dropIn = (height = app.townFocus ? 3 : 90) => { const s = app.spawnPoint(); ctl.spawn(s.x, s.ground + height, s.z, s.heading); };
   const heroDrop = () => { const s = app.spawnPoint(); ctl.heroDrop(s.x, s.ground + 160, s.z, s.heading); };
   void loadClips();
   ctl.onImpact = (p, k) => { fx.impact(p, k); };
@@ -186,6 +206,7 @@ createScene(canvas, areaId).then(async (app) => {
   };
   const benchKind = (['walk', 'flight', 'all'] as const).find((k) => k === qs.get('bench')) ?? null, benchMode = !!benchKind;
   const joinScreen = robotMode && qs.get('join') !== '0' && !benchMode;
+  if (townQ) { await app.focusTown(townQ.id); pills.querySelector(`[data-t="${townQ.id}"]`)?.setAttribute('aria-pressed', 'true'); }
   setRobotMode(robotMode);
   if (joinScreen) setHangar(true); else if (robotMode) dropIn();
   addEventListener('keydown', (e) => {
@@ -211,6 +232,7 @@ createScene(canvas, areaId).then(async (app) => {
     for (const side of [1, -1]) for (const d of [3, 5, 7]) if (app.world.blocked(p.x + fz0 * side * d, p.z - fx0 * side * d, y)) { slowT = 0.55; slowCd = 3; fx.kick(0.3); return; }
   };
 
+  createDevPanel(app.tune, () => app.applyTune());
   const statsEl = document.getElementById('stats')!;
   const showStats = qs.get('perf') === '1';
   statsEl.hidden = !showStats;
@@ -221,6 +243,8 @@ createScene(canvas, areaId).then(async (app) => {
   w.__cityCam = app.camera; w.__cityControls = app.controls; w.__cityScene = app.scene;
   w.__switchArea = (id: string, view?: string) => switchTo(id, view);
   w.__THREE = THREE; w.__world = () => app.worldState(); w.__app = app; w.__stats = () => app.stats; w.__player = player; w.__registry = registry; // tests: shared player state + world registry
+  Object.defineProperty(w, '__towns', { get: () => { const built = app.towns(); return TOWN_META.map((m) => built.find((q) => q.id === m.id) ?? { ...m, x: null, y: null, z: null }); } });
+  w.__warpTown = (id: string) => warpTown(id); w.__packs = () => { const s = new Set([...app.usedPaths].map((p) => p.split('/')[0])); return { packs: [...s].sort(), models: app.usedPaths.size }; };
   w.__enterBuilding = (inside = false) => app.enterBuilding(inside);
   w.__ground = (x: number, z: number) => ({ floor: app.world.floorAt(x, z, 1e9), spawn: app.spawnPoint() }); // tests: walkable height
   w.__sfx = sfx; w.__robot = { kitReport: () => (robot.inner as any).kitReport ?? null, ctl, world: app.world, spawnPoint: () => app.spawnPoint(), model: robot, parts, fx, save, setDamage, heroDrop, nearMissState: () => ({ slowT, slowCd }), setMode: setRobotMode, dropIn, setLook: (l: Partial<RobotLook>) => cust.set(l), hangar: setHangar, customizer: cust, setType: (t: RobotType) => cust.setType(t), hangarState: hangar };
